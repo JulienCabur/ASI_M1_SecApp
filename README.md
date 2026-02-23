@@ -1,6 +1,14 @@
 # SécuApp
+Dans le dossier .build
+    Créer un fichier .env suivant le modèle env.example
 
+Pour démarrer le projet :
+```bash
+cd ./.build
+docker-compose up -d
+```
 
+L'instance keycloak est accessbile via l'url : http://localhost:8080
 
 ## Getting started
 
