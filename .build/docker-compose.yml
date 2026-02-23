@@ -2,7 +2,7 @@ services:
   postgres_keycloak:
     image: postgres
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
@@ -22,7 +22,7 @@ services:
       KC_DB_PASSWORD: /run/secrets/postgres_password
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: /run/secrets/keycloak_admin_password
-      KC_FEATURES: webauthn
+      KC_FEATURES: web-authn
     secrets:
       - postgres_password
       - keycloak_admin_password
