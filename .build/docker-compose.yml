@@ -3,40 +3,34 @@ services:
     image: postgres
     volumes:
       - postgres_data:/var/lib/postgresql
+    env_file:
+      - .env
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: /run/secrets/postgres_password
-    secrets:
-      - postgres_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     networks:
       - auth-network
 
   keycloak:
     image: quay.io/keycloak/keycloak:23.0
     command: start-dev
+    env_file:
+      - .env
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres_keycloak:5432/keycloak
       KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: /run/secrets/postgres_password
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: /run/secrets/keycloak_admin_password
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_FEATURES: web-authn
-    secrets:
-      - postgres_password
-      - keycloak_admin_password
     ports:
       - "8080:8080"
     depends_on:
       - postgres_keycloak
     networks:
       - auth-network
-secrets:
-  postgres_password:
-    file: ./.postgres_password.txt
-  keycloak_admin_password:
-    file: ./.keycloak_admin_password.txt
 networks:
   auth-network:
     driver: bridge
