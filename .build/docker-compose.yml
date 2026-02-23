@@ -6,7 +6,9 @@ services:
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     networks:
       - auth-network
 
@@ -17,17 +19,24 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres_keycloak:5432/keycloak
       KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: password
+      KC_DB_PASSWORD: /run/secrets/postgres_password
       KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN_PASSWORD: /run/secrets/keycloak_admin_password
       KC_FEATURES: webauthn
+    secrets:
+      - postgres_password
+      - keycloak_admin_password
     ports:
       - "8080:8080"
     depends_on:
       - postgres_keycloak
     networks:
       - auth-network
-
+secrets:
+  postgres_password:
+    file: ./.postgres_password.txt
+  keycloak_admin_password:
+    file: ./.keycloak_admin_password.txt
 networks:
   auth-network:
     driver: bridge
