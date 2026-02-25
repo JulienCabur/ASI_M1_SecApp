@@ -1,7 +1,8 @@
 # SécuApp
 Dans le dossier .build
     Créer un fichier .env suivant le modèle env.example
-
+Dans le dossier .build/pki
+    Créer un fichier .env suivant le modèle pkienv.example
 Pour démarrer le projet :
 ```bash
 cd ./.build
