@@ -11,7 +11,16 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     networks:
       - auth-network
-
+  pki:
+    image: debian:bookworm-slim
+    container_name: pki_authority
+    env_file:
+      - pki/pki.env
+    volumes:
+      - ./pki:/etc/pki/CA
+      - pki_secrets:/etc/pki/CA
+      - pki_public:/etc/pki/CA/certs
+    command: tail -f /dev/null
   keycloak:
     image: quay.io/keycloak/keycloak:23.0
     command: start-dev
@@ -29,11 +38,16 @@ services:
       - "8080:8080"
     depends_on:
       - postgres_keycloak
+      - pki
     networks:
       - auth-network
+    volumes:
+      - pki_public:/opt/keycloak/conf/truststores
 networks:
   auth-network:
     driver: bridge
 
 volumes:
   postgres_data:
+  pki_secrets:
+  pki_public:
