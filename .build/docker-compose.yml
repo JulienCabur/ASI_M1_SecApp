@@ -17,7 +17,7 @@ services:
     env_file:
       - pki/pki.env
     volumes:
-      - ./pki:/etc/pki/CA
+      - ./pki:/etc/pki/CA/config
       - pki_secrets:/etc/pki/CA
       - pki_public:/etc/pki/CA/certs
     command: tail -f /dev/null
