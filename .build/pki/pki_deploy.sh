@@ -2,7 +2,7 @@
 set -e # Exit immediately if a command exits with a non-zero status.
 
 BASE_DIR="/etc/pki/CA"
-EXPORT_DIR="/export/certs"
+EXPORT_DIR="/etc/pki/CA/certs"
 CONFIG_DIR="/etc/pki/CA/config"
 
 # Preparation
@@ -33,29 +33,53 @@ openssl ca -config $CONFIG_DIR/root-ca.conf \
     -selfsign \
     -extensions root_ca_ext
 
-# Signing CA
-mkdir -p $BASE_DIR/signing-ca/{private,db,certs}
-chmod 700 $BASE_DIR/signing-ca/private
+# Signing CA 1
+mkdir -p $BASE_DIR/signing-ca1/{private,db,certs}
+chmod 700 $BASE_DIR/signing-ca1/private
 
-touch $BASE_DIR/signing-ca/db/signing-ca.db
-touch $BASE_DIR/signing-ca/db/signing-ca.db.attr
-echo 01 > $BASE_DIR/signing-ca/db/signing-ca.crt.srl
-echo 01 > $BASE_DIR/signing-ca/db/signing-ca.crl.srl
+touch $BASE_DIR/signing-ca1/db/signing-ca1.db
+touch $BASE_DIR/signing-ca1/db/signing-ca1.db.attr
+echo 01 > $BASE_DIR/signing-ca1/db/signing-ca1.crt.srl
+echo 01 > $BASE_DIR/signing-ca1/db/signing-ca1.crl.srl
 
 openssl req -new -config $CONFIG_DIR/signing-ca.conf \
-    -out $BASE_DIR/signing-ca.csr \
-    -keyout $BASE_DIR/signing-ca/private/signing-ca.key \
-    -passout env:SIGNING_PASS \
+    -out $BASE_DIR/signing-ca1.csr \
+    -keyout $BASE_DIR/signing-ca1/private/signing-ca1.key \
+    -passout env:SIGNING2_PASS \
     -batch
 
 openssl ca -config $CONFIG_DIR/root-ca.conf \
-    -in $BASE_DIR/signing-ca.csr \
-    -out $BASE_DIR/signing-ca/certs/signing-ca.crt \
+    -in $BASE_DIR/signing-ca1.csr \
+    -out $BASE_DIR/signing-ca1/certs/signing-ca1.crt \
+    -extensions signing_ca_ext \
+    -passin env:ROOT_PASS \
+    -batch
+
+# Signing CA 2
+mkdir -p $BASE_DIR/signing-ca2/{private,db,certs}
+chmod 700 $BASE_DIR/signing-ca2/private
+
+touch $BASE_DIR/signing-ca2/db/signing-ca2.db
+touch $BASE_DIR/signing-ca2/db/signing-ca2.db.attr
+echo 01 > $BASE_DIR/signing-ca2/db/signing-ca2.crt.srl
+echo 01 > $BASE_DIR/signing-ca2/db/signing-ca2.crl.srl
+
+openssl req -new -config $CONFIG_DIR/signing-ca.conf \
+    -out $BASE_DIR/signing-ca2.csr \
+    -keyout $BASE_DIR/signing-ca2/private/signing-ca2.key \
+    -passout env:SIGNING2_PASS \
+    -batch
+
+openssl ca -config $CONFIG_DIR/root-ca.conf \
+    -in $BASE_DIR/signing-ca2.csr \
+    -out $BASE_DIR/signing-ca2/certs/signing-ca2.crt \
     -extensions signing_ca_ext \
     -passin env:ROOT_PASS \
     -batch
 
 # Chain of trust
-cat $BASE_DIR/signing-ca/certs/signing-ca.crt $BASE_DIR/root-ca/certs/root-ca.crt > $EXPORT_DIR/ca-chain.pem
-cp $BASE_DIR/signing-ca/certs/signing-ca.crt $EXPORT_DIR/signing-ca.crt
-chmod 644 $EXPORT_DIR/ca-chain.pem $EXPORT_DIR/signing-ca.crt
+cat $BASE_DIR/signing-ca1/certs/signing-ca1.crt $BASE_DIR/root-ca/certs/root-ca.crt > $EXPORT_DIR/ca-chain.pem
+cat $BASE_DIR/signing-ca2/certs/signing-ca2.crt $BASE_DIR/root-ca/certs/root-ca.crt > $EXPORT_DIR/ca-chain2.pem
+cp $BASE_DIR/signing-ca1/certs/signing-ca1.crt $EXPORT_DIR/signing-ca1.crt
+cp $BASE_DIR/signing-ca2/certs/signing-ca2.crt $EXPORT_DIR/signing-ca2.crt
+chmod 644 $EXPORT_DIR/ca-chain.pem $EXPORT_DIR/signing-ca2.crt $EXPORT_DIR/signing-ca1.crt $EXPORT_DIR/ca-chain2.pem
