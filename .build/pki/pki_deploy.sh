@@ -42,10 +42,11 @@ touch $BASE_DIR/signing-ca1/db/signing-ca1.db.attr
 echo 01 > $BASE_DIR/signing-ca1/db/signing-ca1.crt.srl
 echo 01 > $BASE_DIR/signing-ca1/db/signing-ca1.crl.srl
 
+export ca="signing-ca1"
 openssl req -new -config $CONFIG_DIR/signing-ca.conf \
     -out $BASE_DIR/signing-ca1.csr \
     -keyout $BASE_DIR/signing-ca1/private/signing-ca1.key \
-    -passout env:SIGNING2_PASS \
+    -passout env:SIGNING1_PASS \
     -batch
 
 openssl ca -config $CONFIG_DIR/root-ca.conf \
@@ -64,6 +65,7 @@ touch $BASE_DIR/signing-ca2/db/signing-ca2.db.attr
 echo 01 > $BASE_DIR/signing-ca2/db/signing-ca2.crt.srl
 echo 01 > $BASE_DIR/signing-ca2/db/signing-ca2.crl.srl
 
+export ca="signing-ca2"
 openssl req -new -config $CONFIG_DIR/signing-ca.conf \
     -out $BASE_DIR/signing-ca2.csr \
     -keyout $BASE_DIR/signing-ca2/private/signing-ca2.key \
@@ -83,3 +85,26 @@ cat $BASE_DIR/signing-ca2/certs/signing-ca2.crt $BASE_DIR/root-ca/certs/root-ca.
 cp $BASE_DIR/signing-ca1/certs/signing-ca1.crt $EXPORT_DIR/signing-ca1.crt
 cp $BASE_DIR/signing-ca2/certs/signing-ca2.crt $EXPORT_DIR/signing-ca2.crt
 chmod 644 $EXPORT_DIR/ca-chain.pem $EXPORT_DIR/signing-ca2.crt $EXPORT_DIR/signing-ca1.crt $EXPORT_DIR/ca-chain2.pem
+
+# Generate serveur certificate
+openssl req -new -config $CONFIG_DIR/server.conf \
+    -out $BASE_DIR/server.csr \
+    -keyout $BASE_DIR/server.key \
+    -nodes
+
+export ca="signing-ca1"
+openssl ca -config $CONFIG_DIR/signing-ca.conf \
+    -in $BASE_DIR/server.csr \
+    -out $BASE_DIR/server.crt \
+    -extensions server_ext \
+    -passin env:SIGNING1_PASS \
+    -batch
+
+cp $BASE_DIR/server.crt $EXPORT_DIR/server.crt
+cp $BASE_DIR/server.key $EXPORT_DIR/server.key
+
+chown 1000:1000 $EXPORT_DIR/server.key
+chmod 644 $EXPORT_DIR/server.crt
+chmod 600 $EXPORT_DIR/server.key
+
+echo "PKI Deployed"

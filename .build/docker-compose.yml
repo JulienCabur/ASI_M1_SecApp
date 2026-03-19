@@ -11,6 +11,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     networks:
       - auth-network
+
   pki:
     image: debian:bookworm-slim
     container_name: pki_authority
@@ -20,10 +21,31 @@ services:
       - ./pki:/etc/pki/CA/config
       - pki_secrets:/etc/pki/CA
       - pki_public:/etc/pki/CA/certs
-    command: tail -f /dev/null
+    command: >
+      bash -c "
+      chmod +x /etc/pki/CA/config/pki_deploy.sh &&
+      /etc/pki/CA/config/pki_deploy.sh &&
+      tail -f /dev/null
+      "
+    networks:
+      - auth-network
+
   keycloak:
     image: quay.io/keycloak/keycloak:23.0
-    command: start-dev
+    entrypoint: >
+      /bin/bash -c "
+      until [ -f /opt/keycloak/conf/truststores/server.crt ]; do sleep 2; done &&
+
+      keytool -import -alias my-pki-chain -file /opt/keycloak/conf/truststores/ca-chain.pem -keystore /tmp/truststore.p12 -storepass ${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
+  
+      /opt/keycloak/bin/kc.sh start-dev \
+        --https-certificate-file=/opt/keycloak/conf/truststores/server.crt \
+        --https-certificate-key-file=/opt/keycloak/conf/truststores/server.key \
+        --https-trust-store-file=/tmp/truststore.p12 \
+        --https-trust-store-password=${KEYCLOAK_TRUSTSTORE_PASSWORD} \
+        --https-client-auth=request \
+        --hostname-strict=false
+      "
     env_file:
       - .env
     environment:
@@ -34,8 +56,11 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_FEATURES: web-authn
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
     ports:
       - "8080:8080"
+      - "8443:8443"
     depends_on:
       - postgres_keycloak
       - pki
