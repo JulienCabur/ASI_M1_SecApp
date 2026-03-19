@@ -15,17 +15,15 @@ services:
   # '--profile=setup' CLI flag to Compose commands, or "up" the service by name
   # such as 'docker compose up setup'.
   setup:
-    profiles:
-      - setup
     build:
-      context: setup/
+      context: elk-stack/setup/
       args:
         ELASTIC_VERSION: ${ELASTIC_VERSION}
     init: true
     volumes:
-      - ./setup/entrypoint.sh:/entrypoint.sh:ro,Z
-      - ./setup/lib.sh:/lib.sh:ro,Z
-      - ./setup/roles:/roles:ro,Z
+      - ./elk-stack/setup/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./elk-stack/setup/lib.sh:/lib.sh:ro,Z
+      - ./elk-stack/setup/roles:/roles:ro,Z
     environment:
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
       LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
@@ -50,7 +48,7 @@ services:
     profiles:
       - setup
     build:
-      context: kibana/
+      context: elk-stack/kibana/
       args:
         ELASTIC_VERSION: ${ELASTIC_VERSION}
     command:
@@ -60,11 +58,11 @@ services:
 
   elasticsearch:
     build:
-      context: elasticsearch/
+      context: elk-stack/elasticsearch/
       args:
         ELASTIC_VERSION: ${ELASTIC_VERSION}
     volumes:
-      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+      - ./elk-stack/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
       - elasticsearch:/usr/share/elasticsearch/data:Z
     ports:
       - 9200:9200
@@ -85,12 +83,12 @@ services:
 
   logstash:
     build:
-      context: logstash/
+      context: elk-stack/logstash/
       args:
         ELASTIC_VERSION: ${ELASTIC_VERSION}
     volumes:
-      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
-      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
+      - ./elk-stack/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
+      - ./elk-stack/logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
     ports:
       - 5044:5044
       - 50000:50000/tcp
@@ -102,16 +100,19 @@ services:
     networks:
       - elk
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_started
+      setup:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   kibana:
     build:
-      context: kibana/
+      context: elk-stack/kibana/
       args:
         ELASTIC_VERSION: ${ELASTIC_VERSION}
     volumes:
-      - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+      - ./elk-stack/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
     ports:
       - 5601:5601
     environment:
@@ -119,7 +120,10 @@ services:
     networks:
       - elk
     depends_on:
-      - elasticsearch
+      elasticsearch:
+        condition: service_started
+      setup:
+        condition: service_completed_successfully
     restart: unless-stopped
 
 networks:

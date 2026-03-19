@@ -2,14 +2,14 @@
 
 ## Lancer ELK
 
-Pour lancer les docker elk faire ces cmd :
+Pour lancer les docker elk faire cette cmd :
 
 ```bash
-docker compose up setup
+docker compose up -d
 ```
 
-Puis une fois finis faire la suivante
+Pour supprimer le volume
 
 ```bash
-docker compose up
+docker compose down -v
 ```
