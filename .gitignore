@@ -1,0 +1,6 @@
+# Environnement files
+*.env
+
+# KeyCloak passwords
+.build/.keycloak_admin_password.txt
+.build/.postgres_password.txt
