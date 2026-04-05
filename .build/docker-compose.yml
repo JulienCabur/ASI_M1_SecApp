@@ -4,7 +4,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
     env_file:
-      - .env
+      - keycloak/.env
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
@@ -37,10 +37,10 @@ services:
       until [ -f /opt/keycloak/conf/truststores/signing-ca1.crt ]; do sleep 2; done &&
       keytool -import -alias signing-ca -file /opt/keycloak/conf/truststores/signing-ca1.crt -keystore /tmp/truststore.p12 -storepass ${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
       keytool -import -alias root-ca -file /opt/keycloak/conf/truststores/ca-chain.pem -keystore /tmp/truststore.p12 -storepass ${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
-      /opt/keycloak/bin/kc.sh start-dev
+      /opt/keycloak/bin/kc.sh start-dev --import-realm
       "
     env_file:
-      - .env
+      - keycloak/.env
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres_keycloak:5432/keycloak
@@ -66,6 +66,7 @@ services:
       - auth-network
     volumes:
       - pki_public:/opt/keycloak/conf/truststores
+      - ./keycloak/import/realm-export.json:/opt/keycloak/data/import/realm.json
 networks:
   auth-network:
     driver: bridge
