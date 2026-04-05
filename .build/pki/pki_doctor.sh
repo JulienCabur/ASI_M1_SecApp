@@ -20,5 +20,3 @@ openssl pkcs12 -export \
     -name "Certificat Docteur Martin" \
     -out docteur_martin.p12 \
     -passout pass:password_docteur
-
-cp docteur_martin.p12 /etc/pki/CA/config

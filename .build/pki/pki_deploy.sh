@@ -84,7 +84,10 @@ cat $BASE_DIR/signing-ca1/certs/signing-ca1.crt $BASE_DIR/root-ca/certs/root-ca.
 cat $BASE_DIR/signing-ca2/certs/signing-ca2.crt $BASE_DIR/root-ca/certs/root-ca.crt > $EXPORT_DIR/ca-chain2.pem
 cp $BASE_DIR/signing-ca1/certs/signing-ca1.crt $EXPORT_DIR/signing-ca1.crt
 cp $BASE_DIR/signing-ca2/certs/signing-ca2.crt $EXPORT_DIR/signing-ca2.crt
+cp $BASE_DIR/root-ca/certs/root-ca.crt $EXPORT_DIR/root-ca.crt
+chmod 644 $EXPORT_DIR/root-ca.crt
 chmod 644 $EXPORT_DIR/ca-chain.pem $EXPORT_DIR/signing-ca2.crt $EXPORT_DIR/signing-ca1.crt $EXPORT_DIR/ca-chain2.pem
+
 
 # Generate server certificate
 openssl req -new -config $CONFIG_DIR/server.conf \
