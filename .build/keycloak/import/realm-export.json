@@ -1531,7 +1531,7 @@
       "userSetupAllowed" : false
     }, {
       "authenticatorFlow" : true,
-      "requirement" : "REQUIRED",
+      "requirement" : "ALTERNATIVE",
       "priority" : 36,
       "autheticatorFlow" : true,
       "flowAlias" : "Password-less forms",
