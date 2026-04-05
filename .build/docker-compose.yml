@@ -4,7 +4,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
     env_file:
-      - keycloak/.env
+      - .env
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
@@ -40,7 +40,7 @@ services:
       /opt/keycloak/bin/kc.sh start-dev --import-realm
       "
     env_file:
-      - keycloak/.env
+      - .env
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres_keycloak:5432/keycloak
