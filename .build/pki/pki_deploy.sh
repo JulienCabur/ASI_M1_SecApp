@@ -93,7 +93,8 @@ chmod 644 $EXPORT_DIR/ca-chain.pem $EXPORT_DIR/signing-ca2.crt $EXPORT_DIR/signi
 openssl req -new -config $CONFIG_DIR/server.conf \
     -out $BASE_DIR/server.csr \
     -keyout $BASE_DIR/server.key \
-    -nodes
+    -passout env:SERVER_KEY_PASS \
+    -batch
 
 export ca="signing-ca1"
 openssl ca -config $CONFIG_DIR/signing-ca.conf \

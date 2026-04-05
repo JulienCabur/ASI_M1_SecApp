@@ -44,7 +44,7 @@
   "waitIncrementSeconds" : 60,
   "quickLoginCheckMilliSeconds" : 1000,
   "maxDeltaTimeSeconds" : 43200,
-  "failureFactor" : 15,
+  "failureFactor" : 5,
   "roles" : {
     "realm" : [ {
       "id" : "fbe17514-3f5c-4e9d-9328-09fa8abefc5a",
@@ -1554,7 +1554,7 @@
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
     }, {
-      "authenticatorConfig" : "X509 Test",
+      "authenticatorConfig" : "GatienClaus",
       "authenticator" : "auth-x509-client-username-form",
       "authenticatorFlow" : false,
       "requirement" : "ALTERNATIVE",
