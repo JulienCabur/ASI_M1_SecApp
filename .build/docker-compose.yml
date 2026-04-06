@@ -1,4 +1,11 @@
 services:
+  webserver:
+    image: nginx:latest
+    ports:
+      - 80:80
+    restart: always
+    volumes:
+      - ./nginx/conf/:/etc/nginx/conf.d/:ro
   postgres_keycloak:
     image: postgres
     volumes:
