@@ -88,7 +88,7 @@ services:
         ELASTIC_VERSION: ${ELASTIC_VERSION}
     volumes:
       - ./elk-stack/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
-      - ./elk-stack/logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
+      - ./elk-stack/logstash/pipeline/:/usr/share/logstash/pipeline/:ro,Z
     ports:
       - 5044:5044
       - 50000:50000/tcp
@@ -117,6 +117,7 @@ services:
       - 5601:5601
     environment:
       KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+      XPACK_ENCRYPTION_KEY: ${XPACK_ENCRYPTION_KEY:-}
     networks:
       - elk
     depends_on:
