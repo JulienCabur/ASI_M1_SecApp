@@ -16,3 +16,8 @@ En cas de modification de la configuration du Keycloak, à la fin :
 docker exec -it build-keycloak-1 /opt/keycloak/bin/kc.sh export --file /opt/keycloak/conf/realm-export.json --realm health_app --users same_file
 docker cp build-keycloak-1:/opt/keycloak/conf/realm-export.json .\keycloak\import\realm-export.json
 ```
+Pour supprimer le volume
+
+```bash
+docker compose down -v
+```
