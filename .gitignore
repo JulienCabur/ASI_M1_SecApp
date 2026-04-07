@@ -2,6 +2,13 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=venv,dotenv,node,react,python
 # Environnement files
 *.env
+*.pem
+*.key
+*.cert
+
+
+elk-stack/elasticsearch/data/
+elk-stack/setup/roles/*.bak
 
 ### Node ###
 # Logs
