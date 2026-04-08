@@ -1,7 +1,10 @@
+import { useAuth } from '@/hooks/useAuth';
+import PatientDashboard from './PatientDashboard';
+import DoctorDashboard from './DoctorDashboard';
+
 export const Home: React.FC = () => {
-    return (
-        <div>
-            <h1>Home</h1>
-        </div>
-    );
-}
+  const { role } = useAuth();
+
+  if (role === 'role_docteurs') return <DoctorDashboard />;
+  return <PatientDashboard />;
+};

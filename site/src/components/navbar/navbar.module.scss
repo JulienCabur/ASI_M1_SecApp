@@ -7,8 +7,10 @@
     height: 100%;
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     z-index: 1000;
     background: linear-gradient(178deg, #1E3A60 0%, #264A76 50.72%, #2D5A8C 100.84%);
+    padding-bottom: 20px;
 }
 
 .links {
@@ -16,6 +18,12 @@
     flex-direction: column;
     align-items: center;
     margin-top: 20px;
+}
+
+.bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .navItem {
