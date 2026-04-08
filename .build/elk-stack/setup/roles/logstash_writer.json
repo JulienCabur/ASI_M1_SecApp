@@ -1,0 +1,20 @@
+{
+  "cluster": [
+    "manage_index_templates",
+    "monitor",
+    "manage_ilm"
+  ],
+  "indices": [
+    {
+      "names": [
+        "security-audit-*"
+      ],
+      "privileges": [
+        "create_doc",
+        "create_index",
+        "auto_configure"
+      ],
+      "allow_restricted_indices": false
+    }
+  ]
+}

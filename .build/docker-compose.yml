@@ -1,0 +1,174 @@
+services:
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
+    entrypoint: ["/entrypoint.sh"]
+    init: true
+    volumes:
+      - ./elk-stack/setup/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./elk-stack/setup/lib.sh:/lib.sh:ro,Z
+      - ./elk-stack/setup/roles:/roles:ro,Z
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+      METRICBEAT_INTERNAL_PASSWORD: ${METRICBEAT_INTERNAL_PASSWORD:-}
+      FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
+      HEARTBEAT_INTERNAL_PASSWORD: ${HEARTBEAT_INTERNAL_PASSWORD:-}
+      MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
+      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
+    network_mode: service:elasticsearch
+    depends_on:
+      - elasticsearch
+  kibana-genkeys:
+    profiles:
+      - setup
+    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
+    command:
+      - bin/kibana-encryption-keys
+      - generate
+    network_mode: none
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
+    volumes:
+      - ./elk-stack/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+      - elasticsearch:/usr/share/elasticsearch/data:Z
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      node.name: elasticsearch
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      discovery.type: single-node
+    networks:
+      - elk
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION}
+    volumes:
+      - ./elk-stack/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
+      - ./elk-stack/logstash/pipeline/:/usr/share/logstash/pipeline/:ro,Z
+    ports:
+      - 5044:5044
+      - 50000:50000/tcp
+      - 50000:50000/udp
+      - 9600:9600
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+    networks:
+      - elk
+    depends_on:
+      elasticsearch:
+        condition: service_started
+      setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
+    volumes:
+      - ./elk-stack/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+    ports:
+      - 5601:5601
+    environment:
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+      XPACK_ENCRYPTION_KEY: ${XPACK_ENCRYPTION_KEY:-}
+    networks:
+      - elk
+    depends_on:
+      elasticsearch:
+        condition: service_started
+      setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  webserver:
+    image: nginx:latest
+    ports:
+      - 80:80
+    restart: always
+    volumes:
+      - ./nginx/conf/:/etc/nginx/conf.d/:ro
+  postgres_keycloak:
+    image: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    networks:
+      - auth-network
+
+  pki:
+    image: debian:bookworm-slim
+    container_name: pki_authority
+    env_file:
+      - pki/pki.env
+    volumes:
+      - ./pki:/etc/pki/CA/config
+      - pki_secrets:/etc/pki/CA
+      - pki_public:/etc/pki/CA/certs
+    command: >
+      bash -c "
+      chmod +x /etc/pki/CA/config/pki_deploy.sh &&
+      /etc/pki/CA/config/pki_deploy.sh &&
+      tail -f /dev/null
+      "
+    networks:
+      - auth-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    entrypoint: >
+      /bin/bash -c "
+      until [ -f /opt/keycloak/conf/truststores/root-ca.crt ]; do sleep 2; done &&
+      rm -f /tmp/truststore.p12 &&
+      keytool -import -alias root-ca -file /opt/keycloak/conf/truststores/root-ca.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
+      keytool -import -alias signing-ca -file /opt/keycloak/conf/truststores/signing-ca1.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
+      /opt/keycloak/bin/kc.sh start-dev --import-realm
+      "
+    env_file:
+      - .env
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres_keycloak:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_FEATURES: web-authn
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/conf/truststores/server.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/conf/truststores/server.key
+      KC_HTTPS_CERTIFICATE_KEY_PASSWORD: ${SERVER_KEY_PASS}
+      KC_HTTPS_TRUST_STORE_FILE: /tmp/truststore.p12
+      KC_HTTPS_TRUST_STORE_PASSWORD: ${KEYCLOAK_TRUSTSTORE_PASSWORD}
+      KC_HTTPS_CLIENT_AUTH: request
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    depends_on:
+      - postgres_keycloak
+      - pki
+    networks:
+      - auth-network
+    volumes:
+      - pki_public:/opt/keycloak/conf/truststores
+      - ./keycloak/import/realm-export.json:/opt/keycloak/data/import/realm.json
+networks:
+  auth-network:
+    driver: bridge
+  elk:
+    driver: bridge
+
+
+volumes:
+  postgres_data:
+  pki_secrets:
+  pki_public:
+  elasticsearch:
