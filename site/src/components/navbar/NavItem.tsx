@@ -9,7 +9,7 @@ import {
 } from 'react-icons/fa';
 import { FaFileMedical } from 'react-icons/fa6';
 import { useAuth } from '@/hooks/useAuth';
-import { keycloak } from '@/services/auth.service';
+import { keycloak, stopTokenRefresh } from '@/services/auth.service';
 
 export const NavItem = ({ label, to }: { label: string; to: string }) => {
   const navigate = useNavigate();
@@ -51,6 +51,7 @@ export const NavItem = ({ label, to }: { label: string; to: string }) => {
         <div
           className={style.navItem}
           onClick={() => {
+            stopTokenRefresh();
             logout();
             keycloak.logout({ redirectUri: window.location.origin + '/auth/callback' });
           }}
