@@ -4,7 +4,16 @@
 #
 server.name: kibana
 server.host: 0.0.0.0
-elasticsearch.hosts: [ http://elasticsearch:9200 ]
+
+## HTTPS – interface web Kibana
+server.ssl.enabled: true
+server.ssl.certificate: /usr/share/kibana/config/certs/elk.crt
+server.ssl.key: /usr/share/kibana/config/certs/elk.key
+
+## Connexion Kibana → Elasticsearch en HTTPS
+elasticsearch.hosts: [ https://elasticsearch:9200 ]
+elasticsearch.ssl.certificateAuthorities: /usr/share/kibana/config/certs/ca-chain.pem
+elasticsearch.ssl.verificationMode: certificate
 
 monitoring.ui.container.elasticsearch.enabled: true
 monitoring.ui.container.logstash.enabled: true
@@ -30,13 +39,13 @@ elasticsearch.password: ${KIBANA_SYSTEM_PASSWORD}
 ## Fleet
 ## https://www.elastic.co/docs/reference/kibana/configuration-reference/fleet-settings
 #
-xpack.fleet.agents.fleet_server.hosts: [ http://fleet-server:8220 ]
+xpack.fleet.agents.fleet_server.hosts: [ https://fleet-server:8220 ]
 
 xpack.fleet.outputs:
   - id: fleet-default-output
     name: default
     type: elasticsearch
-    hosts: [ http://elasticsearch:9200 ]
+    hosts: [ https://elasticsearch:9200 ]
     is_default: true
     is_default_monitoring: true
 
