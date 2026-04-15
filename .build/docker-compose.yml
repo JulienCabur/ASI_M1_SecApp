@@ -93,7 +93,7 @@ services:
       - pki
     volumes:
       - ./nginx/conf/:/etc/nginx/conf.d/:ro
-      - ../site/dist/:/usr/share/nginx/html/:ro
+      - ../src/site/dist/:/usr/share/nginx/html/:ro
       - pki_public:/etc/nginx/certs:ro
       - ./nginx/ssl/server.pass:/etc/nginx/ssl/server.pass:ro
     networks:
