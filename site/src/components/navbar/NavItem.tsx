@@ -8,12 +8,10 @@ import {
   FaBell,
 } from 'react-icons/fa';
 import { FaFileMedical } from 'react-icons/fa6';
-import { useAuth } from '@/hooks/useAuth';
 import { keycloak, stopTokenRefresh } from '@/services/auth.service';
 
 export const NavItem = ({ label, to }: { label: string; to: string }) => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
 
   switch (label) {
     case 'Home':
@@ -52,8 +50,7 @@ export const NavItem = ({ label, to }: { label: string; to: string }) => {
           className={style.navItem}
           onClick={() => {
             stopTokenRefresh();
-            logout();
-            keycloak.logout({ redirectUri: window.location.origin + '/auth/callback' });
+            keycloak.logout({ redirectUri: window.location.origin + '/' });
           }}
         >
           <FaSignOutAlt className={style.icon} />
