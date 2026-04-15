@@ -1,0 +1,16 @@
+.dashboard {
+  padding: 32px;
+}
+
+.card {
+  height: 100%;
+  border-radius: 8px;
+
+  .stat {
+    font-size: 48px;
+    font-weight: 700;
+    color: #1E3A60;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+}

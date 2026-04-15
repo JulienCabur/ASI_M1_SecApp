@@ -1,0 +1,27 @@
+.container {
+  padding: 32px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.listItem {
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: background 0.15s;
+
+  &:hover {
+    background: #f0f5ff;
+  }
+}
+
+.selected {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #e6f4ff;
+  border: 1px solid #91caff;
+}
