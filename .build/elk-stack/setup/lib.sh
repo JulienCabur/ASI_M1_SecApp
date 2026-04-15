@@ -27,13 +27,15 @@ function augment_curl_args {
 	if [[ -n "${ELASTIC_PASSWORD:-}" ]]; then
 		args_ref+=( '-u' "elastic:${ELASTIC_PASSWORD}" )
 	fi
+	# CA du PKI interne pour valider le certificat ELK
+	args_ref+=( '--cacert' '/certs/ca-chain.pem' )
 }
 
 # Poll the 'elasticsearch' service until it responds with HTTP code 200.
 function wait_for_elasticsearch {
 	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
-	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}' "http://${elasticsearch_host}:9200/" )
+	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}' "https://${elasticsearch_host}:9200/" )
 
 	augment_curl_args args
 
@@ -68,7 +70,7 @@ function wait_for_elasticsearch {
 function wait_for_builtin_users {
 	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
-	local -a args=( '-s' '-D-' '-m15' "http://${elasticsearch_host}:9200/_security/user?pretty" )
+	local -a args=( '-s' '-D-' '-m15' "https://${elasticsearch_host}:9200/_security/user?pretty" )
 
 	augment_curl_args args
 
@@ -116,7 +118,7 @@ function check_user_exists {
 	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
 	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'
-		"http://${elasticsearch_host}:9200/_security/user/${username}"
+		"https://${elasticsearch_host}:9200/_security/user/${username}"
 		)
 
 	augment_curl_args args
@@ -150,7 +152,7 @@ function set_user_password {
 	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
 	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'
-		"http://${elasticsearch_host}:9200/_security/user/${username}/_password"
+		"https://${elasticsearch_host}:9200/_security/user/${username}/_password"
 		'-X' 'POST'
 		'-H' 'Content-Type: application/json'
 		'-d' "{\"password\" : \"${password}\"}"
@@ -182,7 +184,7 @@ function create_user {
 	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
 	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'
-		"http://${elasticsearch_host}:9200/_security/user/${username}"
+		"https://${elasticsearch_host}:9200/_security/user/${username}"
 		'-X' 'POST'
 		'-H' 'Content-Type: application/json'
 		'-d' "{\"password\":\"${password}\",\"roles\":[\"${role}\"]}"
@@ -213,7 +215,7 @@ function ensure_role {
 	local elasticsearch_host="${ELASTICSEARCH_HOST:-elasticsearch}"
 
 	local -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'
-		"http://${elasticsearch_host}:9200/_security/role/${name}"
+		"https://${elasticsearch_host}:9200/_security/role/${name}"
 		'-X' 'POST'
 		'-H' 'Content-Type: application/json'
 		'-d' "$body"
