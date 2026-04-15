@@ -94,9 +94,25 @@ services:
     image: nginx:latest
     ports:
       - 80:80
+      - 443:443
     restart: always
+    depends_on:
+      - pki
+    environment:
+      SERVER_KEY_PASS: ${SERVER_KEY_PASS}
     volumes:
       - ./nginx/conf/:/etc/nginx/conf.d/:ro
+      - ../src/site/dist/:/usr/share/nginx/html/:ro
+      - pki_public:/etc/nginx/certs:ro
+    entrypoint: >
+      /bin/bash -c "
+      mkdir -p /etc/nginx/ssl &&
+      printf '%s\n' \"$$SERVER_KEY_PASS\" > /etc/nginx/ssl/server.pass &&
+      chmod 600 /etc/nginx/ssl/server.pass &&
+      exec /docker-entrypoint.sh nginx -g 'daemon off;'
+      "
+    networks:
+      - auth-network
   postgres_keycloak:
     image: postgres
     volumes:
@@ -178,7 +194,6 @@ networks:
     driver: bridge
   elk:
     driver: bridge
-
 
 volumes:
   postgres_data:

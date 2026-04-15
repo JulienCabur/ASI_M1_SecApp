@@ -94,6 +94,7 @@
       "attributes" : { }
     } ],
     "client" : {
+      "health_app_frontend" : [ ],
       "realm-management" : [ {
         "id" : "a2a1f4e2-deac-4858-abe2-c63ea2733a3f",
         "name" : "view-events",
@@ -365,7 +366,7 @@
     "path" : "/Patients",
     "subGroups" : [ ],
     "attributes" : { },
-    "realmRoles" : [ ],
+    "realmRoles" : [ "role_patients" ],
     "clientRoles" : { }
   } ],
   "defaultRole" : {
@@ -376,6 +377,7 @@
     "clientRole" : false,
     "containerId" : "c9ca69e4-db7e-45fc-ad5f-10d5795006b3"
   },
+  "defaultGroups" : [ "/Patients" ],
   "requiredCredentials" : [ "password" ],
   "otpPolicyType" : "totp",
   "otpPolicyAlgorithm" : "HmacSHA1",
@@ -513,6 +515,35 @@
     "realmRoles" : [ "default-roles-health_app" ],
     "notBefore" : 0,
     "groups" : [ ]
+  }, {
+    "id" : "392704fc-6fa3-4a32-8297-0b0dcad187ae",
+    "createdTimestamp" : 1776252747866,
+    "username" : "roger",
+    "enabled" : true,
+    "totp" : false,
+    "emailVerified" : false,
+    "firstName" : "roger",
+    "lastName" : "roger",
+    "email" : "roger@roger.roger",
+    "credentials" : [ {
+      "id" : "89b77558-1013-401a-8b82-08ac60dd37b7",
+      "type" : "password",
+      "createdDate" : 1776252747888,
+      "secretData" : "{\"value\":\"xhrE4929/L8i8PG7otV8qXSWRjhd3l/tifbmC/MfvrA=\",\"salt\":\"kkYKnGmTtmf6iAr1Qaog8w==\",\"additionalParameters\":{}}",
+      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
+    }, {
+      "id" : "22a35bfd-cbd6-45f9-909b-a094335e5a14",
+      "type" : "webauthn-passwordless",
+      "userLabel" : "WebAuthn Authenticator (Default Label)",
+      "createdDate" : 1776252790536,
+      "secretData" : "{}",
+      "credentialData" : "{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credentialId\":\"eTiUT7VYehJ9lDT8QU46AFvyoKg=\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIGQxewksvzVkXAvzZp0QyO3ed3VYPdfJZj2oJsCrvpbDIlggDJK_o1B5o_u2pT0c1M0rbtQuGe2qaBb-YyOMeuO2cjo\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\",\"hybrid\"]}"
+    } ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-health_app" ],
+    "notBefore" : 0,
+    "groups" : [ "/Patients" ]
   }, {
     "id" : "84e4c454-647b-4d76-96e4-4adc919958dd",
     "createdTimestamp" : 1773949665939,
@@ -705,6 +736,42 @@
     "authenticationFlowBindingOverrides" : { },
     "fullScopeAllowed" : false,
     "nodeReRegistrationTimeout" : 0,
+    "defaultClientScopes" : [ "web-origins", "acr", "roles", "profile", "email" ],
+    "optionalClientScopes" : [ "address", "phone", "offline_access", "microprofile-jwt" ]
+  }, {
+    "id" : "de6c4d00-8dee-404b-8600-8f05354ec887",
+    "clientId" : "health_app_frontend",
+    "name" : "health_app_frontend",
+    "description" : "",
+    "rootUrl" : "https://localhost",
+    "adminUrl" : "https://localhost",
+    "baseUrl" : "https://localhost",
+    "surrogateAuthRequired" : false,
+    "enabled" : true,
+    "alwaysDisplayInConsole" : false,
+    "clientAuthenticatorType" : "client-secret",
+    "redirectUris" : [ "https://localhost/*" ],
+    "webOrigins" : [ "https://localhost" ],
+    "notBefore" : 0,
+    "bearerOnly" : false,
+    "consentRequired" : false,
+    "standardFlowEnabled" : true,
+    "implicitFlowEnabled" : false,
+    "directAccessGrantsEnabled" : true,
+    "serviceAccountsEnabled" : false,
+    "publicClient" : true,
+    "frontchannelLogout" : true,
+    "protocol" : "openid-connect",
+    "attributes" : {
+      "oidc.ciba.grant.enabled" : "false",
+      "post.logout.redirect.uris" : "https://localhost/*",
+      "oauth2.device.authorization.grant.enabled" : "false",
+      "backchannel.logout.session.required" : "true",
+      "backchannel.logout.revoke.offline.tokens" : "false"
+    },
+    "authenticationFlowBindingOverrides" : { },
+    "fullScopeAllowed" : true,
+    "nodeReRegistrationTimeout" : -1,
     "defaultClientScopes" : [ "web-origins", "acr", "roles", "profile", "email" ],
     "optionalClientScopes" : [ "address", "phone", "offline_access", "microprofile-jwt" ]
   }, {
@@ -1341,7 +1408,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-sha256-pairwise-sub-mapper", "saml-user-property-mapper", "oidc-address-mapper", "saml-user-attribute-mapper", "oidc-usermodel-property-mapper", "saml-role-list-mapper", "oidc-usermodel-attribute-mapper", "oidc-full-name-mapper" ]
+        "allowed-protocol-mapper-types" : [ "oidc-address-mapper", "saml-role-list-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-property-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper", "oidc-full-name-mapper", "saml-user-property-mapper" ]
       }
     }, {
       "id" : "bed76a0e-6199-4bce-9588-714de1db0458",
@@ -1357,7 +1424,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "saml-role-list-mapper", "oidc-usermodel-property-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-user-attribute-mapper", "saml-user-property-mapper", "oidc-address-mapper", "oidc-full-name-mapper", "oidc-usermodel-attribute-mapper" ]
+        "allowed-protocol-mapper-types" : [ "oidc-usermodel-attribute-mapper", "oidc-address-mapper", "saml-user-property-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-full-name-mapper", "saml-role-list-mapper", "saml-user-attribute-mapper", "oidc-usermodel-property-mapper" ]
       }
     }, {
       "id" : "a3ceee06-2e09-403f-a53e-f57cf3acc5ae",
