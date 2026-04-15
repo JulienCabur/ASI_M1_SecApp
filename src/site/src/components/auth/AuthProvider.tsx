@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { App, Spin } from 'antd';
 import { keycloak, initKeycloak, getUserFromToken, stopTokenRefresh } from '@/services/auth.service';
 import { useAuthStore } from '@/store/auth.store';
+import styles from './AuthProvider.module.scss';
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -38,7 +39,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   if (!initialized) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <div className={styles.loader}>
         <Spin size="large" />
       </div>
     );
