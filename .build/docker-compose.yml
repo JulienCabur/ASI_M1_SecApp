@@ -7,6 +7,7 @@ services:
       - ./elk-stack/setup/entrypoint.sh:/entrypoint.sh:ro,Z
       - ./elk-stack/setup/lib.sh:/lib.sh:ro,Z
       - ./elk-stack/setup/roles:/roles:ro,Z
+      - pki_public:/certs:ro
     environment:
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
       LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
@@ -32,6 +33,7 @@ services:
     volumes:
       - ./elk-stack/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
       - elasticsearch:/usr/share/elasticsearch/data:Z
+      - pki_public:/usr/share/elasticsearch/config/certs:ro
     ports:
       - 9200:9200
       - 9300:9300
@@ -42,6 +44,9 @@ services:
       discovery.type: single-node
     networks:
       - elk
+    depends_on:
+      pki:
+        condition: service_healthy
     restart: unless-stopped
 
   logstash:
@@ -49,6 +54,7 @@ services:
     volumes:
       - ./elk-stack/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
       - ./elk-stack/logstash/pipeline/:/usr/share/logstash/pipeline/:ro,Z
+      - pki_public:/usr/share/logstash/config/certs:ro
     ports:
       - 5044:5044
       - 50000:50000/tcp
@@ -70,6 +76,7 @@ services:
     image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
     volumes:
       - ./elk-stack/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+      - pki_public:/usr/share/kibana/config/certs:ro
     ports:
       - 5601:5601
     environment:
@@ -134,6 +141,12 @@ services:
       /etc/pki/CA/config/pki_deploy.sh &&
       tail -f /dev/null
       "
+    healthcheck:
+      test: ["CMD", "test", "-f", "/etc/pki/CA/certs/elk.crt"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
     networks:
       - auth-network
 

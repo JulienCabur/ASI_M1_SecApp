@@ -133,5 +133,28 @@ chown 1000:1000 $EXPORT_DIR/nginx.key
 chmod 644 $EXPORT_DIR/nginx.crt
 chmod 600 $EXPORT_DIR/nginx.key
 
+# Generate ELK certificate (elasticsearch, kibana, logstash)
+SAN="DNS:elasticsearch,DNS:kibana,DNS:logstash,DNS:localhost" \
+openssl req -new -config $CONFIG_DIR/server.conf \
+    -out $BASE_DIR/elk.csr \
+    -keyout $BASE_DIR/elk.key \
+    -passout env:SERVER_KEY_PASS \
+    -batch
+
+export ca="signing-ca1"
+openssl ca -config $CONFIG_DIR/signing-ca.conf \
+    -in $BASE_DIR/elk.csr \
+    -out $BASE_DIR/elk.crt \
+    -extensions server_ext \
+    -passin env:SIGNING1_PASS \
+    -batch
+
+cp $BASE_DIR/elk.crt $EXPORT_DIR/elk.crt
+cp $BASE_DIR/elk.key $EXPORT_DIR/elk.key
+
+chown 1000:1000 $EXPORT_DIR/elk.key
+chmod 644 $EXPORT_DIR/elk.crt
+chmod 600 $EXPORT_DIR/elk.key
+
 
 echo "PKI Deployed"
