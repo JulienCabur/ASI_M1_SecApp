@@ -115,8 +115,11 @@ services:
       - auth-network
   postgres_keycloak:
     image: postgres
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
+      - ./postgres-init/init.sql:/docker-entrypoint-initdb.d/init.sql
     env_file:
       - .env
     environment:
@@ -189,6 +192,35 @@ services:
     volumes:
       - pki_public:/opt/keycloak/conf/truststores
       - ./keycloak/import/realm-export.json:/opt/keycloak/data/import/realm.json
+  mailcatcher:
+      image: sj26/mailcatcher
+      ports:
+        - "1025:1025"
+        - "1080:1080"
+      networks:
+        - auth-network
+  backend:
+    build:
+      context: ..
+      dockerfile: .build/backend/Dockerfile
+    container_name: backend
+    ports:
+      - "8081:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
+    env_file:
+      - ../src/backend/.env
+    depends_on:
+      - keycloak
+      - postgres_keycloak
+      - pki
+    networks:
+      - auth-network
+
 networks:
   auth-network:
     driver: bridge

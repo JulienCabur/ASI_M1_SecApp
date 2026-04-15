@@ -138,7 +138,7 @@ SAN="DNS:elasticsearch,DNS:kibana,DNS:logstash,DNS:localhost" \
 openssl req -new -config $CONFIG_DIR/server.conf \
     -out $BASE_DIR/elk.csr \
     -keyout $BASE_DIR/elk.key \
-    -passout env:SERVER_KEY_PASS \
+    -passout env:ELK_KEY_PASS \
     -batch
 
 export ca="signing-ca1"

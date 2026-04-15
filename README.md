@@ -25,3 +25,15 @@ Pour supprimer le volume
 ```bash
 docker compose down -v
 ```
+
+Pour restart backend après modif :
+```bash
+docker compose down backend
+docker-compose build --no-cache backend
+docker compose up backend -d
+```
+
+Pour restart frontend après modif :
+```bash
+pnpm build
+```
