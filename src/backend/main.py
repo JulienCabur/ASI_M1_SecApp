@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from core.database import engine, Base
+
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI(
     title="UNamur Medical Institute",
     description="Core API for the UNamur Medical Institute project",
