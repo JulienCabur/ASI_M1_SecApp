@@ -130,3 +130,4 @@ for SERVICE in $SERVICES; do
 done
 
 echo "PKI Deployed"
+exec tail -f /dev/null

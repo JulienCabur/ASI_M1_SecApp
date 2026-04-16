@@ -7,6 +7,7 @@ services:
       - ./elk-stack/setup/entrypoint.sh:/entrypoint.sh:ro,Z
       - ./elk-stack/setup/lib.sh:/lib.sh:ro,Z
       - ./elk-stack/setup/roles:/roles:ro,Z
+      - ./secrets/elasticsearch:/certs:ro,Z
     environment:
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
       LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
@@ -105,9 +106,9 @@ services:
     env_file:
       - ../src/backend/.env
     depends_on:
+      - pki
       - keycloak
       - postgres_keycloak
-      - pki
     networks:
       - auth-network
     volumes:
@@ -161,10 +162,9 @@ services:
       - ./pki:/etc/pki/CA/config
       - pki_secrets:/etc/pki/CA
       - ./secrets:/etc/pki/CA/certs
-    command: >
+    command: |
       bash -c "
-      bash /etc/pki/CA/config/pki_deploy.sh
-      tail -f /dev/null
+      bash /etc/pki/CA/config/pki_deploy.sh;
       "
     healthcheck:
       test: ["CMD", "test", "-f", "/etc/pki/CA/certs/root-ca.crt"]
