@@ -28,7 +28,7 @@ async def create_directory(
         "path": directory_path
     }
 
-@router.get("/download")
+@router.get("/download_file", response_class=FileResponse)
 async def download_file(
     file: str,
     db: Session = Depends(get_db),
@@ -41,7 +41,7 @@ async def download_file(
 
     return FileResponse(path=file_content, filename=file)
 
-@router.post("/upload", response_model=Dict[str, Any])
+@router.post("/upload_file", response_model=Dict[str, Any])
 async def upload_file(
     file: UploadFile,
     db: Session = Depends(get_db),
