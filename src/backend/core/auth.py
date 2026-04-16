@@ -41,13 +41,14 @@ async def get_public_key(token: str) -> Dict[str, Any]:
 
         public_key = None
         for key in jwks.get("keys", []):
-            if key.get("kid") == key_id:
+            if key.get("kid") == key_id and public_key is None:
                 public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
-                break
 
         if not public_key:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Clé de signature non trouvée")
+
         return public_key
+
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Erreur lors de la récupération de la clé publique: {str(e)}")
 
