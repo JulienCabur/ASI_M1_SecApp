@@ -1,4 +1,4 @@
-﻿{
+{
   "id" : "c9ca69e4-db7e-45fc-ad5f-10d5795006b3",
   "realm" : "health_app",
   "displayName" : "",
@@ -411,6 +411,28 @@
   "webAuthnPolicyPasswordlessAcceptableAaguids" : [ ],
   "webAuthnPolicyPasswordlessExtraOrigins" : [ ],
   "users" : [ {
+    "id" : "3479f67c-567c-4d1f-8cda-860d38efe0e7",
+    "createdTimestamp" : 1776333586908,
+    "username" : "aaa@aaa.com",
+    "enabled" : true,
+    "totp" : false,
+    "emailVerified" : false,
+    "firstName" : "aaaaa",
+    "lastName" : "aaaaa",
+    "email" : "aaa@aaa.com",
+    "credentials" : [ {
+      "id" : "969ac8e8-c561-4934-9548-a66e22aa8664",
+      "type" : "password",
+      "createdDate" : 1776333586923,
+      "secretData" : "{\"value\":\"kcWFtotC+x9MZ10xlRqxrZf6qIw/PCSFz6jsSrxW6os=\",\"salt\":\"7l5RKZbvs687qLYfVXFM2g==\",\"additionalParameters\":{}}",
+      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
+    } ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ "VERIFY_EMAIL", "webauthn-register-passwordless" ],
+    "realmRoles" : [ "default-roles-health_app" ],
+    "notBefore" : 0,
+    "groups" : [ "/Patients" ]
+  }, {
     "id" : "ddaf69c2-a097-45f0-9d79-a0effaad1438",
     "createdTimestamp" : 1773956921059,
     "username" : "dd",
@@ -1409,7 +1431,7 @@
     "referrerPolicy" : "no-referrer",
     "xRobotsTag" : "none",
     "xFrameOptions" : "SAMEORIGIN",
-    "contentSecurityPolicy" : "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "contentSecurityPolicy" : "frame-src 'self' https://www.google.com https://www.recaptcha.net; frame-ancestors 'self'; object-src 'none';",
     "xXSSProtection" : "1; mode=block",
     "strictTransportSecurity" : "max-age=31536000; includeSubDomains"
   },
@@ -1477,7 +1499,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-address-mapper", "saml-role-list-mapper", "oidc-usermodel-attribute-mapper", "saml-user-property-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-property-mapper", "saml-user-attribute-mapper", "oidc-full-name-mapper" ]
+        "allowed-protocol-mapper-types" : [ "oidc-usermodel-attribute-mapper", "oidc-usermodel-property-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-role-list-mapper", "oidc-full-name-mapper", "oidc-address-mapper", "saml-user-property-mapper", "saml-user-attribute-mapper" ]
       }
     }, {
       "id" : "bed76a0e-6199-4bce-9588-714de1db0458",
@@ -1493,7 +1515,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-address-mapper", "saml-user-attribute-mapper", "saml-user-property-mapper", "oidc-usermodel-attribute-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "saml-role-list-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-user-attribute-mapper", "saml-user-property-mapper", "oidc-full-name-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-property-mapper", "oidc-usermodel-attribute-mapper", "oidc-address-mapper", "saml-role-list-mapper" ]
       }
     }, {
       "id" : "a3ceee06-2e09-403f-a53e-f57cf3acc5ae",
@@ -2000,9 +2022,10 @@
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
     }, {
+      "authenticatorConfig" : "Health App Captacha",
       "authenticator" : "registration-recaptcha-action",
       "authenticatorFlow" : false,
-      "requirement" : "DISABLED",
+      "requirement" : "REQUIRED",
       "priority" : 60,
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
@@ -2152,6 +2175,13 @@
       "x509-cert-auth.crldp-checking-enabled" : "false",
       "x509-cert-auth.mapping-source-selection" : "Subject's Common Name",
       "x509-cert-auth.timestamp-validation-enabled" : "true"
+    }
+  }, {
+    "id" : "35f51cc4-0d10-41b3-9c0e-542ef1434853",
+    "alias" : "Health App Captacha",
+    "config" : {
+      "site.key" : "6Lc0TrosAAAAAE0hz4-oVajDrmzj6L6T0GdQErzf",
+      "secret" : "6Lc0TrosAAAAAE6lHhjBuy3yv-0ldG1BBt_RwkAS"
     }
   }, {
     "id" : "04ff0c4d-dcdd-4d9e-a75f-a7e5d829c03e",
