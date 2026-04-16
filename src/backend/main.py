@@ -8,8 +8,6 @@ import os
 
 Base.metadata.create_all(bind=engine)
 
-# Si le backend est derrière un reverse proxy, utilise root_path
-
 app = FastAPI(
     title="UNamur Medical Institute",
     description="Core API for the UNamur Medical Institute project",

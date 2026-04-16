@@ -19,16 +19,37 @@ async def get_keycloak_public_key() -> Dict[str, Any]:
     """
     try:
         keycloak_url = os.getenv("KEYCLOAK_PUBLIC_KEY_URL")
-        print(f"📍 URL JWKS: {keycloak_url}")
         
         async with httpx.AsyncClient(verify=False) as client:
             response = await client.get(keycloak_url)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as e:
-        print(f"❌ Erreur HTTP Keycloak: {e}")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Service d'authentification indisponible")
 
+async def get_public_key(token: str) -> Dict[str, Any]:
+    """
+    Récupère la clé publique correspondante au token JWT en utilisant le kid du header du token pour trouver la bonne clé dans le JWKS de Keycloak.
+    """
+    try:
+        jwks = await get_keycloak_public_key()
+        unverified_header = jwt.get_unverified_header(token)
+        key_id = unverified_header.get("kid")
+
+        if not key_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalide")
+
+        public_key = None
+        for key in jwks.get("keys", []):
+            if key.get("kid") == key_id:
+                public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
+                break
+
+        if not public_key:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Clé de signature non trouvée")
+        return public_key
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Erreur lors de la récupération de la clé publique: {str(e)}")
 
 async def validate_jwt_token(token: str) -> Dict[str, Any]:
     """
@@ -36,95 +57,30 @@ async def validate_jwt_token(token: str) -> Dict[str, Any]:
     Retourne le payload du token si valide, ou lève une HTTPException.
     """
     try:
-        print(f"1️⃣ Récupération JWKS de Keycloak...")
-        # Récupère la clé publique de Keycloak
-        jwks = await get_keycloak_public_key()
-        print(f"2️⃣ JWKS reçu: {len(jwks.get('keys', []))} clés")
-        
-        # Extrait le header du token (sans vérifier) pour obtenir le kid
-        print(f"3️⃣ Extraction du header du token...")
-        unverified_header = jwt.get_unverified_header(token)
-        kid = unverified_header.get("kid")
-        print(f"4️⃣ KID extrait: {kid}")
-        
-        if not kid:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail="Token invalide: pas de 'kid' dans le header JWT"
-            )
-        
-        # Trouve la clé correspondante dans le JWKS
-        print(f"5️⃣ Recherche de la clé correspondant à kid={kid}")
-        public_key = None
-        for key in jwks.get("keys", []):
-            if key.get("kid") == kid:
-                print(f"6️⃣ Clé trouvée! Construction de la clé RSA...")
-                public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
-                break
-        
-        if not public_key:
-            print(f"❌ Clé non trouvée pour kid={kid}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail=f"Clé de signature avec kid '{kid}' non trouvée dans Keycloak"
-            )
-        
-        # Valide et décode le token avec la clé publique
-        print(f"7️⃣ Vérification de la signature RS256...")
-        # Note: On ne vérifie pas l'audience (verify_aud=False) car Keycloak utilise 'account' par défaut
-        # et cela peut être différent du CLIENT_ID. L'important est de valider la signature RS256.
+        public_key = await get_public_key(token)
         payload = jwt.decode(
             token,
             public_key,
             algorithms=["RS256"],
-            options={"verify_aud": False}  # Désactiver la vérification d'audience
+            options={"verify_aud": False}
         )
-        print(f"8️⃣ ✅ Token valide! Payload: {payload.get('sub')}")
-        
         return payload
-        
+
     except jwt.ExpiredSignatureError as e:
-        print(f"❌ Token expiré: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail=f"❌ Token expiré: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token expiré: {str(e)}")
     except jwt.InvalidTokenError as e:
-        print(f"❌ Token invalide: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail=f"❌ Token invalide: {str(e)}"
-        )
-    except HTTPException:
-        raise
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token invalide: {str(e)}")
     except Exception as e:
-        print(f"❌ Erreur générale: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail=f"❌ Erreur lors de la validation du token: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Erreur lors de la validation du token: {str(e)}")
+
 
 async def get_current_user(credentials: Any = Depends(security)) -> UserInDB:
     """
     Dépendance FastAPI pour vérifier l'authentification.
     """
     try:
-        jwks = await get_keycloak_public_key()
-        unverified_header = jwt.get_unverified_header(credentials.credentials)
-        kid = unverified_header.get("kid")
 
-        if not kid:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalide")
-
-        public_key = None
-        for key in jwks.get("keys", []):
-            if key.get("kid") == kid:
-                public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key)
-                break
-        
-        if not public_key:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Clé de signature non trouvée")
-
+        public_key = await get_public_key(credentials.credentials)
         payload = jwt.decode(
             credentials.credentials,
             public_key,
@@ -146,23 +102,3 @@ async def get_current_user(credentials: Any = Depends(security)) -> UserInDB:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Token invalide : {e}")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Erreur d'authentification : {e}")
-
-
-def get_user_id_from_token(payload: Dict[str, Any]) -> str:
-    """Extrait l'ID utilisateur du payload du token."""
-    return payload.get("sub")
-
-
-def get_username_from_token(payload: Dict[str, Any]) -> str:
-    """Extrait le nom d'utilisateur du payload du token."""
-    return payload.get("preferred_username") or payload.get("name")
-
-
-def get_email_from_token(payload: Dict[str, Any]) -> str:
-    """Extrait l'email du payload du token."""
-    return payload.get("email")
-
-
-def get_roles_from_token(payload: Dict[str, Any]) -> list:
-    """Extrait les rôles du payload du token."""
-    return payload.get("realm_access", {}).get("roles", [])
