@@ -20,12 +20,11 @@ async def create_directory(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
-    directory_name = current_user.username + "_" + str(current_user.id)
 
     file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    directory_path = file_service.create_directory_service(username=directory_name)
+    directory_path = file_service.create_directory_service(username=str(current_user.id))
     return {
-        "message": f"Répertoire créé pour {directory_name}",
+        "message": f"Répertoire créé pour {str(current_user.id)}",
         "path": directory_path
     }
 
@@ -35,11 +34,10 @@ async def download_file(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ):
-    directory_name = current_user.username + "_" + str(current_user.id)
     storage_path = os.getenv("STORAGE_PATH")
 
     file_service = FileService(db=db, storage_path=storage_path)
-    file_content = file_service.save_file(file=file, username=directory_name)
+    file_content = file_service.save_file(file=file, username=str(current_user.id))
 
     return FileResponse(path=file_content, filename=file)
 
@@ -49,10 +47,7 @@ async def upload_file(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
-    directory_name = current_user.username + "_" + str(current_user.id)
 
     file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    message = file_service.upload_file(file=file, username=directory_name)
-    return {
-        "message": message
-    }
+    message = file_service.upload_file(file=file, username=str(current_user.id))
+    return {"message": message}
