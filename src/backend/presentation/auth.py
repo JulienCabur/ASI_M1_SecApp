@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from dotenv import load_dotenv
 from core.database import get_db
-from core.auth import get_current_user, validate_jwt_token, get_username_from_token
+from core.auth import get_current_user, validate_jwt_token
 from typing import Dict, Any
 from service.log_service import LogsService
-
-from src.backend.schema.auth_schema import UserInDB
+from schema.auth_schema import UserInDB
 
 router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion de l'authentification
     prefix="/auth",
@@ -17,13 +16,23 @@ log_service = LogsService()
 @router.get("/validate_token", response_model=Dict[str, Any])
 async def validate_token_route(token: str = Query(..., description="JWT token to validate")) -> Dict[str, Any]:
     try:
-        paylod = await validate_jwt_token(token)
-        log_service.add_logs([f"Token validated successfully for user: {get_username_from_token(token)}"], category="INFO", log_type="api")
+        payload = await validate_jwt_token(token)
+        log_service.add_logs([f"Token validated successfully for user: {payload.get('sub')}"], category="INFO", log_type="api")
         return {"status": "Token valide",
-                "payload": paylod}
+                "payload": payload}
     except Exception as e:
         log_service.add_logs([f"Token validation failed: {str(e)}"], category="ERROR", log_type="api")
         raise HTTPException(status_code=400, detail=f"Erreur lors de la validation du token: {str(e)}")
+
+@router.post("/register_doctor", response_model=Dict[str, Any])
+async def register_doctor_route(
+    username: str) -> Dict[str, Any]:
+    try:
+        # Implementation for registering a doctor
+        pass
+    except Exception as e:
+        log_service.add_logs([f"Error occurred while registering doctor: {str(e)}"], category="ERROR", log_type="api")
+        raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du médecin: {str(e)}")
 
 @router.get("/user_info", response_model=Dict[str, Any])
 async def get_user_info_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:

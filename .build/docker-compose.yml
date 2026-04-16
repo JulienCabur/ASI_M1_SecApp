@@ -7,7 +7,6 @@ services:
       - ./elk-stack/setup/entrypoint.sh:/entrypoint.sh:ro,Z
       - ./elk-stack/setup/lib.sh:/lib.sh:ro,Z
       - ./elk-stack/setup/roles:/roles:ro,Z
-      - pki_public:/certs:ro
     environment:
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
       LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
@@ -33,7 +32,7 @@ services:
     volumes:
       - ./elk-stack/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
       - elasticsearch:/usr/share/elasticsearch/data:Z
-      - pki_public:/usr/share/elasticsearch/config/certs:ro
+      - ./secrets/elasticsearch:/usr/share/elasticsearch/config/certs:ro
     ports:
       - 9200:9200
       - 9300:9300
@@ -54,7 +53,7 @@ services:
     volumes:
       - ./elk-stack/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
       - ./elk-stack/logstash/pipeline/:/usr/share/logstash/pipeline/:ro,Z
-      - pki_public:/usr/share/logstash/config/certs:ro
+      - ./secrets/logstash:/usr/share/logstash/config/certs:ro
     ports:
       - 5044:5044
       - 50000:50000/tcp
@@ -76,7 +75,7 @@ services:
     image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
     volumes:
       - ./elk-stack/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
-      - pki_public:/usr/share/kibana/config/certs:ro
+      - ./secrets/kibana:/usr/share/kibana/config/certs:ro
     ports:
       - 5601:5601
     environment:
@@ -90,6 +89,29 @@ services:
       setup:
         condition: service_completed_successfully
     restart: unless-stopped
+  backend:
+    build:
+      context: ..
+      dockerfile: .build/backend/Dockerfile
+    container_name: backend
+    ports:
+      - "8081:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
+    env_file:
+      - ../src/backend/.env
+    depends_on:
+      - keycloak
+      - postgres_keycloak
+      - pki
+    networks:
+      - auth-network
+    volumes:
+      - ./secrets/backend:/app/certs:ro
   webserver:
     image: nginx:latest
     ports:
@@ -98,12 +120,13 @@ services:
     restart: always
     depends_on:
       - pki
+      - backend
     environment:
       SERVER_KEY_PASS: ${SERVER_KEY_PASS}
     volumes:
       - ./nginx/conf/:/etc/nginx/conf.d/:ro
       - ../src/site/dist/:/usr/share/nginx/html/:ro
-      - pki_public:/etc/nginx/certs:ro
+      - ./secrets/webserver:/etc/nginx/certs:ro
     entrypoint: >
       /bin/bash -c "
       mkdir -p /etc/nginx/ssl &&
@@ -137,15 +160,14 @@ services:
     volumes:
       - ./pki:/etc/pki/CA/config
       - pki_secrets:/etc/pki/CA
-      - pki_public:/etc/pki/CA/certs
+      - ./secrets:/etc/pki/CA/certs
     command: >
       bash -c "
-      chmod +x /etc/pki/CA/config/pki_deploy.sh &&
-      /etc/pki/CA/config/pki_deploy.sh &&
+      bash /etc/pki/CA/config/pki_deploy.sh
       tail -f /dev/null
       "
     healthcheck:
-      test: ["CMD", "test", "-f", "/etc/pki/CA/certs/elk.crt"]
+      test: ["CMD", "test", "-f", "/etc/pki/CA/certs/root-ca.crt"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -155,12 +177,13 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:23.0
+    container_name: keycloak
     entrypoint: >
       /bin/bash -c "
       until [ -f /opt/keycloak/conf/truststores/root-ca.crt ]; do sleep 2; done &&
       rm -f /tmp/truststore.p12 &&
       keytool -import -alias root-ca -file /opt/keycloak/conf/truststores/root-ca.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
-      keytool -import -alias signing-ca -file /opt/keycloak/conf/truststores/signing-ca1.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
+      keytool -import -alias signing-ca -file /opt/keycloak/conf/truststores/signing-ca2.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
       /opt/keycloak/bin/kc.sh start-dev --import-realm
       "
     env_file:
@@ -190,36 +213,16 @@ services:
     networks:
       - auth-network
     volumes:
-      - pki_public:/opt/keycloak/conf/truststores
+      - ./secrets/keycloak:/opt/keycloak/conf/truststores
       - ./keycloak/import/realm-export.json:/opt/keycloak/data/import/realm.json
   mailcatcher:
       image: sj26/mailcatcher
+      container_name: mailcatcher
       ports:
         - "1025:1025"
         - "1080:1080"
       networks:
         - auth-network
-  backend:
-    build:
-      context: ..
-      dockerfile: .build/backend/Dockerfile
-    container_name: backend
-    ports:
-      - "8081:8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 5s
-    env_file:
-      - ../src/backend/.env
-    depends_on:
-      - keycloak
-      - postgres_keycloak
-      - pki
-    networks:
-      - auth-network
 
 networks:
   auth-network:
@@ -230,5 +233,4 @@ networks:
 volumes:
   postgres_data:
   pki_secrets:
-  pki_public:
   elasticsearch:

@@ -5,6 +5,7 @@ if [ -z "$1" ] || [ -z "$2" ]; then
     echo "Erreur: Le nom et le mot de passe doivent être fournis en paramètres."
     exit 1
 fi
+mkdir -p /etc/pki/CA/certs/doctors
 
 NAME="$1"
 PASSWORD="$2"

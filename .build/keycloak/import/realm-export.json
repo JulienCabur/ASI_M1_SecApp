@@ -529,6 +529,42 @@
     "notBefore" : 0,
     "groups" : [ "/Patients" ]
   }, {
+    "id" : "482478ca-4241-4930-89d3-10d89fd3be11",
+    "createdTimestamp" : 1776366765878,
+    "username" : "mamn@mamn.com",
+    "enabled" : true,
+    "totp" : true,
+    "emailVerified" : true,
+    "firstName" : "mamn",
+    "lastName" : "mamn",
+    "email" : "mamn@mamn.com",
+    "credentials" : [ {
+      "id" : "46cb0b18-3fbf-4aca-af6e-e9ffb8e7cfe2",
+      "type" : "password",
+      "createdDate" : 1776366765973,
+      "secretData" : "{\"value\":\"DfzIRkddakFZtglhHm399SrKUkUAsAXhU4/Sb1jUOQQ=\",\"salt\":\"ffsYnt8G+DjJxZvY07D43A==\",\"additionalParameters\":{}}",
+      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
+    }, {
+      "id" : "41a10bd9-659f-4eb4-a3d6-eab8ae481187",
+      "type" : "otp",
+      "userLabel" : "Health",
+      "createdDate" : 1776366793855,
+      "secretData" : "{\"value\":\"Kt4OLb8mMG6FW8s5uMm8\"}",
+      "credentialData" : "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+    }, {
+      "id" : "7e0be590-a20c-4511-ad17-59331f3540ca",
+      "type" : "webauthn-passwordless",
+      "userLabel" : "WebAuthn Authenticator (Default Label)",
+      "createdDate" : 1776366866945,
+      "secretData" : "{}",
+      "credentialData" : "{\"aaguid\":\"00000000-0000-0000-0000-000000000000\",\"credentialId\":\"LNGffYgW/X6H5QqEE2+4bA==\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYILPMvSkuE-yASHyoT48GHIbK6PM4Z-XiUsFtVYtYMeoXIlggV_dVVdK1PzjIKDZ3bgs3JMAZaXxBGpIbEbda4Xbw_2k\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\",\"hybrid\"]}"
+    } ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-health_app" ],
+    "notBefore" : 0,
+    "groups" : [ "/Patients" ]
+  }, {
     "id" : "0c90e028-f90f-4eea-afce-f827da90dd4f",
     "createdTimestamp" : 1773957559271,
     "username" : "martin",
@@ -1499,7 +1535,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-usermodel-attribute-mapper", "oidc-usermodel-property-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-role-list-mapper", "oidc-full-name-mapper", "oidc-address-mapper", "saml-user-property-mapper", "saml-user-attribute-mapper" ]
+        "allowed-protocol-mapper-types" : [ "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper", "saml-role-list-mapper", "saml-user-attribute-mapper", "oidc-usermodel-attribute-mapper", "oidc-full-name-mapper", "saml-user-property-mapper" ]
       }
     }, {
       "id" : "bed76a0e-6199-4bce-9588-714de1db0458",
@@ -1515,7 +1551,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "saml-user-attribute-mapper", "saml-user-property-mapper", "oidc-full-name-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-property-mapper", "oidc-usermodel-attribute-mapper", "oidc-address-mapper", "saml-role-list-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-user-property-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-role-list-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper" ]
       }
     }, {
       "id" : "a3ceee06-2e09-403f-a53e-f57cf3acc5ae",
@@ -1722,7 +1758,7 @@
     }, {
       "authenticatorFlow" : true,
       "requirement" : "ALTERNATIVE",
-      "priority" : 37,
+      "priority" : 38,
       "autheticatorFlow" : true,
       "flowAlias" : "Password-less forms",
       "userSetupAllowed" : false
@@ -1749,10 +1785,17 @@
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
     }, {
+      "authenticator" : "auth-otp-form",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 30,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
       "authenticator" : "conditional-user-configured",
       "authenticatorFlow" : false,
       "requirement" : "DISABLED",
-      "priority" : 30,
+      "priority" : 31,
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
     } ]
@@ -2060,7 +2103,7 @@
       "userSetupAllowed" : false
     }, {
       "authenticatorFlow" : true,
-      "requirement" : "DISABLED",
+      "requirement" : "ALTERNATIVE",
       "priority" : 40,
       "autheticatorFlow" : true,
       "flowAlias" : "Reset - Conditional OTP",
@@ -2217,7 +2260,7 @@
     "name" : "Configure OTP",
     "providerId" : "CONFIGURE_TOTP",
     "enabled" : true,
-    "defaultAction" : false,
+    "defaultAction" : true,
     "priority" : 10,
     "config" : { }
   }, {

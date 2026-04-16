@@ -89,72 +89,44 @@ chmod 644 $EXPORT_DIR/root-ca.crt
 chmod 644 $EXPORT_DIR/ca-chain.pem $EXPORT_DIR/signing-ca2.crt $EXPORT_DIR/signing-ca1.crt $EXPORT_DIR/ca-chain2.pem
 
 
-# Generate server certificate
-openssl req -new -config $CONFIG_DIR/server.conf \
-    -out $BASE_DIR/server.csr \
-    -keyout $BASE_DIR/server.key \
-    -passout env:SERVER_KEY_PASS \
-    -batch
+SERVICES="keycloak webserver elasticsearch kibana logstash backend"
 
-export ca="signing-ca1"
-openssl ca -config $CONFIG_DIR/signing-ca.conf \
-    -in $BASE_DIR/server.csr \
-    -out $BASE_DIR/server.crt \
-    -extensions server_ext \
-    -passin env:SIGNING1_PASS \
-    -batch
+for SERVICE in $SERVICES; do
+    SERVICE_EXPORT="$EXPORT_DIR/$SERVICE"
+    mkdir -p "$SERVICE_EXPORT"
+    SERVICE_UPPER=$(echo "$SERVICE" | tr '[:lower:]' '[:upper:]')
+    key_pass="env:${SERVICE_UPPER}_KEY_PASS"
 
-cp $BASE_DIR/server.crt $EXPORT_DIR/server.crt
-cp $BASE_DIR/server.key $EXPORT_DIR/server.key
 
-chown 1000:1000 $EXPORT_DIR/server.key
-chmod 644 $EXPORT_DIR/server.crt
-chmod 600 $EXPORT_DIR/server.key
+    SAN="DNS:$SERVICE,DNS:localhost" \
+    openssl req -new -config $CONFIG_DIR/server.conf \
+        -out $BASE_DIR/$SERVICE.csr \
+        -keyout $SERVICE_EXPORT/server.key \
+        -passout $key_pass \
+        -subj "/DC=be/DC=healthapp/O=Health Application/CN=$SERVICE" \
+        -batch
+    export ca="signing-ca2"
+    openssl ca -config $CONFIG_DIR/signing-ca.conf \
+        -in $BASE_DIR/$SERVICE.csr \
+        -out $SERVICE_EXPORT/server.crt \
+        -extensions server_ext \
+        -passin env:SIGNING2_PASS \
+        -batch
+    if [[ "$SERVICE" == "keycloak" ]]; then
+        cp $EXPORT_DIR/ca-chain2.pem $SERVICE_EXPORT/ca-chain2.pem
+        cp $EXPORT_DIR/ca-chain.pem $SERVICE_EXPORT/ca-chain.pem
+        cp $EXPORT_DIR/signing-ca2.crt $SERVICE_EXPORT/signing-ca2.crt
+        chmod 644 $SERVICE_EXPORT/ca-chain2.pem $SERVICE_EXPORT/signing-ca2.crt
+    else
+        cp $EXPORT_DIR/ca-chain2.pem $SERVICE_EXPORT/ca-chain.pem
+    fi
+    cp $EXPORT_DIR/root-ca.crt $SERVICE_EXPORT/root-ca.crt
 
-# Nginx
-openssl req -new -config $CONFIG_DIR/server.conf \
-    -out $BASE_DIR/nginx.csr \
-    -keyout $BASE_DIR/nginx.key \
-    -passout env:NGINX_KEY_PASS \
-    -batch
+    chown -R 1000:1000 $SERVICE_EXPORT
+    chmod 644 $SERVICE_EXPORT/server.crt $SERVICE_EXPORT/ca-chain.pem $SERVICE_EXPORT/root-ca.crt
+    chmod 600 $SERVICE_EXPORT/server.key
 
-export ca="signing-ca1"
-openssl ca -config $CONFIG_DIR/signing-ca.conf \
-    -in $BASE_DIR/nginx.csr \
-    -out $BASE_DIR/nginx.crt \
-    -extensions server_ext \
-    -passin env:SIGNING1_PASS \
-    -batch
-
-cp $BASE_DIR/nginx.crt $EXPORT_DIR/nginx.crt
-cp $BASE_DIR/nginx.key $EXPORT_DIR/nginx.key
-
-chown 1000:1000 $EXPORT_DIR/nginx.key
-chmod 644 $EXPORT_DIR/nginx.crt
-chmod 600 $EXPORT_DIR/nginx.key
-
-# Generate ELK certificate (elasticsearch, kibana, logstash)
-SAN="DNS:elasticsearch,DNS:kibana,DNS:logstash,DNS:localhost" \
-openssl req -new -config $CONFIG_DIR/server.conf \
-    -out $BASE_DIR/elk.csr \
-    -keyout $BASE_DIR/elk.key \
-    -passout env:ELK_KEY_PASS \
-    -batch
-
-export ca="signing-ca1"
-openssl ca -config $CONFIG_DIR/signing-ca.conf \
-    -in $BASE_DIR/elk.csr \
-    -out $BASE_DIR/elk.crt \
-    -extensions server_ext \
-    -passin env:SIGNING1_PASS \
-    -batch
-
-cp $BASE_DIR/elk.crt $EXPORT_DIR/elk.crt
-cp $BASE_DIR/elk.key $EXPORT_DIR/elk.key
-
-chown 1000:1000 $EXPORT_DIR/elk.key
-chmod 644 $EXPORT_DIR/elk.crt
-chmod 600 $EXPORT_DIR/elk.key
-
+    rm $BASE_DIR/$SERVICE.csr
+done
 
 echo "PKI Deployed"
