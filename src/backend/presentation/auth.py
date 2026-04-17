@@ -4,6 +4,8 @@ from core.database import get_db
 from core.auth import get_current_user, validate_jwt_token
 from typing import Dict, Any
 from service.log_service import LogsService
+from service.auth_service import AuthService
+from sqlalchemy.orm import Session
 from schema.auth_schema import UserInDB
 
 router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion de l'authentification
@@ -26,9 +28,10 @@ async def validate_token_route(token: str = Query(..., description="JWT token to
 
 @router.post("/register_doctor", response_model=Dict[str, Any])
 async def register_doctor_route(
-    username: str) -> Dict[str, Any]:
+    username: str,
+    db: Session = Depends(get_db)) -> Dict[str, Any]:
     try:
-        # Implementation for registering a doctor
+        auth_service = AuthService(db=db)
         pass
     except Exception as e:
         log_service.add_logs([f"Error occurred while registering doctor: {str(e)}"], category="ERROR", log_type="api")
