@@ -1,3 +1,9 @@
+"""
+Module de gestion de l'authentification pour l'application FastAPI. 
+Ce module fournit des routes pour valider les tokens JWT, enregistrer les médecins, et extraire les informations utilisateur à partir du token d'authentification. 
+Il utilise des services d'authentification et de journalisation pour gérer les opérations liées à l'authentification et enregistrer les événements importants.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from dotenv import load_dotenv
 from core.database import get_db
@@ -13,17 +19,14 @@ router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion de 
     tags=["auth"]
 )
 load_dotenv()
-log_service = LogsService()
 
 @router.get("/validate_token", response_model=Dict[str, Any])
 async def validate_token_route(token: str = Query(..., description="JWT token to validate")) -> Dict[str, Any]:
     try:
         payload = await validate_jwt_token(token)
-        log_service.add_logs([f"Token validated successfully for user: {payload.get('sub')}"], category="INFO", log_type="api")
         return {"status": "Token valide",
                 "payload": payload}
     except Exception as e:
-        log_service.add_logs([f"Token validation failed: {str(e)}"], category="ERROR", log_type="api")
         raise HTTPException(status_code=400, detail=f"Erreur lors de la validation du token: {str(e)}")
 
 @router.post("/register_doctor", response_model=Dict[str, Any])
@@ -34,13 +37,11 @@ async def register_doctor_route(
         auth_service = AuthService(db=db)
         pass
     except Exception as e:
-        log_service.add_logs([f"Error occurred while registering doctor: {str(e)}"], category="ERROR", log_type="api")
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du médecin: {str(e)}")
 
 @router.get("/user_info", response_model=Dict[str, Any])
 async def get_user_info_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:
     try:
-        log_service.add_logs([f"Extracted user information for user: {current_user.username}"], category="INFO", log_type="api")
         return {
             "id": current_user.id,
             "username": current_user.username,
@@ -48,23 +49,18 @@ async def get_user_info_route(current_user: UserInDB = Depends(get_current_user)
             "roles": current_user.roles
         }
     except Exception as e:
-        log_service.add_logs([f"Error occurred while extracting user information: {str(e)}"], category="ERROR", log_type="api")
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'extraction des informations utilisateur: {str(e)}")
 
 @router.get("/user_name", response_model=Dict[str, Any])
 async def get_username_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:
     try:
-        log_service.add_logs([f"Extracted username for user: {current_user.username}"], category="INFO", log_type="api")
         return {"username": current_user.username}
     except Exception as e:
-        log_service.add_logs([f"Error occurred while extracting username: {str(e)}"], category="ERROR", log_type="api")
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'extraction du nom d'utilisateur: {str(e)}")
 
 @router.get("/user_roles", response_model=Dict[str, Any])
 async def get_user_roles_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:
     try:
-        log_service.add_logs([f"Extracted user roles for user: {current_user.username}"], category="INFO", log_type="api")
         return {"roles": current_user.roles}
     except Exception as e:
-        log_service.add_logs([f"Error occurred while extracting user roles: {str(e)}"], category="ERROR", log_type="api")
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'extraction des rôles utilisateur: {str(e)}")

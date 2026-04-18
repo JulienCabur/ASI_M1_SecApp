@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, UploadFile, Query
+from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from core.database import get_db
-from core.auth import get_current_user, validate_jwt_token
+from core.auth import get_current_user
 from service.file_service import FileService
 from schema.auth_schema import UserInDB
 from typing import Dict, Any
@@ -25,7 +25,7 @@ async def create_directory(
 
     file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
     directory_path = file_service.create_directory_service(username=str(current_user.id))
-    log_service.add_logs([f"Directory created for user {current_user.id} at path: {directory_path}"], category="INFO", log_type="api")
+    log_service.add_logs(action="CREATE_DIRECTORY", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
     return {
         "message": f"Répertoire créé pour {str(current_user.id)}",
         "path": directory_path
@@ -41,7 +41,7 @@ async def download_file(
 
     file_service = FileService(db=db, storage_path=storage_path)
     file_content = file_service.save_file(file=file, username=str(current_user.id))
-    log_service.add_logs([f"File downloaded by user {current_user.id}: {file}"], category="INFO", log_type="api")
+    log_service.add_logs(action="DOWNLOAD_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
 
     return FileResponse(path=file_content, filename=file)
 
@@ -54,5 +54,5 @@ async def upload_file(
 
     file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
     message = file_service.upload_file(file=file, username=str(current_user.id))
-    log_service.add_logs([f"File uploaded by user {current_user.id}: {file.filename}"], category="INFO", log_type="api")
+    log_service.add_logs(action="UPLOAD_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
     return {"message": message}

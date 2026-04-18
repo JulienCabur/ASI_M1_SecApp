@@ -1,5 +1,10 @@
 import datetime
 import os
+import requests
+import hashlib
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class LogsService:
     """
@@ -9,178 +14,60 @@ class LogsService:
         """
         Initialise le service de logs.
         """
-        self.logs = []
-        self.service_path = "/var/log/service_logs.log"
-        self.api_path = "/var/log/api_logs.log"
-        self.category = ["INFO", "WARNING", "ERROR", "DEBUG"]
+        self.category = ["INFO", "WARNING", "ERROR", "DEBUG", "CRITICAL"]
+        self.sequence = 0
+        self.logstash_url = os.getenv("LOGSTASH_URL", "https://logstash:5044")
+        self.service_name = "backend_python"
+        self.previous_hash = "0000000000000000000000000000000000000000000000000000000000000000"
+        self.source_ip = "0.0.0.0"
 
-    def add_logs(self, logs: list[str], category=None, log_type="service"):
+    
+    def add_logs(self, action: str, log_level: str, user_id: str, user_role: str, patient_id: str = "null"):
         """
-        Méthode pour ajouter des logs au service.
-        :param logs: Liste des messages de log à ajouter.
-        :param category: Catégorie du log (INFO, WARNING, ERROR, DEBUG).
-        :param log_type: Type de log (service, api, web).
-        :return: True si les logs ont été ajoutés avec succès.
+        Ajoute un log à Logstash.
         """
-        if log_type == "service" :
-            log_file_path = self.service_path  
-        else:
-            log_file_path = self.api_path
+        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
 
-        with open(log_file_path, "a+") as log_file:
-            for log in logs:
-                if not category:
-                    category = "INFO"
+        raw_string = f"{timestamp}{log_level}{self.service_name}{action}{user_id}{user_role}{user_role}{self.source_ip}{patient_id}{self.sequence}{self.previous_hash}"
 
-                log_line = self.create_log_line(log, category)
-                log_file.write(log_line + "\n")
+        valid_hash = hashlib.sha256(raw_string.encode('utf-8')).hexdigest()
 
-        if log_type == "web":
-            if not os.path.exists(self.weblog_path):
-                try:
-                    os.makedirs(os.path.dirname(self.weblog_path), exist_ok=True)
-                    with open(self.weblog_path, "w+") as log_file:
-                        log_file.write("")
-
-                except Exception as e:
-                    raise Exception(f"Failed to create log file: {e}")
-
-            try:
-                with open(self.weblog_path, "a+") as log_file:
-                    for log in logs:
-                        log_line = self.create_log_line(log, category)
-                        log_file.writelines(log_line + "\n")
-
-            except Exception as e:
-                raise Exception(f"Failed to write web log: {e}")
-
-        return True
-
-
-    def get_logs(self, log_type="service"):
-        """
-        Méthode pour récupérer les logs.
-        :param log_type: Type de log à récupérer (service, api, web, websocket).
-        :return: Liste des logs récupérés.
-        """
-        if log_type == "service":
-            log_file_path = self.service_path
-        elif log_type == "api":
-            log_file_path = self.api_path
-        elif log_type == "web":
-            log_file_path = self.weblog_path
-        elif log_type == "websocket":
-            log_file_path = self.websocket_path
-        else:
-            log_file_path = self.service_path
+        log_data = {
+            "@timestamp": timestamp,
+            "log": {
+                "level": log_level
+            },
+            "service": {
+                "name": self.service_name
+            },
+            "message": f"Action {action} effectuée par l'utilisateur.",
+            "event": {
+                "action": action
+            },
+            "user": {
+                "id": user_id,
+                "roles": [user_role]
+            },
+            "source": {
+                "ip": self.source_ip
+            },
+            "patient": {
+                "id": patient_id
+            },
+            "audit_chain": {
+                "sequence": self.sequence,
+                "hash": valid_hash,
+                "previous_hash": self.previous_hash
+            }
+        }
+        
+        self.previous_hash = valid_hash
+        self.sequence += 1
 
         try:
-            with open(log_file_path, "r+") as log_file:
-                self.logs = log_file.readlines()
-
-        except FileNotFoundError:
-            self.logs = []
-
+            response = requests.post(self.logstash_url, json=log_data, verify=False, timeout=5)
+            print(f"Log ECS envoyé - Action: {action}")
         except Exception as e:
-            raise Exception(f"Failed to read log file: {e}")
-
-        return self.logs
-
-
-    def get_logs_of_category(self, category):
-        """
-        Méthode pour récupérer les logs d'une catégorie spécifique.
-        :param category: Catégorie de log à filtrer (INFO, WARNING, ERROR, DEBUG).
-        :return: Liste des logs filtrés par catégorie.
-        """
-        if category not in self.category:
-            raise ValueError(f"Invalid log category: {category}")
-
-        service_logs = self.get_logs()
-        api_logs = self.get_logs(log_type="api")
-        web_logs = self.get_logs(log_type="web")
-        websocket_logs = self.get_logs(log_type="websocket")
-        all_logs = service_logs + api_logs + web_logs + websocket_logs
-        filtered_logs = []
-
-        for log in all_logs:
-            if log.startswith(category):
-                filtered_logs.append(log)
-    
-        return filtered_logs
-
-
-    def create_log_line(self, message, category):
-        """
-        Crée une ligne de log formatée avec un timestamp.
-        :param message: Message de log.
-        :param category: Catégorie du log (INFO, WARNING, ERROR, DEBUG).
-        :return: Ligne de log formatée.
-        """
-        if category not in self.category:
-            raise ValueError(f"Invalid log category: {category}")
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        return f"{category}: [{timestamp}] - {message}"
-    
-    def get_logs_from_interval(self, start_time, end_time):
-        """
-        Méthode pour récupérer les logs dans un intervalle de temps spécifique.
-        :param start_time: Heure de début au format "YYYY-MM-DD HH:MM:SS".
-        :param end_time: Heure de fin au format "YYYY-MM-DD HH:MM:SS".
-        :return: Liste des logs dans l'intervalle de temps spécifié.
-        """
-        start_time = datetime.datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
-        end_time = datetime.datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
-        service_logs = self.get_logs()
-        api_logs = self.get_logs(log_type="api")
-        web_logs = self.get_logs(log_type="web")
-        websocket_logs = self.get_logs(log_type="websocket")
-        all_logs = service_logs + api_logs + web_logs + websocket_logs
-        filtered_logs = []
-
-        for log in all_logs:
-            log_timestamp = log.split("[")[1].split("]")[0]
-            log_timestamp = datetime.datetime.strptime(log_timestamp, "%Y-%m-%d %H:%M:%S")
-            if start_time <= log_timestamp <= end_time:
-                filtered_logs.append(log)
-
-        return filtered_logs
-
-
-    def get_last_n_logs(self, n):
-        """
-        Méthode pour récupérer les n derniers logs.
-        :param n: Nombre de logs à récupérer.
-        :return: Liste des n derniers logs.
-        """
-        service_logs = self.get_logs()
-        api_logs = self.get_logs(log_type="api")
-        web_logs = self.get_logs(log_type="web")
-        websocket_logs = self.get_logs(log_type="websocket")
-        all_logs = service_logs + api_logs + web_logs + websocket_logs
-
-        return all_logs[-n:]
-    
-    def get_logs_from_date(self, date):
-        """
-        Méthode pour récupérer les logs d'une date spécifique.
-        :param date: Date au format "YYYY-MM-DD".
-        :return: Liste des logs de la date spécifiée.
-        """
-        date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
-        service_logs = self.get_logs()
-        api_logs = self.get_logs(log_type="api")
-        web_logs = self.get_logs(log_type="web")
-        websocket_logs = self.get_logs(log_type="websocket")
-        all_logs = service_logs + api_logs + web_logs + websocket_logs
-        filtered_logs = []
-
-        for log in all_logs:
-            log_timestamp = log.split("[")[1].split("]")[0]
-            log_date = datetime.datetime.strptime(log_timestamp, "%Y-%m-%d %H:%M:%S").date()
-
-            if log_date == date:
-                filtered_logs.append(log)
-
-        return filtered_logs
+            print(f"Erreur lors de l'envoi du log à Logstash: {e}")
+        
+        #return valid_hash

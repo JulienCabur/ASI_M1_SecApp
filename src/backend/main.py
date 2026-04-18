@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.database import engine, Base
 from presentation.file import router as file_router
 from presentation.auth import router as auth_router
-import os
 
 Base.metadata.create_all(bind=engine)
 

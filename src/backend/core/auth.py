@@ -86,9 +86,10 @@ async def get_current_user(credentials: Any = Depends(security)) -> UserInDB:
             credentials.credentials,
             public_key,
             algorithms=["RS256"],
-            audience=os.getenv("KEYCLOAK_CLIENT_ID") if os.getenv("KEYCLOAK_CLIENT_ID") else None,
-            options={"verify_aud": bool(os.getenv("KEYCLOAK_CLIENT_ID"))}
+            #audience=os.getenv("KEYCLOAK_CLIENT_ID") if os.getenv("KEYCLOAK_CLIENT_ID") else None,
+            options={"verify_aud": False} # Celui qui change, je l'encule
         )
+        #bool(os.getenv("KEYCLOAK_CLIENT_ID"))
         user = UserInDB(
             id=payload.get("sub"),
             username=payload.get("preferred_username") or payload.get("name"),

@@ -111,6 +111,7 @@ services:
       - postgres_keycloak
     networks:
       - auth-network
+      - elk
     volumes:
       - ./secrets/backend:/app/certs:ro
   webserver:

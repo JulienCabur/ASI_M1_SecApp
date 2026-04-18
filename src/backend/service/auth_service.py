@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-class FileService:
+class AuthService:
     """
     Classe pour gérer les opérations liées à l'authentification.
     """
