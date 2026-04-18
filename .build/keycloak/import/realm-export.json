@@ -358,7 +358,7 @@
     "path" : "/Docteurs",
     "subGroups" : [ ],
     "attributes" : { },
-    "realmRoles" : [ ],
+    "realmRoles" : [ "role_docteurs" ],
     "clientRoles" : { }
   }, {
     "id" : "5ecd7bec-e451-48e4-a60e-8f07ab477a9b",
@@ -483,6 +483,42 @@
     "realmRoles" : [ "default-roles-health_app" ],
     "notBefore" : 0,
     "groups" : [ ]
+  }, {
+    "id" : "42b3b28d-4862-401d-8e36-cda65e5678e0",
+    "createdTimestamp" : 1776469671687,
+    "username" : "erdem.d03@gmail.com",
+    "enabled" : true,
+    "totp" : true,
+    "emailVerified" : true,
+    "firstName" : "Erdem",
+    "lastName" : "Demir",
+    "email" : "erdem.d03@gmail.com",
+    "credentials" : [ {
+      "id" : "71d1abea-24d3-4ae1-ac7c-210d34a3c023",
+      "type" : "password",
+      "createdDate" : 1776469671722,
+      "secretData" : "{\"value\":\"4t1iKiUKZcRuUQUZ68jgnCrFV4lQ8DQfCUmh5K/W+Kc=\",\"salt\":\"CIef9DHmKWzbwWpdh+2BcA==\",\"additionalParameters\":{}}",
+      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
+    }, {
+      "id" : "32ff62b6-33eb-4ca2-a011-46b8f421ec4d",
+      "type" : "otp",
+      "userLabel" : "iPhone",
+      "createdDate" : 1776469696490,
+      "secretData" : "{\"value\":\"tqn8OtSo4huphKuwCqyt\"}",
+      "credentialData" : "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+    }, {
+      "id" : "cfc1b631-b7cc-406b-b085-c8b9dd078acd",
+      "type" : "webauthn-passwordless",
+      "userLabel" : "Erdem",
+      "createdDate" : 1776469736703,
+      "secretData" : "{}",
+      "credentialData" : "{\"aaguid\":\"9ddd1817-af5a-4672-a2b9-3e3dd95000a9\",\"credentialId\":\"fK2Zfy7vfVPWcrpW6/6GieNxNIRg9+z97L1UHv0BNqo=\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIN42RHFhdC0xJYGnwI_-VWlXUc78fIQ6l0LLNmtLVXH-IlggoZwgkSXfpJqNZySOeVhF9Yl5a-0yQhjD3Qn7oK54aXY\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\"]}"
+    } ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-health_app" ],
+    "notBefore" : 0,
+    "groups" : [ "/Patients" ]
   }, {
     "id" : "6253f734-df27-4bef-9da9-6860fc70bb74",
     "createdTimestamp" : 1775405393816,
@@ -1467,7 +1503,7 @@
     "referrerPolicy" : "no-referrer",
     "xRobotsTag" : "none",
     "xFrameOptions" : "SAMEORIGIN",
-    "contentSecurityPolicy" : "frame-src 'self' https://www.google.com https://www.recaptcha.net; frame-ancestors 'self'; object-src 'none';",
+    "contentSecurityPolicy" : "frame-src 'self' https://www.google.com https://www.recaptcha.net; frame-ancestors 'self' https://localhost; object-src 'none';",
     "xXSSProtection" : "1; mode=block",
     "strictTransportSecurity" : "max-age=31536000; includeSubDomains"
   },
@@ -1535,7 +1571,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper", "saml-role-list-mapper", "saml-user-attribute-mapper", "oidc-usermodel-attribute-mapper", "oidc-full-name-mapper", "saml-user-property-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-user-property-mapper", "oidc-address-mapper", "oidc-usermodel-attribute-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-role-list-mapper", "oidc-full-name-mapper", "saml-user-attribute-mapper", "oidc-usermodel-property-mapper" ]
       }
     }, {
       "id" : "bed76a0e-6199-4bce-9588-714de1db0458",
@@ -1551,7 +1587,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "saml-user-property-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-role-list-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-role-list-mapper", "oidc-address-mapper", "oidc-usermodel-attribute-mapper", "oidc-full-name-mapper", "saml-user-property-mapper", "saml-user-attribute-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-property-mapper" ]
       }
     }, {
       "id" : "a3ceee06-2e09-403f-a53e-f57cf3acc5ae",

@@ -106,14 +106,20 @@ services:
     env_file:
       - ../src/backend/.env
     depends_on:
-      - pki
-      - keycloak
-      - postgres_keycloak
+      pki:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      postgres_keycloak:
+        condition: service_started
+
     networks:
       - auth-network
       - elk
     volumes:
       - ./secrets/backend:/app/certs:ro
+      - pki_doctors_crt:/app/certs_doctors
+      - pki_doctors_csr:/app/csr
   webserver:
     image: nginx:latest
     ports:
@@ -163,6 +169,8 @@ services:
       - ./pki:/etc/pki/CA/config
       - pki_secrets:/etc/pki/CA
       - ./secrets:/etc/pki/CA/certs
+      - pki_doctors_csr:/etc/pki/CA/csr
+      - pki_doctors_crt:/etc/pki/CA/certs_doctors
     command: |
       bash -c "
       bash /etc/pki/CA/config/pki_deploy.sh;
@@ -233,5 +241,7 @@ networks:
 
 volumes:
   postgres_data:
+  pki_doctors_csr:
+  pki_doctors_crt:
   pki_secrets:
   elasticsearch:

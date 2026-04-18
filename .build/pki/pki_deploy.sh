@@ -130,4 +130,4 @@ for SERVICE in $SERVICES; do
 done
 
 echo "PKI Deployed"
-exec tail -f /dev/null
+bash /etc/pki/CA/config/pki_sign.sh
