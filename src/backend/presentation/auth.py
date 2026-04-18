@@ -26,6 +26,7 @@ logs_service = LogsService()
 async def validate_token_route(token: str = Query(..., description="JWT token to validate")) -> Dict[str, Any]:
     try:
         payload = await validate_jwt_token(token)
+        logs_service.add_logs(action="VALIDATE_TOKEN", log_level="INFO", user_id=payload.get("sub"), user_role=payload.get("roles", ["unknown"])[0], patient_id="null")
         return {"status": "Token valide",
                 "payload": payload}
     except Exception as e:
@@ -37,22 +38,35 @@ async def register_doctor_route(
     db: Session = Depends(get_db)) -> Dict[str, Any]:
     try:
         auth_service = AuthService(db=db)
-        print(f"Enregistrement du médecin: {user_info.username}")
         auth_service.generate_csr(user_info.username)
-        print(f"CSR généré pour le médecin: {user_info.username}")
-        time.sleep(5)  # Attendre que le CSR soit signé
+        logs_service.add_logs(action="GENERATE_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        time.sleep(5)
         cert_path = auth_service.check_csr_signed(user_info.username)
-        print(f"CSR signé pour le médecin: {user_info.username}, chemin du certificat: {cert_path}")
+        logs_service.add_logs(action="CHECK_CSR_SIGNED", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         auth_service.create_doctor_in_keycloak(cert_path, user_info)
-        print(f"Docteur créé dans Keycloak pour le médecin: {user_info.username}")
+        logs_service.add_logs(action="REGISTER_DOCTOR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         return FileResponse(path=cert_path, filename=f"{user_info.username}.p12", media_type="application/x-pkcs12")
-        auth_service.delete_sensitive_files(user_info.username)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du médecin: {str(e)}")
+
+@router.get("/password_for_cert", response_model=Dict[str, Any])
+async def get_password_for_cert_route(
+    username: str = Query(..., description="Nom d'utilisateur pour lequel récupérer le mot de passe"),
+    db: Session = Depends(get_db)) -> Dict[str, Any]:
+    try:
+        auth_service = AuthService(db=db)
+        password = auth_service.get_password_for_cert(username)
+        logs_service.add_logs(action="GET_PASSWORD_FOR_CERT", log_level="INFO", user_id=username, user_role="doctor", patient_id="null")
+        auth_service.delete_sensitive_files(username)
+        logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=username, user_role="doctor", patient_id="null")
+        return {"password": password}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération du mot de passe: {str(e)}")
 
 @router.get("/user_info", response_model=Dict[str, Any])
 async def get_user_info_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:
     try:
+        logs_service.add_logs(action="GET_USER_INFO", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return {
             "id": current_user.id,
             "username": current_user.username,
@@ -65,6 +79,7 @@ async def get_user_info_route(current_user: UserInDB = Depends(get_current_user)
 @router.get("/user_name", response_model=Dict[str, Any])
 async def get_username_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:
     try:
+        logs_service.add_logs(action="GET_USERNAME", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return {"username": current_user.username}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'extraction du nom d'utilisateur: {str(e)}")
@@ -72,6 +87,7 @@ async def get_username_route(current_user: UserInDB = Depends(get_current_user))
 @router.get("/user_roles", response_model=Dict[str, Any])
 async def get_user_roles_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:
     try:
+        logs_service.add_logs(action="GET_USER_ROLES", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return {"roles": current_user.roles}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'extraction des rôles utilisateur: {str(e)}")

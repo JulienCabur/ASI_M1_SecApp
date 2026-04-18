@@ -8,11 +8,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.serialization import pkcs12
-from cryptography import x509
 from cryptography.x509.oid import NameOID
 import os
-import secrets
-import traceback
 
 load_dotenv()  # Charger les variables d'environnement depuis le fichier .env
 class AuthService:
@@ -52,8 +49,6 @@ class AuthService:
                 format=serialization.PrivateFormat.TraditionalOpenSSL,
                 encryption_algorithm=serialization.NoEncryption()
             ))
-        print(f"CSR et clé privée générés pour {common_name}")
-
         return f"CSR et clé privée générés pour {common_name}"
     
     def check_csr_signed(self, common_name: str):
@@ -62,7 +57,7 @@ class AuthService:
             raise Exception("Certificat non trouvé")
         return path
     
-    def create_doctor_in_keycloak(self, cert_path: str, user_info: CertificateRequest):
+    def create_doctor_in_keycloak(self, cert_path: str, user_info: CertificateRequest) -> str:
         with open(cert_path, "rb") as f:
             cert_data = f.read()
 
@@ -98,19 +93,30 @@ class AuthService:
 
         try:
             new_user_id = keycloak_admin.create_user(user_payload, exist_ok=False)
-            print(f"Utilisateur créé dans Keycloak avec ID: {new_user_id}")
-            group_patient = keycloak_admin.get_group_by_path("/Patients")            
+            group_patient = keycloak_admin.get_group_by_path("/Patients")
             keycloak_admin.group_user_remove(new_user_id, group_patient['id'])
-            return new_user_id
+            keycloak_admin.update_user(
+                user_id=new_user_id,
+                payload={
+                    "requiredActions": ["VERIFY_EMAIL", "CONFIGURE_TOTP"]
+                }
+            )
+            return p12_password
         except Exception as e:
-            print(f"ERREUR KEYCLOAK DURING USER CREATION: {type(e).__name__}: {str(e)}")
             raise Exception(f"Erreur lors de la création de l'utilisateur dans Keycloak: {str(e)}")
+    
+    def get_password_for_cert(self, username: str) -> str:
+        password_path = os.path.join(self.cert_repository, username + ".p12password")
+        if not os.path.exists(password_path):
+            raise Exception("Mot de passe pour le certificat non trouvé")
+        with open(password_path, "r") as f:
+            return f.read().strip()
 
     def delete_sensitive_files(self, common_name: str):
         csr_path = os.path.join(self.csr_repository, common_name + ".csr")
         csr_password_path = os.path.join(self.csr_repository, common_name + ".csrpassword")
-        crt_path = os.path.join(self.cert_repository, common_name + ".crt")
-        crt_password_path = os.path.join(self.cert_repository, common_name + ".crtpassword")
+        crt_path = os.path.join(self.cert_repository, common_name + ".p12")
+        crt_password_path = os.path.join(self.cert_repository, common_name + ".p12password")
         key_path = os.path.join(self.csr_repository, common_name + ".key")
         
         for path in [csr_path, crt_path, key_path, csr_password_path, crt_password_path]:
