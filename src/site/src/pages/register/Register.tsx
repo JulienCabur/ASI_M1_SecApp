@@ -69,7 +69,7 @@ const Register: React.FC = () => {
 
         <div className={style.footer}>
           <Text>Déjà un compte ?</Text>{' '}
-          <a href="/auth/callback">Se connecter</a>
+          <a href="/login">Se connecter</a>
         </div>
       </Card>
     </div>
