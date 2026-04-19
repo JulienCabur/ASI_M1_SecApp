@@ -68,3 +68,9 @@ export const getRegistrationUrl = async (_params: RegistrationParams): Promise<s
     redirectUri: window.location.origin + '/auth/callback',
   });
 };
+
+export const getResetCredentialsUrl = (): string => {
+  const url = import.meta.env.VITE_KEYCLOAK_URL as string;
+  const realm = import.meta.env.VITE_KEYCLOAK_REALM as string;
+  return `${url}/realms/${realm}/login-actions/reset-credentials`;
+};

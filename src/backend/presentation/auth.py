@@ -13,7 +13,7 @@ from typing import Dict, Any
 from service.log_service import LogsService
 from service.auth_service import AuthService
 from sqlalchemy.orm import Session
-from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
+from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse, ChallengeResponseRequest
 import time
 
 router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion de l'authentification
@@ -73,10 +73,21 @@ async def get_challenge(
 
 @router.post("/challenge_response", response_model=Dict[str, Any])
 async def post_challenge_response(
-    username: str = Query(..., description="Nom d'utilisateur pour lequel soumettre la réponse au challenge"),
+    ChallengeResponseRequest: ChallengeResponseRequest,
     db: Session = Depends(get_db)) -> Dict[str, Any]:
     auth_service = AuthService(db=db)
-    return {"status": "Challenge response received"}
+    try :
+        auth_service.verify_challenge_response(
+            username=ChallengeResponseRequest.username,
+            nonce=ChallengeResponseRequest.nonce,
+            timestamp=ChallengeResponseRequest.timestamp,
+            signature=ChallengeResponseRequest.signature,
+            certificate=ChallengeResponseRequest.certificate
+        )
+        return {"status": "Challenge response received"}
+    except Exception as e:
+        auth_service.clear_challenge(username=ChallengeResponseRequest.username)
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la soumission de la réponse au challenge: {str(e)}")
 
 @router.get("/user_info", response_model=Dict[str, Any])
 async def get_user_info_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:

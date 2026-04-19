@@ -1,3 +1,4 @@
+
 import datetime
 import secrets
 from sqlalchemy.orm import Session
@@ -9,6 +10,8 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
@@ -144,5 +147,41 @@ class AuthService:
         self.db.commit()
         return ChallengeResponse(nonce=nonce, timestamp=timestamp)
 
-    def verify_challenge_response(self, username: str, signature: str, certificate: str) -> bool:
-        pass
+    def verify_challenge_response(self, username: str, nonce: str, timestamp: str, signature: str, certificate: str) -> bool:
+        challenge_nonce = self.db.query(User.challenge_nonce).filter(User.username == username).scalar()
+        challenge_timestamp = self.db.query(User.challenge_timestamp).filter(User.username == username).scalar()
+        if not challenge_nonce or not challenge_timestamp:
+            raise Exception("Aucun challenge généré pour cet utilisateur")
+        if timestamp != challenge_timestamp:
+            raise Exception("Timestamp invalide")
+        else :
+            if (datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(challenge_timestamp.replace('Z', '+00:00'))).total_seconds() > 300:
+                raise Exception("Le challenge a expiré")
+        if nonce != challenge_nonce:
+            raise Exception("Nonce invalide")
+
+        verification_data = f"{nonce}:{timestamp}".encode()
+        try:
+            cert = x509.load_pem_x509_certificate(certificate.encode(), default_backend())
+            public_key = cert.public_key()
+            public_key.verify(
+            bytes.fromhex(signature),
+            verification_data,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH
+                ),
+                hashes.SHA256()
+            )
+            self.clear_challenge(username)
+            return True
+        except Exception as e:
+            raise Exception(f"Erreur lors de la vérification du challenge: {str(e)}")
+    
+    def clear_challenge(self, username: str):
+        user = self.db.query(User).filter(User.username == username).first()
+        if user:
+            user.challenge_nonce = None
+            user.challenge_timestamp = None
+            self.db.commit()
+        return True
