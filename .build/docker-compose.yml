@@ -113,7 +113,7 @@ services:
       KEYCLOAK_CLIENT_ID: health_app_frontend
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
       KEYCLOAK_PUBLIC_KEY_URL: https://keycloak:8443/realms/health_app/protocol/openid-connect/certs
-
+      
       STORAGE_PATH: /storage
       DATABASE_URL: postgresql://keycloak:${POSTGRES_PASSWORD}@postgres_keycloak:5432/dbbackend
     depends_on:
