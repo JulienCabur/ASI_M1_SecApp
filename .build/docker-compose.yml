@@ -108,6 +108,7 @@ services:
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      DATABASE_URL: postgresql://keycloak:${POSTGRES_PASSWORD}@postgres_keycloak:5432/dbbackend
     depends_on:
       pki:
         condition: service_healthy

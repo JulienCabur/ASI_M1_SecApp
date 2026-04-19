@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class AuthBase(BaseModel):
     username: str
@@ -15,3 +15,10 @@ class CertificateRequest(AuthBase):
 class ChallengeResponse(BaseModel):
     nonce: str
     timestamp: str
+
+class ChallengeResponseRequest(BaseModel):
+    username: str = Field(..., example="dr.house")
+    nonce: str = Field(..., description="Le nonce hexadécimal reçu lors du challenge")
+    timestamp: str = Field(..., description="Le timestamp ISO reçu lors du challenge")
+    signature: str = Field(..., description="Signature hexadécimale (PSS/SHA256)")
+    certificate: str = Field(..., description="Le certificat PEM du docteur")

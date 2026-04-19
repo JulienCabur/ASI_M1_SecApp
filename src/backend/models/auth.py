@@ -15,4 +15,6 @@ class User(Base):
     id = Column(String, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     roles = Column(String, nullable=False)
+    public_key = Column(String, nullable=True)
     challenge_nonce = Column(String, nullable=True)
+    challenge_timestamp = Column(String, nullable=True)
