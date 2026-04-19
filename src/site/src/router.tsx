@@ -3,7 +3,6 @@ import style from './router.module.scss';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import Navbar from '@/components/navbar/Navbar';
 import { Home } from '@/pages/home/Home';
-import Register from '@/pages/register/Register';
 import Login from '@/pages/login/Login';
 import AuthCallback from '@/pages/auth/AuthCallback';
 import Doctors from '@/pages/doctors/Doctors';
@@ -27,7 +26,6 @@ const Router = () => {
       <Routes>
         {/* Public routes — no auth required */}
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Protected routes */}
