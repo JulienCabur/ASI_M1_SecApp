@@ -104,10 +104,18 @@ services:
       retries: 5
       start_period: 5s
     env_file:
-      - ../src/backend/.env
+      - ./.env
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_SERVER_URL: https://keycloak:8443
+      KEYCLOAK_REALM: health_app
+      KEYCLOAK_CLIENT_ID: health_app_frontend
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      KEYCLOAK_PUBLIC_KEY_URL: https://keycloak:8443/realms/health_app/protocol/openid-connect/certs
+
+      STORAGE_PATH: /storage
+      DATABASE_URL: postgresql://keycloak:${POSTGRES_PASSWORD}@postgres_keycloak:5432/dbbackend
     depends_on:
       pki:
         condition: service_healthy
@@ -132,8 +140,14 @@ services:
     depends_on:
       - pki
       - backend
+    env_file:
+      - ./.env
     environment:
       SERVER_KEY_PASS: ${SERVER_KEY_PASS}
+      VITE_KEYCLOAK_URL: https://keycloak:8443
+      VITE_KEYCLOAK_REALM: health_app
+      VITE_KEYCLOAK_CLIENT_ID: health_app_frontend
+      VITE_API_BASE_URL: http://backend:8000
     volumes:
       - ./nginx/conf/:/etc/nginx/conf.d/:ro
       - ../src/site/dist/:/usr/share/nginx/html/:ro
@@ -167,7 +181,17 @@ services:
     image: debian:bookworm-slim
     container_name: pki_authority
     env_file:
-      - pki/pki.env
+      - ./.env
+    environment:
+      ROOT_PASS: ${ROOT_PASS}
+      SIGNING1_PASS: ${SIGNING1_PASS}
+      SIGNING2_PASS: ${SIGNING2_PASS}
+      KEYCLOAK_KEY_PASS: ${KEYCLOAK_KEY_PASS}
+      WEBSERVER_KEY_PASS: ${WEBSERVER_KEY_PASS}
+      ELASTICSEARCH_KEY_PASS: ${ELASTICSEARCH_KEY_PASS}
+      KIBANA_KEY_PASS: ${KIBANA_KEY_PASS}
+      LOGSTASH_KEY_PASS: ${LOGSTASH_KEY_PASS}
+      BACKEND_KEY_PASS: ${BACKEND_KEY_PASS}
     volumes:
       - ./pki:/etc/pki/CA/config
       - pki_secrets:/etc/pki/CA
