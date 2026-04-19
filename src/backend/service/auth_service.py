@@ -1,5 +1,8 @@
+import datetime
+import secrets
 from sqlalchemy.orm import Session
-from schema.auth_schema import UserInDB, CertificateRequest
+from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
+from models.auth import User
 from keycloak import KeycloakAdmin
 from dotenv import load_dotenv
 from cryptography import x509
@@ -24,7 +27,7 @@ class AuthService:
         self.db = db
         self.csr_repository = "/app/csr"
         self.cert_repository = "/app/certs_doctors"
-    
+
     def generate_csr(self, common_name: str):
         file_csr = common_name + ".csr"
         file_key = common_name + ".key"
@@ -50,13 +53,13 @@ class AuthService:
                 encryption_algorithm=serialization.NoEncryption()
             ))
         return f"CSR et clé privée générés pour {common_name}"
-    
+
     def check_csr_signed(self, common_name: str):
         path=self.cert_repository + "/" + common_name + ".p12"
         if not os.path.exists(path):
             raise Exception("Certificat non trouvé")
         return path
-    
+
     def create_doctor_in_keycloak(self, cert_path: str, user_info: CertificateRequest) -> str:
         with open(cert_path, "rb") as f:
             cert_data = f.read()
@@ -66,7 +69,7 @@ class AuthService:
 
         private_key, cert, additional_certs = pkcs12.load_key_and_certificates(cert_data, p12_password.encode())
         serial_hex = f"{cert.serial_number:02X}"
-    
+
         print(f"Création de l'utilisateur dans Keycloak avec le certificat: {cert_path}, numéro de série: {serial_hex}")
 
         keycloak_admin = KeycloakAdmin(
@@ -101,10 +104,18 @@ class AuthService:
                     "requiredActions": ["VERIFY_EMAIL", "CONFIGURE_TOTP"]
                 }
             )
+            user = User(
+                id=new_user_id,
+                username=user_info.username,
+                roles="doctor",
+                challenge_nonce=None
+            )
+            self.db.add(user)
+            self.db.commit()
             return p12_password
         except Exception as e:
             raise Exception(f"Erreur lors de la création de l'utilisateur dans Keycloak: {str(e)}")
-    
+
     def get_password_for_cert(self, username: str) -> str:
         password_path = os.path.join(self.cert_repository, username + ".p12password")
         if not os.path.exists(password_path):
@@ -118,7 +129,20 @@ class AuthService:
         crt_path = os.path.join(self.cert_repository, common_name + ".p12")
         crt_password_path = os.path.join(self.cert_repository, common_name + ".p12password")
         key_path = os.path.join(self.csr_repository, common_name + ".key")
-        
+
         for path in [csr_path, crt_path, key_path, csr_password_path, crt_password_path]:
              if os.path.exists(path):
                 os.remove(path)
+
+    def generate_challenge(self, username: str) -> ChallengeResponse:
+        user = self.db.query(User).filter(User.username == username).first()
+        if not user:
+            raise Exception("Utilisateur non trouvé")
+        nonce = secrets.token_hex(16)
+        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        user.challenge_nonce = nonce
+        self.db.commit()
+        return ChallengeResponse(nonce=nonce, timestamp=timestamp)
+
+    def verify_challenge_response(self, username: str, signature: str, certificate: str) -> bool:
+        pass

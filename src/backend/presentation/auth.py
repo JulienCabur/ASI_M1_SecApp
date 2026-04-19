@@ -13,7 +13,7 @@ from typing import Dict, Any
 from service.log_service import LogsService
 from service.auth_service import AuthService
 from sqlalchemy.orm import Session
-from schema.auth_schema import UserInDB, CertificateRequest
+from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
 import time
 
 router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion de l'authentification
@@ -62,6 +62,21 @@ async def get_password_for_cert_route(
         return {"password": password}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération du mot de passe: {str(e)}")
+
+@router.get("/challenge", response_model=ChallengeResponse)
+async def get_challenge(
+    username: str = Query(..., description="Nom d'utilisateur pour lequel générer le challenge"),
+    db: Session = Depends(get_db)) -> ChallengeResponse:
+    auth_service = AuthService(db=db)
+    challenge = auth_service.generate_challenge(username)
+    return challenge
+
+@router.post("/challenge_response", response_model=Dict[str, Any])
+async def post_challenge_response(
+    username: str = Query(..., description="Nom d'utilisateur pour lequel soumettre la réponse au challenge"),
+    db: Session = Depends(get_db)) -> Dict[str, Any]:
+    auth_service = AuthService(db=db)
+    return {"status": "Challenge response received"}
 
 @router.get("/user_info", response_model=Dict[str, Any])
 async def get_user_info_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:

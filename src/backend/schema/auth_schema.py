@@ -11,3 +11,7 @@ class UserInDB(AuthBase):
 class CertificateRequest(AuthBase):
     first_name: str
     last_name: str
+
+class ChallengeResponse(BaseModel):
+    nonce: str
+    timestamp: str

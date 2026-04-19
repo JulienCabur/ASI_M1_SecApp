@@ -195,7 +195,7 @@ services:
       until [ -f /opt/keycloak/conf/truststores/root-ca.crt ]; do sleep 2; done &&
       rm -f /tmp/truststore.p12 &&
       keytool -import -alias root-ca -file /opt/keycloak/conf/truststores/root-ca.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
-      keytool -import -alias signing-ca -file /opt/keycloak/conf/truststores/signing-ca2.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
+      keytool -import -alias signing-ca -file /opt/keycloak/conf/truststores/signing-ca1.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
       /opt/keycloak/bin/kc.sh start-dev --import-realm
       "
     env_file:

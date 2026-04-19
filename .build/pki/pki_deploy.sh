@@ -93,6 +93,9 @@ SERVICES="keycloak webserver elasticsearch kibana logstash backend"
 
 for SERVICE in $SERVICES; do
     SERVICE_EXPORT="$EXPORT_DIR/$SERVICE"
+    if [ -d "$SERVICE_EXPORT" ]; then
+        rm -rf "$SERVICE_EXPORT"
+    fi
     mkdir -p "$SERVICE_EXPORT"
     SERVICE_UPPER=$(echo "$SERVICE" | tr '[:lower:]' '[:upper:]')
     key_pass="env:${SERVICE_UPPER}_KEY_PASS"
@@ -115,8 +118,8 @@ for SERVICE in $SERVICES; do
     if [[ "$SERVICE" == "keycloak" ]]; then
         cp $EXPORT_DIR/ca-chain2.pem $SERVICE_EXPORT/ca-chain2.pem
         cp $EXPORT_DIR/ca-chain.pem $SERVICE_EXPORT/ca-chain.pem
-        cp $EXPORT_DIR/signing-ca2.crt $SERVICE_EXPORT/signing-ca2.crt
-        chmod 644 $SERVICE_EXPORT/ca-chain2.pem $SERVICE_EXPORT/signing-ca2.crt
+        cp $EXPORT_DIR/signing-ca1.crt $SERVICE_EXPORT/signing-ca1.crt
+        chmod 644 $SERVICE_EXPORT/ca-chain2.pem $SERVICE_EXPORT/signing-ca1.crt
     else
         cp $EXPORT_DIR/ca-chain2.pem $SERVICE_EXPORT/ca-chain.pem
     fi
