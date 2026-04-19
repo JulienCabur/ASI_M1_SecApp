@@ -8,11 +8,7 @@ echo "Creating .env files..."
 if [ -f "$DEFAULT_PATH/.env" ]; then
     echo "$DEFAULT_PATH/.env already exists. Do you want to overwrite it? (y/n)"
     read response
-    if [ "$response" = "y" ]; then
-        cp "$DEFAULT_PATH/env.example" "$DEFAULT_PATH/.env"
-        echo "Overwritten $DEFAULT_PATH/.env"
-        exit 0
-    else
+    if [ "$response" = "n" ]; then
         echo "Aborting. $DEFAULT_PATH/.env was not overwritten."
         exit 0
     fi
