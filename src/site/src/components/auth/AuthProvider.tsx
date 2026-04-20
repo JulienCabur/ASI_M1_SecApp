@@ -13,22 +13,31 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const { setUser, logout } = useAuthStore();
 
   useEffect(() => {
+    console.log('AuthProvider initializing...');
+    
     initKeycloak()
       .then((authenticated) => {
+        console.log('Keycloak initialized, authenticated:', authenticated);
+        
         if (authenticated) {
           const user = getUserFromToken();
+          console.log('User from token:', user);
+          console.log('JWT Token:', keycloak.token);
+          
           if (user) {
             setUser(user, keycloak.token ?? '');
           } else {
-            // Token present but role not recognized — force logout
+            console.warn('Token present but no user found');
             logout();
             keycloak.logout();
           }
+        } else {
+          console.log('User not authenticated');
         }
         setInitialized(true);
       })
-      .catch(() => {
-        // Keycloak unreachable (dev without infra) — allow public pages to load
+      .catch((error) => {
+        console.error('Keycloak init error:', error);
         setInitialized(true);
       });
 

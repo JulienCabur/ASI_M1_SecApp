@@ -72,6 +72,5 @@ export const getRegistrationUrl = async (_params: RegistrationParams): Promise<s
 export const getResetCredentialsUrl = (): string => {
   const url = import.meta.env.VITE_KEYCLOAK_URL as string;
   const realm = import.meta.env.VITE_KEYCLOAK_REALM as string;
-  const clientId = import.meta.env.VITE_KEYCLOAK_CLIENT_ID as string;
-  return `${url}/realms/${realm}/login-actions/reset-credentials?client_id=${encodeURIComponent(clientId)}`;
+  return `${url}/realms/${realm}/login-actions/reset-credentials`;
 };
