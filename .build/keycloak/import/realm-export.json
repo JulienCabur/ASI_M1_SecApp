@@ -5,8 +5,8 @@
   "displayNameHtml" : "",
   "notBefore" : 0,
   "defaultSignatureAlgorithm" : "RS256",
-  "revokeRefreshToken" : false,
-  "refreshTokenMaxReuse" : 0,
+  "revokeRefreshToken" : true,
+  "refreshTokenMaxReuse" : 1,
   "accessTokenLifespan" : 300,
   "accessTokenLifespanForImplicitFlow" : 900,
   "ssoSessionIdleTimeout" : 1800,
@@ -32,7 +32,7 @@
   "registrationAllowed" : true,
   "registrationEmailAsUsername" : false,
   "rememberMe" : false,
-  "verifyEmail" : false,
+  "verifyEmail" : true,
   "loginWithEmailAllowed" : true,
   "duplicateEmailsAllowed" : false,
   "resetPasswordAllowed" : true,
@@ -358,7 +358,7 @@
     "path" : "/Docteurs",
     "subGroups" : [ ],
     "attributes" : { },
-    "realmRoles" : [ ],
+    "realmRoles" : [ "role_docteurs" ],
     "clientRoles" : { }
   }, {
     "id" : "5ecd7bec-e451-48e4-a60e-8f07ab477a9b",
@@ -411,63 +411,68 @@
   "webAuthnPolicyPasswordlessAcceptableAaguids" : [ ],
   "webAuthnPolicyPasswordlessExtraOrigins" : [ ],
   "users" : [ {
-    "id" : "ddaf69c2-a097-45f0-9d79-a0effaad1438",
-    "createdTimestamp" : 1773956921059,
-    "username" : "dd",
+    "id" : "7aa0071f-7dc6-4952-8100-9f5c9d683337",
+    "createdTimestamp" : 1776703908175,
+    "username" : "dr_robin",
     "enabled" : true,
     "totp" : false,
     "emailVerified" : false,
-    "firstName" : "dd",
-    "lastName" : "dd",
-    "email" : "dd@ddd.com",
-    "credentials" : [ {
-      "id" : "257b3cf8-55e6-492e-a287-42647b163d32",
-      "type" : "password",
-      "createdDate" : 1773956921129,
-      "secretData" : "{\"value\":\"PB+hC5XMEAqSYtGlDwd4aD3WfalCY7ou8gQVHZL88Gg=\",\"salt\":\"uAdhtZzgj5FvRodmDiU6rg==\",\"additionalParameters\":{}}",
-      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
-    } ],
+    "firstName" : "dr_robin",
+    "lastName" : "dr_robin",
+    "email" : "dr_robin@gmail.com",
+    "attributes" : {
+      "certificate_serial" : [ "9F0DF069B78B0E8E0AD867C6BC65259450B635B" ],
+      "user_type" : [ "doctor" ]
+    },
+    "credentials" : [ ],
     "disableableCredentialTypes" : [ ],
-    "requiredActions" : [ "webauthn-register-passwordless" ],
+    "requiredActions" : [ "CONFIGURE_TOTP", "VERIFY_EMAIL" ],
     "realmRoles" : [ "default-roles-health_app" ],
     "notBefore" : 0,
-    "groups" : [ ]
+    "groups" : [ "/Docteurs" ]
   }, {
-    "id" : "cf279b1d-7b15-49c5-aa55-7041b04e7292",
-    "createdTimestamp" : 1775388122397,
-    "username" : "erdem",
+    "id" : "42b3b28d-4862-401d-8e36-cda65e5678e0",
+    "createdTimestamp" : 1776469671687,
+    "username" : "erdem.d03@gmail.com",
     "enabled" : true,
-    "totp" : false,
-    "emailVerified" : false,
-    "firstName" : "erdem",
-    "lastName" : "erdem",
-    "email" : "erdem@e.com",
+    "totp" : true,
+    "emailVerified" : true,
+    "firstName" : "Erdem",
+    "lastName" : "Demir",
+    "email" : "erdem.d03@gmail.com",
     "credentials" : [ {
-      "id" : "294eb0fb-8c3c-4f82-af93-8d3741434f2a",
+      "id" : "71d1abea-24d3-4ae1-ac7c-210d34a3c023",
       "type" : "password",
-      "createdDate" : 1775388122454,
-      "secretData" : "{\"value\":\"UZb6MOTVE0fr5+pcBUQvWLjyps8mgSBNvCdyHw+Qn6U=\",\"salt\":\"DVr61RJ7BrN9IyyRiZMS/g==\",\"additionalParameters\":{}}",
+      "createdDate" : 1776469671722,
+      "secretData" : "{\"value\":\"4t1iKiUKZcRuUQUZ68jgnCrFV4lQ8DQfCUmh5K/W+Kc=\",\"salt\":\"CIef9DHmKWzbwWpdh+2BcA==\",\"additionalParameters\":{}}",
       "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
     }, {
-      "id" : "550159b1-0109-4f41-8ce6-a7de98722b1c",
+      "id" : "32ff62b6-33eb-4ca2-a011-46b8f421ec4d",
+      "type" : "otp",
+      "userLabel" : "iPhone",
+      "createdDate" : 1776469696490,
+      "secretData" : "{\"value\":\"tqn8OtSo4huphKuwCqyt\"}",
+      "credentialData" : "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+    }, {
+      "id" : "cfc1b631-b7cc-406b-b085-c8b9dd078acd",
       "type" : "webauthn-passwordless",
-      "userLabel" : "erdem",
-      "createdDate" : 1775388155426,
+      "userLabel" : "Erdem",
+      "createdDate" : 1776469736703,
       "secretData" : "{}",
-      "credentialData" : "{\"aaguid\":\"08987058-cadc-4b81-b6e1-30de50dcbe96\",\"credentialId\":\"TLB0JM8PQHCQzLpkBMRmEazp46s5j+aJYJpUPeWFoeg=\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIJ7sWIHLeBKHzNAt1eyma_T1_iGwTI2hFX-4Z-5RRba3IlggHhrNPlvMzNC0oXMd068gwLZGQA9Qm0MLqDyUKX54JYI\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\"]}"
+      "credentialData" : "{\"aaguid\":\"9ddd1817-af5a-4672-a2b9-3e3dd95000a9\",\"credentialId\":\"fK2Zfy7vfVPWcrpW6/6GieNxNIRg9+z97L1UHv0BNqo=\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIN42RHFhdC0xJYGnwI_-VWlXUc78fIQ6l0LLNmtLVXH-IlggoZwgkSXfpJqNZySOeVhF9Yl5a-0yQhjD3Qn7oK54aXY\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\"]}"
     } ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
     "realmRoles" : [ "default-roles-health_app" ],
     "notBefore" : 0,
-    "groups" : [ ]
+    "groups" : [ "/Patients" ]
   }, {
     "id" : "6253f734-df27-4bef-9da9-6860fc70bb74",
     "createdTimestamp" : 1775405393816,
-    "username" : "gatienclaus",
+    "username" : "gatien@gmail.com",
     "enabled" : true,
     "totp" : false,
-    "emailVerified" : false,
+    "emailVerified" : true,
     "firstName" : "Gatien",
     "lastName" : "Claus",
     "email" : "gatien@gmail.com",
@@ -478,124 +483,62 @@
     "notBefore" : 0,
     "groups" : [ ]
   }, {
-    "id" : "0c90e028-f90f-4eea-afce-f827da90dd4f",
-    "createdTimestamp" : 1773957559271,
-    "username" : "martin",
+    "id" : "a4e21114-6c2f-4313-9251-b83de04ea816",
+    "createdTimestamp" : 1776546502737,
+    "username" : "string",
     "enabled" : true,
-    "totp" : false,
-    "emailVerified" : false,
-    "firstName" : "Martin",
-    "lastName" : "Houry",
-    "email" : "martin@email.com",
-    "credentials" : [ ],
-    "disableableCredentialTypes" : [ ],
-    "requiredActions" : [ "webauthn-register-passwordless" ],
-    "realmRoles" : [ "default-roles-health_app" ],
-    "notBefore" : 0,
-    "groups" : [ ]
-  }, {
-    "id" : "47500b0f-7ee2-446d-8489-dd411be75966",
-    "createdTimestamp" : 1773957444307,
-    "username" : "mop",
-    "enabled" : true,
-    "totp" : false,
-    "emailVerified" : false,
-    "firstName" : "test",
-    "lastName" : "test",
-    "email" : "tho.ruelle.20@gmail.com",
+    "totp" : true,
+    "emailVerified" : true,
+    "firstName" : "string",
+    "lastName" : "string",
+    "email" : "string@string.com",
+    "attributes" : {
+      "certificate_serial" : [ "35CFEEC6CBA65011E14D87BDDBA5823391090E3A" ],
+      "user_type" : [ "doctor" ]
+    },
     "credentials" : [ {
-      "id" : "a6548652-4502-4718-bea6-45536ca85c0c",
-      "type" : "password",
-      "createdDate" : 1773957444348,
-      "secretData" : "{\"value\":\"XKw+IUbzZYqmWL8IDFIAFmWIDCUz4KoTDdhM0PpO1Uk=\",\"salt\":\"yCRFNQP5dtdUjxx7buRHgw==\",\"additionalParameters\":{}}",
-      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
-    } ],
-    "disableableCredentialTypes" : [ ],
-    "requiredActions" : [ "webauthn-register-passwordless" ],
-    "realmRoles" : [ "default-roles-health_app" ],
-    "notBefore" : 0,
-    "groups" : [ ]
-  }, {
-    "id" : "392704fc-6fa3-4a32-8297-0b0dcad187ae",
-    "createdTimestamp" : 1776252747866,
-    "username" : "roger",
-    "enabled" : true,
-    "totp" : false,
-    "emailVerified" : false,
-    "firstName" : "roger",
-    "lastName" : "roger",
-    "email" : "roger@roger.roger",
-    "credentials" : [ {
-      "id" : "89b77558-1013-401a-8b82-08ac60dd37b7",
-      "type" : "password",
-      "createdDate" : 1776252747888,
-      "secretData" : "{\"value\":\"xhrE4929/L8i8PG7otV8qXSWRjhd3l/tifbmC/MfvrA=\",\"salt\":\"kkYKnGmTtmf6iAr1Qaog8w==\",\"additionalParameters\":{}}",
-      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
-    }, {
-      "id" : "22a35bfd-cbd6-45f9-909b-a094335e5a14",
-      "type" : "webauthn-passwordless",
-      "userLabel" : "WebAuthn Authenticator (Default Label)",
-      "createdDate" : 1776252790536,
-      "secretData" : "{}",
-      "credentialData" : "{\"aaguid\":\"fbfc3007-154e-4ecc-8c0b-6e020557d7bd\",\"credentialId\":\"eTiUT7VYehJ9lDT8QU46AFvyoKg=\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIGQxewksvzVkXAvzZp0QyO3ed3VYPdfJZj2oJsCrvpbDIlggDJK_o1B5o_u2pT0c1M0rbtQuGe2qaBb-YyOMeuO2cjo\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\",\"hybrid\"]}"
+      "id" : "40104060-6484-4353-9a78-acbd81491868",
+      "type" : "otp",
+      "userLabel" : "string",
+      "createdDate" : 1776546631859,
+      "secretData" : "{\"value\":\"paKwrwcOC2RPaEC9EAr2\"}",
+      "credentialData" : "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
     } ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
     "realmRoles" : [ "default-roles-health_app" ],
     "notBefore" : 0,
-    "groups" : [ "/Patients" ]
+    "groups" : [ "/Docteurs" ]
   }, {
-    "id" : "84e4c454-647b-4d76-96e4-4adc919958dd",
-    "createdTimestamp" : 1773949665939,
-    "username" : "test",
-    "enabled" : true,
-    "totp" : false,
-    "emailVerified" : false,
-    "firstName" : "test",
-    "lastName" : "test",
-    "email" : "testt@user.com",
-    "credentials" : [ {
-      "id" : "cf298573-2c04-4a18-93ad-f7b217b883d6",
-      "type" : "password",
-      "createdDate" : 1773949665982,
-      "secretData" : "{\"value\":\"CnXsogrzelstKlvWktS9zj2W53n/XcylaJe/hUKjHc4=\",\"salt\":\"LoiREVMJyo6CbCTyirhWVQ==\",\"additionalParameters\":{}}",
-      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
-    }, {
-      "id" : "b6244803-6e40-4e0e-a179-a72a7d60cc47",
-      "type" : "webauthn-passwordless",
-      "userLabel" : "mmm",
-      "createdDate" : 1773949680991,
-      "secretData" : "{}",
-      "credentialData" : "{\"aaguid\":\"08987058-cadc-4b81-b6e1-30de50dcbe96\",\"credentialId\":\"xZ7U22bvtDxndp0Ap7PqzTtKMUwBxjYS15hKeBPbBkE=\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIIiTv6W1N5gaM-Qnma7IYzBE9tNlzdAOZsG6_Lgay7PqIlgg7CS53uRtaDUpvb_mPlj8WIf4WXGUmvo_tepnKNtouOE\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\"]}"
-    } ],
-    "disableableCredentialTypes" : [ ],
-    "requiredActions" : [ ],
-    "realmRoles" : [ "default-roles-health_app" ],
-    "notBefore" : 0,
-    "groups" : [ ]
-  }, {
-    "id" : "f305df6a-b431-4d18-94a5-dcda0f05d3e3",
-    "createdTimestamp" : 1771885029364,
+    "id" : "c598a68f-4f2b-459a-a8fc-9559d0b5592b",
+    "createdTimestamp" : 1776704768919,
     "username" : "thomas",
     "enabled" : true,
-    "totp" : false,
-    "emailVerified" : false,
+    "totp" : true,
+    "emailVerified" : true,
     "firstName" : "Thomas",
     "lastName" : "Ruelle",
-    "email" : "redscorpion220@gmail.com",
+    "email" : "tho.ruelle.20@gmail.com",
     "credentials" : [ {
-      "id" : "0702cc45-390d-4593-aabb-effb88ac14be",
+      "id" : "7bf85ecc-3c66-425a-b361-6f8680dbf9aa",
       "type" : "password",
-      "createdDate" : 1771885029387,
-      "secretData" : "{\"value\":\"EknISHpVuibfJGX8GSj+fptBPV6TK4lENNUY0BvOhJg=\",\"salt\":\"o3sKItetje1pH4nXFrlApw==\",\"additionalParameters\":{}}",
+      "createdDate" : 1776704768951,
+      "secretData" : "{\"value\":\"ymr+tHtIqI51L++vMC9PVWzJXb3bn4FIb2mZc7kony0=\",\"salt\":\"B1+JXcKRVhm5brdiGgCs2g==\",\"additionalParameters\":{}}",
       "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
     }, {
-      "id" : "a2903aab-9903-4608-8464-c7664fe660fb",
+      "id" : "70ea5b65-f722-4e0c-887a-426f49efbc0a",
+      "type" : "otp",
+      "userLabel" : "Test",
+      "createdDate" : 1776704794305,
+      "secretData" : "{\"value\":\"2Ez1cDfKOoW2imfyFeUR\"}",
+      "credentialData" : "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+    }, {
+      "id" : "e34d3fed-ac95-4b10-b00c-6b35993ab00f",
       "type" : "webauthn-passwordless",
       "userLabel" : "WebAuthn Authenticator (Default Label)",
-      "createdDate" : 1771885041498,
+      "createdDate" : 1776704844419,
       "secretData" : "{}",
-      "credentialData" : "{\"aaguid\":\"08987058-cadc-4b81-b6e1-30de50dcbe96\",\"credentialId\":\"xN5wR8nS2xKv9VJnQ/zsaLJRquwGrSZEP2/gstracp8=\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIK8HgGZxY68cCCX1ARV4EG93_BZxEB_GplQvOlmAm_fWIlggxw06piJdYULkYo51Sd2NwIJl1zeitd_xRGDFhlTcbtg\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\"]}"
+      "credentialData" : "{\"aaguid\":\"00000000-0000-0000-0000-000000000000\",\"credentialId\":\"LJhZal385TqvOrkCu7fJWw==\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIKAKlFRFLUDQZUemUg8KXlkZ1sBUQQw3FDV6p-_rJY2UIlggbqx5_Z4uFoIr9QNmSKidKPt96pilMnG5Qvre6JHWvew\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\",\"hybrid\"]}"
     } ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
@@ -772,6 +715,19 @@
     "authenticationFlowBindingOverrides" : { },
     "fullScopeAllowed" : true,
     "nodeReRegistrationTimeout" : -1,
+    "protocolMappers" : [ {
+      "id" : "4b2aaa2a-60d7-4b30-a329-70e1f5fcf45d",
+      "name" : "Audience for Backend",
+      "protocol" : "openid-connect",
+      "protocolMapper" : "oidc-audience-mapper",
+      "consentRequired" : false,
+      "config" : {
+        "included.client.audience" : "health_app_frontend",
+        "id.token.claim" : "false",
+        "access.token.claim" : "true",
+        "introspection.token.claim" : "true"
+      }
+    } ],
     "defaultClientScopes" : [ "web-origins", "acr", "roles", "profile", "email" ],
     "optionalClientScopes" : [ "address", "phone", "offline_access", "microprofile-jwt" ]
   }, {
@@ -1351,11 +1307,22 @@
     "referrerPolicy" : "no-referrer",
     "xRobotsTag" : "none",
     "xFrameOptions" : "SAMEORIGIN",
-    "contentSecurityPolicy" : "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "contentSecurityPolicy" : "frame-src 'self' https://www.google.com https://www.recaptcha.net; frame-ancestors 'self' https://localhost; object-src 'none';",
     "xXSSProtection" : "1; mode=block",
     "strictTransportSecurity" : "max-age=31536000; includeSubDomains"
   },
-  "smtpServer" : { },
+  "smtpServer" : {
+    "replyToDisplayName" : "",
+    "starttls" : "false",
+    "auth" : "",
+    "port" : "1025",
+    "host" : "mailcatcher",
+    "replyTo" : "",
+    "from" : "admin@healthapp.be",
+    "fromDisplayName" : "",
+    "envelopeFrom" : "",
+    "ssl" : "false"
+  },
   "eventsEnabled" : false,
   "eventsListeners" : [ "jboss-logging" ],
   "enabledEventTypes" : [ ],
@@ -1408,7 +1375,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-address-mapper", "saml-role-list-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-property-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper", "oidc-full-name-mapper", "saml-user-property-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-user-property-mapper", "saml-role-list-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper" ]
       }
     }, {
       "id" : "bed76a0e-6199-4bce-9588-714de1db0458",
@@ -1424,7 +1391,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-usermodel-attribute-mapper", "oidc-address-mapper", "saml-user-property-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-full-name-mapper", "saml-role-list-mapper", "saml-user-attribute-mapper", "oidc-usermodel-property-mapper" ]
+        "allowed-protocol-mapper-types" : [ "oidc-usermodel-attribute-mapper", "oidc-usermodel-property-mapper", "saml-role-list-mapper", "oidc-address-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-user-property-mapper", "saml-user-attribute-mapper", "oidc-full-name-mapper" ]
       }
     }, {
       "id" : "a3ceee06-2e09-403f-a53e-f57cf3acc5ae",
@@ -1621,17 +1588,16 @@
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
     }, {
-      "authenticatorConfig" : "GatienClaus",
-      "authenticator" : "auth-x509-client-username-form",
-      "authenticatorFlow" : false,
+      "authenticatorFlow" : true,
       "requirement" : "ALTERNATIVE",
       "priority" : 36,
-      "autheticatorFlow" : false,
+      "autheticatorFlow" : true,
+      "flowAlias" : "X509",
       "userSetupAllowed" : false
     }, {
       "authenticatorFlow" : true,
       "requirement" : "ALTERNATIVE",
-      "priority" : 37,
+      "priority" : 39,
       "autheticatorFlow" : true,
       "flowAlias" : "Password-less forms",
       "userSetupAllowed" : false
@@ -1658,10 +1624,17 @@
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
     }, {
+      "authenticator" : "auth-otp-form",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 30,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
       "authenticator" : "conditional-user-configured",
       "authenticatorFlow" : false,
       "requirement" : "DISABLED",
-      "priority" : 30,
+      "priority" : 31,
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
     } ]
@@ -1730,6 +1703,29 @@
       "priority" : 20,
       "autheticatorFlow" : true,
       "flowAlias" : "First broker login - Conditional OTP",
+      "userSetupAllowed" : false
+    } ]
+  }, {
+    "id" : "ce29d31c-6073-4526-b960-e0fa874df6d7",
+    "alias" : "X509",
+    "description" : "",
+    "providerId" : "basic-flow",
+    "topLevel" : false,
+    "builtIn" : false,
+    "authenticationExecutions" : [ {
+      "authenticatorConfig" : "Doctors",
+      "authenticator" : "auth-x509-client-username-form",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 0,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
+      "authenticator" : "auth-otp-form",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 1,
+      "autheticatorFlow" : false,
       "userSetupAllowed" : false
     } ]
   }, {
@@ -1931,9 +1927,10 @@
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
     }, {
+      "authenticatorConfig" : "Health App Captacha",
       "authenticator" : "registration-recaptcha-action",
       "authenticatorFlow" : false,
-      "requirement" : "DISABLED",
+      "requirement" : "REQUIRED",
       "priority" : 60,
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
@@ -1962,13 +1959,13 @@
     }, {
       "authenticator" : "reset-password",
       "authenticatorFlow" : false,
-      "requirement" : "REQUIRED",
+      "requirement" : "DISABLED",
       "priority" : 30,
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
     }, {
       "authenticatorFlow" : true,
-      "requirement" : "CONDITIONAL",
+      "requirement" : "ALTERNATIVE",
       "priority" : 40,
       "autheticatorFlow" : true,
       "flowAlias" : "Reset - Conditional OTP",
@@ -2071,8 +2068,8 @@
       "x509-cert-auth.timestamp-validation-enabled" : "true"
     }
   }, {
-    "id" : "a71aabc9-bd37-4051-86ea-3c1ef60642f7",
-    "alias" : "GatienClaus",
+    "id" : "6f1205da-9d64-4423-98b8-e763b870e2ee",
+    "alias" : "Doctors",
     "config" : {
       "x509-cert-auth.canonical-dn-enabled" : "false",
       "x509-cert-auth.serialnumber-hex-enabled" : "false",
@@ -2083,6 +2080,28 @@
       "x509-cert-auth.crldp-checking-enabled" : "false",
       "x509-cert-auth.mapping-source-selection" : "Subject's Common Name",
       "x509-cert-auth.timestamp-validation-enabled" : "true"
+    }
+  }, {
+    "id" : "a71aabc9-bd37-4051-86ea-3c1ef60642f7",
+    "alias" : "GatienClaus",
+    "config" : {
+      "x509-cert-auth.canonical-dn-enabled" : "false",
+      "x509-cert-auth.mapper-selection.user-attribute-name" : "certificate_serial",
+      "x509-cert-auth.serialnumber-hex-enabled" : "true",
+      "x509-cert-auth.ocsp-fail-open" : "false",
+      "x509-cert-auth.regular-expression" : "(.*?)(?:$)",
+      "x509-cert-auth.mapper-selection" : "Username or Email",
+      "x509-cert-auth.certificate-policy-mode" : "All",
+      "x509-cert-auth.crldp-checking-enabled" : "false",
+      "x509-cert-auth.mapping-source-selection" : "Subject's Common Name",
+      "x509-cert-auth.timestamp-validation-enabled" : "true"
+    }
+  }, {
+    "id" : "35f51cc4-0d10-41b3-9c0e-542ef1434853",
+    "alias" : "Health App Captacha",
+    "config" : {
+      "site.key" : "6Lc0TrosAAAAAE0hz4-oVajDrmzj6L6T0GdQErzf",
+      "secret" : "6Lc0TrosAAAAAE6lHhjBuy3yv-0ldG1BBt_RwkAS"
     }
   }, {
     "id" : "04ff0c4d-dcdd-4d9e-a75f-a7e5d829c03e",
@@ -2118,7 +2137,7 @@
     "name" : "Configure OTP",
     "providerId" : "CONFIGURE_TOTP",
     "enabled" : true,
-    "defaultAction" : false,
+    "defaultAction" : true,
     "priority" : 10,
     "config" : { }
   }, {
@@ -2198,7 +2217,10 @@
     "clientOfflineSessionMaxLifespan" : "0",
     "oauth2DevicePollingInterval" : "5",
     "clientSessionIdleTimeout" : "0",
+    "actionTokenGeneratedByUserLifespan.verify-email" : "",
+    "actionTokenGeneratedByUserLifespan.idp-verify-account-via-email" : "",
     "clientOfflineSessionIdleTimeout" : "0",
+    "actionTokenGeneratedByUserLifespan.execute-actions" : "",
     "cibaInterval" : "5",
     "realmReusableOtpCode" : "false",
     "cibaExpiresIn" : "120",
@@ -2206,7 +2228,9 @@
     "parRequestUriLifespan" : "60",
     "clientSessionMaxLifespan" : "0",
     "frontendUrl" : "",
-    "acr.loa.map" : "{}"
+    "acr.loa.map" : "{}",
+    "shortVerificationUri" : "",
+    "actionTokenGeneratedByUserLifespan.reset-credentials" : ""
   },
   "keycloakVersion" : "23.0.7",
   "userManagedAccessAllowed" : false,

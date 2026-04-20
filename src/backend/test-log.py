@@ -2,7 +2,7 @@ import requests
 import hashlib
 import datetime
 
-LOGSTASH_URL = "http://localhost:5044"
+LOGSTASH_URL = "https://localhost:5044"
 
 def generate_log(action, sequence, prev_hash, patient_id="null", is_falsified=False):
     # 1. On fige toutes les variables (y compris l'heure exacte) AVANT le hachage
@@ -54,7 +54,7 @@ def generate_log(action, sequence, prev_hash, patient_id="null", is_falsified=Fa
     
     # 4. Envoi asynchrone à Logstash
     try:
-        response = requests.post(LOGSTASH_URL, json=log_data)
+        response = requests.post(LOGSTASH_URL, json=log_data, verify=False, timeout=5)
         etat = "😈 FALSIFIÉ" if is_falsified else "✅ Valide"
         print(f"Log ECS (Full Hashing) envoyé ({etat}) - Action: {action}")
     except Exception as e:
