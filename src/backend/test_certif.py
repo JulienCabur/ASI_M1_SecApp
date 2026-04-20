@@ -7,9 +7,9 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 
 BASE_URL = "http://localhost:8081" 
-USERNAME = "dr_gatien" # Placer à la racine du projet
-P12_FILE = "dr_gatien.p12"
-P12_PASSWORD = "pass_généré"
+USERNAME = "dr_level" # Placer à la racine du projet
+P12_FILE = "dr_level.p12"
+P12_PASSWORD = "aUaIAh682QpaB1M/U/5WuXc3KFMIRYzA"
 
 def test_login_flow():
     resp = requests.get(f"{BASE_URL}/auth/challenge", params={"username": USERNAME})

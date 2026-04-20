@@ -93,10 +93,8 @@ SERVICES="keycloak webserver elasticsearch kibana logstash backend"
 
 for SERVICE in $SERVICES; do
     SERVICE_EXPORT="$EXPORT_DIR/$SERVICE"
-    if [ -d "$SERVICE_EXPORT" ]; then
-        rm -rf "$SERVICE_EXPORT"
-    fi
     mkdir -p "$SERVICE_EXPORT"
+    find "$SERVICE_EXPORT" -mindepth 1 -delete
     SERVICE_UPPER=$(echo "$SERVICE" | tr '[:lower:]' '[:upper:]')
     key_pass="env:${SERVICE_UPPER}_KEY_PASS"
 

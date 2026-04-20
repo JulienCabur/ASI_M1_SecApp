@@ -115,6 +115,8 @@ services:
       KEYCLOAK_PUBLIC_KEY_URL: https://keycloak:8443/realms/health_app/protocol/openid-connect/certs
       STORAGE_PATH: /storage
       DATABASE_URL: postgresql://keycloak:${POSTGRES_PASSWORD}@postgres_keycloak:5432/dbbackend
+      KEYCLOAK_VERIFY: "true"
+      KEYCLOAK_CA_BUNDLE: /app/certs/ca-chain.pem
     depends_on:
       pki:
         condition: service_healthy
@@ -163,7 +165,7 @@ services:
   postgres_keycloak:
     image: postgres
     ports:
-      - "5432:5432"
+      - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./postgres-init/init.sql:/docker-entrypoint-initdb.d/init.sql

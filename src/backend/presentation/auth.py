@@ -43,25 +43,21 @@ async def register_doctor_route(
         time.sleep(5)
         cert_path = auth_service.check_csr_signed(user_info.username)
         logs_service.add_logs(action="CHECK_CSR_SIGNED", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
-        auth_service.create_doctor_in_keycloak(cert_path, user_info)
+        p12_password = auth_service.create_doctor_in_keycloak(cert_path, user_info)
         logs_service.add_logs(action="REGISTER_DOCTOR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
-        return FileResponse(path=cert_path, filename=f"{user_info.username}.p12", media_type="application/x-pkcs12")
+        p12_content = auth_service.get_p12_content(cert_path)
+        logs_service.add_logs(action="GET_P12_CONTENT", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        auth_service.delete_sensitive_files(user_info.username)
+        logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        return {
+            "status": "success",
+            "username": user_info.username,
+            "certificate_b64": p12_content,
+            "password": p12_password,
+            "filename": f"{user_info.username}.p12"
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du médecin: {str(e)}")
-
-@router.get("/password_for_cert", response_model=Dict[str, Any])
-async def get_password_for_cert_route(
-    username: str = Query(..., description="Nom d'utilisateur pour lequel récupérer le mot de passe"),
-    db: Session = Depends(get_db)) -> Dict[str, Any]:
-    try:
-        auth_service = AuthService(db=db)
-        password = auth_service.get_password_for_cert(username)
-        logs_service.add_logs(action="GET_PASSWORD_FOR_CERT", log_level="INFO", user_id=username, user_role="doctor", patient_id="null")
-        auth_service.delete_sensitive_files(username)
-        logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=username, user_role="doctor", patient_id="null")
-        return {"password": password}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération du mot de passe: {str(e)}")
 
 @router.get("/challenge", response_model=ChallengeResponse)
 async def get_challenge(

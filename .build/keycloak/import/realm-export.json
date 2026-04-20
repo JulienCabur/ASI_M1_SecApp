@@ -5,8 +5,8 @@
   "displayNameHtml" : "",
   "notBefore" : 0,
   "defaultSignatureAlgorithm" : "RS256",
-  "revokeRefreshToken" : false,
-  "refreshTokenMaxReuse" : 0,
+  "revokeRefreshToken" : true,
+  "refreshTokenMaxReuse" : 1,
   "accessTokenLifespan" : 300,
   "accessTokenLifespanForImplicitFlow" : 900,
   "ssoSessionIdleTimeout" : 1800,
@@ -411,6 +411,26 @@
   "webAuthnPolicyPasswordlessAcceptableAaguids" : [ ],
   "webAuthnPolicyPasswordlessExtraOrigins" : [ ],
   "users" : [ {
+    "id" : "7aa0071f-7dc6-4952-8100-9f5c9d683337",
+    "createdTimestamp" : 1776703908175,
+    "username" : "dr_robin",
+    "enabled" : true,
+    "totp" : false,
+    "emailVerified" : false,
+    "firstName" : "dr_robin",
+    "lastName" : "dr_robin",
+    "email" : "dr_robin@gmail.com",
+    "attributes" : {
+      "certificate_serial" : [ "9F0DF069B78B0E8E0AD867C6BC65259450B635B" ],
+      "user_type" : [ "doctor" ]
+    },
+    "credentials" : [ ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ "CONFIGURE_TOTP", "VERIFY_EMAIL" ],
+    "realmRoles" : [ "default-roles-health_app" ],
+    "notBefore" : 0,
+    "groups" : [ "/Docteurs" ]
+  }, {
     "id" : "42b3b28d-4862-401d-8e36-cda65e5678e0",
     "createdTimestamp" : 1776469671687,
     "username" : "erdem.d03@gmail.com",
@@ -489,6 +509,42 @@
     "realmRoles" : [ "default-roles-health_app" ],
     "notBefore" : 0,
     "groups" : [ "/Docteurs" ]
+  }, {
+    "id" : "c598a68f-4f2b-459a-a8fc-9559d0b5592b",
+    "createdTimestamp" : 1776704768919,
+    "username" : "thomas",
+    "enabled" : true,
+    "totp" : true,
+    "emailVerified" : true,
+    "firstName" : "Thomas",
+    "lastName" : "Ruelle",
+    "email" : "tho.ruelle.20@gmail.com",
+    "credentials" : [ {
+      "id" : "7bf85ecc-3c66-425a-b361-6f8680dbf9aa",
+      "type" : "password",
+      "createdDate" : 1776704768951,
+      "secretData" : "{\"value\":\"ymr+tHtIqI51L++vMC9PVWzJXb3bn4FIb2mZc7kony0=\",\"salt\":\"B1+JXcKRVhm5brdiGgCs2g==\",\"additionalParameters\":{}}",
+      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
+    }, {
+      "id" : "70ea5b65-f722-4e0c-887a-426f49efbc0a",
+      "type" : "otp",
+      "userLabel" : "Test",
+      "createdDate" : 1776704794305,
+      "secretData" : "{\"value\":\"2Ez1cDfKOoW2imfyFeUR\"}",
+      "credentialData" : "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+    }, {
+      "id" : "e34d3fed-ac95-4b10-b00c-6b35993ab00f",
+      "type" : "webauthn-passwordless",
+      "userLabel" : "WebAuthn Authenticator (Default Label)",
+      "createdDate" : 1776704844419,
+      "secretData" : "{}",
+      "credentialData" : "{\"aaguid\":\"00000000-0000-0000-0000-000000000000\",\"credentialId\":\"LJhZal385TqvOrkCu7fJWw==\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIKAKlFRFLUDQZUemUg8KXlkZ1sBUQQw3FDV6p-_rJY2UIlggbqx5_Z4uFoIr9QNmSKidKPt96pilMnG5Qvre6JHWvew\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\",\"hybrid\"]}"
+    } ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-health_app" ],
+    "notBefore" : 0,
+    "groups" : [ "/Patients" ]
   } ],
   "scopeMappings" : [ {
     "clientScope" : "offline_access",
@@ -659,6 +715,19 @@
     "authenticationFlowBindingOverrides" : { },
     "fullScopeAllowed" : true,
     "nodeReRegistrationTimeout" : -1,
+    "protocolMappers" : [ {
+      "id" : "4b2aaa2a-60d7-4b30-a329-70e1f5fcf45d",
+      "name" : "Audience for Backend",
+      "protocol" : "openid-connect",
+      "protocolMapper" : "oidc-audience-mapper",
+      "consentRequired" : false,
+      "config" : {
+        "included.client.audience" : "health_app_frontend",
+        "id.token.claim" : "false",
+        "access.token.claim" : "true",
+        "introspection.token.claim" : "true"
+      }
+    } ],
     "defaultClientScopes" : [ "web-origins", "acr", "roles", "profile", "email" ],
     "optionalClientScopes" : [ "address", "phone", "offline_access", "microprofile-jwt" ]
   }, {
@@ -1306,7 +1375,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-sha256-pairwise-sub-mapper", "saml-role-list-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper", "saml-user-property-mapper", "oidc-full-name-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-user-property-mapper", "saml-role-list-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper" ]
       }
     }, {
       "id" : "bed76a0e-6199-4bce-9588-714de1db0458",
@@ -1322,7 +1391,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-usermodel-attribute-mapper", "oidc-address-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "saml-user-attribute-mapper", "saml-user-property-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-role-list-mapper" ]
+        "allowed-protocol-mapper-types" : [ "oidc-usermodel-attribute-mapper", "oidc-usermodel-property-mapper", "saml-role-list-mapper", "oidc-address-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-user-property-mapper", "saml-user-attribute-mapper", "oidc-full-name-mapper" ]
       }
     }, {
       "id" : "a3ceee06-2e09-403f-a53e-f57cf3acc5ae",
@@ -2148,7 +2217,10 @@
     "clientOfflineSessionMaxLifespan" : "0",
     "oauth2DevicePollingInterval" : "5",
     "clientSessionIdleTimeout" : "0",
+    "actionTokenGeneratedByUserLifespan.verify-email" : "",
+    "actionTokenGeneratedByUserLifespan.idp-verify-account-via-email" : "",
     "clientOfflineSessionIdleTimeout" : "0",
+    "actionTokenGeneratedByUserLifespan.execute-actions" : "",
     "cibaInterval" : "5",
     "realmReusableOtpCode" : "false",
     "cibaExpiresIn" : "120",
@@ -2156,7 +2228,9 @@
     "parRequestUriLifespan" : "60",
     "clientSessionMaxLifespan" : "0",
     "frontendUrl" : "",
-    "acr.loa.map" : "{}"
+    "acr.loa.map" : "{}",
+    "shortVerificationUri" : "",
+    "actionTokenGeneratedByUserLifespan.reset-credentials" : ""
   },
   "keycloakVersion" : "23.0.7",
   "userManagedAccessAllowed" : false,

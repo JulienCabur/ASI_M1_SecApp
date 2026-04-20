@@ -3,9 +3,11 @@ import datetime
 import secrets
 from sqlalchemy.orm import Session
 from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
+import base64
 from models.auth import User
 from keycloak import KeycloakAdmin
 from dotenv import load_dotenv
+from core.auth import resolve_keycloak_verify
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -18,6 +20,8 @@ from cryptography.x509.oid import NameOID
 import os
 
 load_dotenv()  # Charger les variables d'environnement depuis le fichier .env
+
+
 class AuthService:
     """
     Classe pour gérer les opérations liées à l'authentification.
@@ -81,7 +85,7 @@ class AuthService:
             password=os.getenv("KEYCLOAK_ADMIN_PASSWORD"),
             realm_name=os.getenv("KEYCLOAK_REALM"),
             user_realm_name="master",
-            verify=False
+            verify=resolve_keycloak_verify()
         )
 
         user_payload = {
@@ -115,16 +119,16 @@ class AuthService:
             )
             self.db.add(user)
             self.db.commit()
+            
             return p12_password
         except Exception as e:
+            self.delete_sensitive_files(user_info.username)
             raise Exception(f"Erreur lors de la création de l'utilisateur dans Keycloak: {str(e)}")
-
-    def get_password_for_cert(self, username: str) -> str:
-        password_path = os.path.join(self.cert_repository, username + ".p12password")
-        if not os.path.exists(password_path):
-            raise Exception("Mot de passe pour le certificat non trouvé")
-        with open(password_path, "r") as f:
-            return f.read().strip()
+    
+    def get_p12_content(self, cert_path: str) -> bytes:
+        with open(cert_path, "rb") as f:
+            p12_content = base64.b64encode(f.read()).decode('utf-8')
+        return p12_content
 
     def delete_sensitive_files(self, common_name: str):
         csr_path = os.path.join(self.csr_repository, common_name + ".csr")

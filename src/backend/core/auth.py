@@ -12,6 +12,25 @@ load_dotenv()
 security = HTTPBearer()
 
 
+def resolve_keycloak_verify() -> bool | str:
+    """
+    Retourne la valeur de vérification TLS pour Keycloak.
+    """
+    verify_raw = (os.getenv("KEYCLOAK_VERIFY") or "true").strip()
+    ca_bundle = (os.getenv("KEYCLOAK_CA_BUNDLE") or "").strip()
+
+    if ca_bundle:
+        return ca_bundle
+
+    verify_lower = verify_raw.lower()
+    if verify_lower in {"false", "0", "no", "off"}:
+        return False
+    if verify_lower in {"true", "1", "yes", "on", ""}:
+        return True
+
+    return verify_raw
+
+
 async def get_keycloak_public_key() -> Dict[str, Any]:
     """
     Récupère la clé publique de Keycloak via son endpoint JWKS (JSON Web Key Set).
@@ -19,8 +38,8 @@ async def get_keycloak_public_key() -> Dict[str, Any]:
     """
     try:
         keycloak_url = os.getenv("KEYCLOAK_PUBLIC_KEY_URL")
-        
-        async with httpx.AsyncClient(verify=False) as client:
+
+        async with httpx.AsyncClient(verify=resolve_keycloak_verify()) as client:
             response = await client.get(keycloak_url)
             response.raise_for_status()
             return response.json()
@@ -63,7 +82,8 @@ async def validate_jwt_token(token: str) -> Dict[str, Any]:
             token,
             public_key,
             algorithms=["RS256"],
-            options={"verify_aud": False}
+            audience=os.getenv("KEYCLOAK_CLIENT_ID"),
+            options={"verify_aud": True}
         )
         return payload
 
@@ -86,10 +106,9 @@ async def get_current_user(credentials: Any = Depends(security)) -> UserInDB:
             credentials.credentials,
             public_key,
             algorithms=["RS256"],
-            #audience=os.getenv("KEYCLOAK_CLIENT_ID") if os.getenv("KEYCLOAK_CLIENT_ID") else None,
-            options={"verify_aud": False} # Celui qui change, je l'encule
+            audience=os.getenv("KEYCLOAK_CLIENT_ID"),
+            options={"verify_aud": True}
         )
-        #bool(os.getenv("KEYCLOAK_CLIENT_ID"))
         user = UserInDB(
             id=payload.get("sub"),
             username=payload.get("preferred_username") or payload.get("name"),
