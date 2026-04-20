@@ -134,7 +134,7 @@ class AuthService:
         key_path = os.path.join(self.csr_repository, common_name + ".key")
 
         for path in [csr_path, crt_path, key_path, csr_password_path, crt_password_path]:
-             if os.path.exists(path):
+            if os.path.exists(path):
                 os.remove(path)
 
     def generate_challenge(self, username: str) -> ChallengeResponse:
@@ -144,6 +144,7 @@ class AuthService:
         nonce = secrets.token_hex(16)
         timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
         user.challenge_nonce = nonce
+        user.challenge_timestamp = timestamp
         self.db.commit()
         return ChallengeResponse(nonce=nonce, timestamp=timestamp)
 
