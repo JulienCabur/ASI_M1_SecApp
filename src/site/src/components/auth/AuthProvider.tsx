@@ -13,31 +13,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const { setUser, logout } = useAuthStore();
 
   useEffect(() => {
-    console.log('AuthProvider initializing...');
-    
     initKeycloak()
       .then((authenticated) => {
-        console.log('Keycloak initialized, authenticated:', authenticated);
-        
         if (authenticated) {
           const user = getUserFromToken();
-          console.log('User from token:', user);
-          console.log('JWT Token:', keycloak.token);
-          
           if (user) {
             setUser(user, keycloak.token ?? '');
           } else {
-            console.warn('Token present but no user found');
             logout();
-            keycloak.logout();
+            keycloak.logout({ redirectUri: window.location.origin + '/login' });
           }
-        } else {
-          console.log('User not authenticated');
         }
         setInitialized(true);
       })
-      .catch((error) => {
-        console.error('Keycloak init error:', error);
+      .catch(() => {
         setInitialized(true);
       });
 

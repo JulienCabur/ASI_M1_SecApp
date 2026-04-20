@@ -9,24 +9,68 @@ export const keycloak = new Keycloak({
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
+const LOGIN_REDIRECT = window.location.origin + '/login';
+const INIT_TIMEOUT_MS = 10_000;
+
+const logoutToLogin = () =>
+  keycloak.logout({ redirectUri: LOGIN_REDIRECT });
+
+const startTokenRefresh = () => {
+  stopTokenRefresh();
+  refreshInterval = setInterval(() => {
+    keycloak.updateToken(60).catch(logoutToLogin);
+  }, 50_000);
+};
+
 export const initKeycloak = (): Promise<boolean> => {
-  return keycloak
-    .init({
-      onLoad: 'check-sso',
-      silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
-      pkceMethod: 'S256',
-    })
-    .then((authenticated) => {
-      if (authenticated) {
-        // Refresh token every 50s before the 5-min expiry
-        refreshInterval = setInterval(() => {
-          keycloak.updateToken(60).catch(() => {
-            keycloak.logout();
-          });
-        }, 50_000);
+  keycloak.onTokenExpired = () => {
+    keycloak.updateToken(60).catch(logoutToLogin);
+  };
+  keycloak.onAuthRefreshError = logoutToLogin;
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(false);
       }
-      return authenticated;
-    });
+    }, INIT_TIMEOUT_MS);
+
+    keycloak
+      .init({
+        onLoad: 'check-sso',
+        silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
+        pkceMethod: 'S256',
+      })
+      .then(async (authenticated) => {
+        clearTimeout(timeout);
+        if (settled) return;
+        settled = true;
+
+        if (authenticated) {
+          try {
+            // Ensure we have a fresh token after a page reload
+            await keycloak.updateToken(60);
+          } catch {
+            resolve(false);
+            return;
+          }
+          startTokenRefresh();
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+        if (!settled) {
+          settled = true;
+          resolve(false);
+        }
+      });
+  });
 };
 
 export const stopTokenRefresh = () => {
