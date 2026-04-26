@@ -1,6 +1,7 @@
 
 import datetime
 import secrets
+import time
 from sqlalchemy.orm import Session
 from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
 import base64
@@ -206,6 +207,82 @@ class AuthService:
     # le flow `Password-less`, donc on l'exclut volontairement.
     _RESET_ACTIONS = ["CONFIGURE_TOTP", "webauthn-register-passwordless"]
 
+    # Types de credentials Keycloak qu'on rotate sur un reset passwordless.
+    # On ignore tout autre type (cookies SSO, etc.) pour ne pas casser le compte.
+    _RESET_CREDENTIAL_TYPES = ("otp", "webauthn-passwordless")
+
+    # Attribut Keycloak posé à la demande de reset, lu au callback OIDC pour
+    # déterminer quels credentials sont "anciens".
+    _RESET_CLEANUP_ATTR = "pending_credentials_cleanup"
+
+    @staticmethod
+    def _now_ms() -> int:
+        return int(time.time() * 1000)
+
+    def _set_cleanup_marker(self, admin: KeycloakAdmin, user_id: str) -> None:
+        """Pose un timestamp ms sur l'attribut `pending_credentials_cleanup`.
+        Lecture-modification-écriture pour ne pas écraser les autres attributs."""
+        user = admin.get_user(user_id) or {}
+        attrs = dict(user.get("attributes") or {})
+        attrs[self._RESET_CLEANUP_ATTR] = [str(self._now_ms())]
+        admin.update_user(user_id=user_id, payload={"attributes": attrs})
+
+    def _clear_cleanup_marker(self, admin: KeycloakAdmin, user_id: str, attrs: dict) -> None:
+        new_attrs = {k: v for k, v in attrs.items() if k != self._RESET_CLEANUP_ATTR}
+        admin.update_user(user_id=user_id, payload={"attributes": new_attrs})
+
+    def cleanup_old_credentials_after_reset(self, user_id: str) -> None:
+        """À appeler dans le callback OIDC, après que la session est posée.
+
+        Si le compte porte le marqueur `pending_credentials_cleanup`, supprime
+        les credentials TOTP/WebAuthn créés *avant* ce marqueur (les nouveaux,
+        enrôlés depuis, sont conservés), puis efface le marqueur.
+
+        Idempotent : sans marqueur ou sans credentials anciens, no-op.
+        N'élève jamais : un échec ne doit pas casser le login. Le marqueur
+        n'est *pas* effacé en cas d'erreur, le prochain login retentera."""
+        try:
+            admin = self._keycloak_admin()
+            user = admin.get_user(user_id) or {}
+        except Exception:
+            return
+        attrs = user.get("attributes") or {}
+        raw_marker = (attrs.get(self._RESET_CLEANUP_ATTR) or [None])[0]
+        if not raw_marker:
+            return
+        try:
+            marker_ms = int(raw_marker)
+        except (TypeError, ValueError):
+            # Marqueur corrompu : on l'enlève sans rien supprimer.
+            try:
+                self._clear_cleanup_marker(admin, user_id, attrs)
+            except Exception:
+                pass
+            return
+
+        try:
+            credentials = admin.get_credentials(user_id) or []
+        except Exception:
+            return
+
+        for cred in credentials:
+            if cred.get("type") not in self._RESET_CREDENTIAL_TYPES:
+                continue
+            created = cred.get("createdDate") or 0
+            cred_id = cred.get("id")
+            if not cred_id or created >= marker_ms:
+                continue
+            try:
+                admin.delete_credential(user_id, cred_id)
+            except Exception:
+                # On n'interrompt pas la boucle : on tente les autres credentials.
+                continue
+
+        try:
+            self._clear_cleanup_marker(admin, user_id, attrs)
+        except Exception:
+            pass
+
     def send_credentials_reset_email(self, email: str) -> None:
         """Envoie un mail Keycloak pour ré-enrôler les credentials passwordless (TOTP + WebAuthn).
 
@@ -234,6 +311,10 @@ class AuthService:
         # action (UPDATE_PASSWORD résiduelle, VERIFY_EMAIL...).
         admin.update_user(user_id=user_id, payload={"requiredActions": []})
 
+        # Marqueur lu au callback OIDC : tout credential TOTP/WebAuthn antérieur
+        # à cet instant sera supprimé après un login réussi avec les nouveaux.
+        self._set_cleanup_marker(admin, user_id)
+
         client_id = os.getenv("KEYCLOAK_CLIENT_ID", "health_app_frontend")
         redirect_uri = os.getenv("FRONTEND_URL", "https://localhost").rstrip("/") + "/login"
         admin.send_update_account(
@@ -256,3 +337,5 @@ class AuthService:
             user_id=user_id,
             payload={"requiredActions": list(self._RESET_ACTIONS)},
         )
+        # Voir send_credentials_reset_email : même mécanisme de nettoyage différé.
+        self._set_cleanup_marker(admin, user_id)

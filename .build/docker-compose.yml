@@ -1,7 +1,7 @@
 services:
   setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
-    entrypoint: ["/entrypoint.sh"]
+    entrypoint: [ "/entrypoint.sh" ]
     init: true
     volumes:
       - ./elk-stack/setup/entrypoint.sh:/entrypoint.sh:ro,Z
@@ -98,7 +98,7 @@ services:
     ports:
       - "8081:8000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -157,12 +157,10 @@ services:
       - ../src/site/dist/:/usr/share/nginx/html/:ro
       - ./secrets/webserver:/etc/nginx/certs:ro
     entrypoint: >
-      /bin/bash -c "
-      mkdir -p /etc/nginx/ssl &&
-      printf '%s\n' \"$$SERVER_KEY_PASS\" > /etc/nginx/ssl/server.pass &&
-      chmod 600 /etc/nginx/ssl/server.pass &&
-      exec /docker-entrypoint.sh nginx -g 'daemon off;'
-      "
+      /bin/bash -c " mkdir -p /etc/nginx/ssl && printf '%s\n'
+      \"$$SERVER_KEY_PASS\" > /etc/nginx/ssl/server.pass && chmod 600
+      /etc/nginx/ssl/server.pass && exec /docker-entrypoint.sh nginx -g 'daemon
+      off;' "
     networks:
       - auth-network
   postgres_keycloak:
@@ -207,7 +205,7 @@ services:
       bash /etc/pki/CA/config/pki_deploy.sh;
       "
     healthcheck:
-      test: ["CMD", "test", "-f", "/etc/pki/CA/certs/root-ca.crt"]
+      test: [ "CMD", "test", "-f", "/etc/pki/CA/certs/root-ca.crt" ]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -219,15 +217,17 @@ services:
     image: quay.io/keycloak/keycloak:23.0
     container_name: keycloak
     entrypoint: >
-      /bin/bash -c "
-      until [ -f /opt/keycloak/conf/truststores/root-ca.crt ]; do sleep 2; done &&
-      rm -f /tmp/truststore.p12 &&
-      keytool -import -alias root-ca -file /opt/keycloak/conf/truststores/root-ca.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
-      keytool -import -alias signing-ca -file /opt/keycloak/conf/truststores/signing-ca1.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
-      mkdir -p /opt/keycloak/data/import &&
-      sed \"s|\\$${KEYCLOAK_CLIENT_SECRET}|$${KEYCLOAK_CLIENT_SECRET}|g\" /tmp/realm.template.json > /opt/keycloak/data/import/realm.json &&
-      /opt/keycloak/bin/kc.sh start-dev --import-realm
-      "
+      /bin/bash -c " until [ -f /opt/keycloak/conf/truststores/root-ca.crt ]; do
+      sleep 2; done && rm -f /tmp/truststore.p12 && keytool -import -alias
+      root-ca -file /opt/keycloak/conf/truststores/root-ca.crt -keystore
+      /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt
+      && keytool -import -alias signing-ca -file
+      /opt/keycloak/conf/truststores/signing-ca1.crt -keystore
+      /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt
+      && mkdir -p /opt/keycloak/data/import && sed
+      \"s|\\$${KEYCLOAK_CLIENT_SECRET}|$${KEYCLOAK_CLIENT_SECRET}|g\"
+      /tmp/realm.template.json > /opt/keycloak/data/import/realm.json &&
+      /opt/keycloak/bin/kc.sh start-dev --import-realm "
     env_file:
       - .env
     environment:
@@ -237,7 +237,7 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_FEATURES: web-authn
+      KC_FEATURES: web-authn,declarative-user-profile
       KC_HOSTNAME: localhost
       KC_HOSTNAME_PORT: 8443
       KC_HOSTNAME_STRICT: "false"
@@ -261,13 +261,13 @@ services:
       - ./secrets/keycloak:/opt/keycloak/conf/truststores
       - ./keycloak/import/realm-export.json:/tmp/realm.template.json:ro
   mailcatcher:
-      image: sj26/mailcatcher
-      container_name: mailcatcher
-      ports:
-        - "1025:1025"
-        - "1080:1080"
-      networks:
-        - auth-network
+    image: sj26/mailcatcher
+    container_name: mailcatcher
+    ports:
+      - "1025:1025"
+      - "1080:1080"
+    networks:
+      - auth-network
 
 networks:
   auth-network:

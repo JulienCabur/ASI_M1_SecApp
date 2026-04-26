@@ -103,6 +103,7 @@ async def callback_route(
     code: str = Query(default=""),
     state: str = Query(default=""),
     error: str = Query(default=""),
+    db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Callback Keycloak : échange le `code` contre des tokens et pose le cookie session."""
     fail_url = f"{_frontend_url()}/login?error=auth_failed"
@@ -136,10 +137,28 @@ async def callback_route(
     set_csrf_cookie(response, secrets.token_urlsafe(32))
 
     claims = _decode_id_or_access_token_unverified(payload.get("access_token", ""))
+    user_sub = claims.get("sub")
+
+    # Nettoyage des anciens credentials si un reset a été demandé : si le compte
+    # porte le marqueur `pending_credentials_cleanup`, on supprime maintenant
+    # les TOTP/WebAuthn antérieurs au marqueur (les nouveaux ont survécu au
+    # login => preuve qu'ils fonctionnent). Idempotent et tolérant aux erreurs.
+    if user_sub:
+        try:
+            AuthService(db=db).cleanup_old_credentials_after_reset(user_sub)
+        except Exception:
+            logs_service.add_logs(
+                action="CREDENTIALS_CLEANUP_FAIL",
+                log_level="WARNING",
+                user_id=user_sub,
+                user_role="unknown",
+                patient_id="null",
+            )
+
     logs_service.add_logs(
         action="LOGIN",
         log_level="INFO",
-        user_id=claims.get("sub", "unknown"),
+        user_id=user_sub or "unknown",
         user_role=(claims.get("realm_access", {}).get("roles", ["unknown"]) or ["unknown"])[0],
         patient_id="null",
     )
