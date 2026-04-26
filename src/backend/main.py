@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.database import engine, Base
 from presentation.file import router as file_router
 from presentation.auth import router as auth_router
+from presentation.check_authenticity import router as check_authenticity_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,6 +25,7 @@ app.add_middleware(
 
 app.include_router(file_router)
 app.include_router(auth_router)
+app.include_router(check_authenticity_router)
 
 @app.get("/")
 def root():
