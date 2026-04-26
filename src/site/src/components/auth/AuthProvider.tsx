@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { App, Spin } from 'antd';
-import { keycloak, initKeycloak, getUserFromToken, stopTokenRefresh } from '@/services/auth.service';
+import { fetchMe } from '@/services/auth.service';
 import { useAuthStore } from '@/store/auth.store';
 import styles from './AuthProvider.module.scss';
 
@@ -8,32 +8,36 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
+/**
+ * Bootstrap d'auth en mode BFF : un seul appel `GET /auth/me` au montage
+ * de l'app pour savoir si la session cookie est valide. Si oui, on hydrate
+ * le store ; sinon, on laisse l'utilisateur sur les routes publiques.
+ *
+ * Le refresh des tokens est géré côté serveur à la demande (chaque appel à
+ * une route protégée fait un refresh si nécessaire), donc plus de setInterval.
+ */
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [initialized, setInitialized] = useState(false);
-  const { setUser, logout } = useAuthStore();
+  const { setUser, clear } = useAuthStore();
 
   useEffect(() => {
-    initKeycloak()
-      .then((authenticated) => {
-        if (authenticated) {
-          const user = getUserFromToken();
-          if (user) {
-            setUser(user, keycloak.token ?? '');
-          } else {
-            logout();
-            keycloak.logout({ redirectUri: window.location.origin + '/login' });
-          }
-        }
-        setInitialized(true);
+    let cancelled = false;
+    fetchMe()
+      .then((user) => {
+        if (cancelled) return;
+        if (user) setUser(user);
+        else clear();
       })
       .catch(() => {
-        setInitialized(true);
+        if (!cancelled) clear();
+      })
+      .finally(() => {
+        if (!cancelled) setInitialized(true);
       });
-
     return () => {
-      stopTokenRefresh();
+      cancelled = true;
     };
-  }, [setUser, logout]);
+  }, [setUser, clear]);
 
   if (!initialized) {
     return (

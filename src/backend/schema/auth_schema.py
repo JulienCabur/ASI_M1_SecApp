@@ -1,8 +1,12 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 class AuthBase(BaseModel):
     username: str
     email: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr = Field(..., description="Adresse e-mail du compte à réinitialiser")
 
 class UserInDB(AuthBase):
     id: str

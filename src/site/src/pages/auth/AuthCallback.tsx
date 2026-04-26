@@ -1,22 +1,26 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router';
-import { Spin, Result, Button } from 'antd';
-import { useAuth } from '@/hooks/useAuth';
-import { keycloak } from '@/services/auth.service';
+import { useNavigate, useSearchParams } from 'react-router';
+import { Result, Button, Spin } from 'antd';
+import { startLogin } from '@/services/auth.service';
 
+/**
+ * En mode BFF, le callback OIDC est traité par le backend (`/fastapi/auth/callback`).
+ * Le back redirige ensuite vers la racine (ou `redirect_to`). Cette page sert
+ * uniquement de fallback si l'utilisateur arrive ici avec un `?error=...` côté front,
+ * ou si une route legacy continue de pointer ici.
+ */
 const AuthCallback: React.FC = () => {
-  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const error = params.get('error');
 
   useEffect(() => {
-    // Keycloak JS adapter processes the URL callback automatically during initKeycloak()
-    // which runs inside AuthProvider before this component mounts.
-    if (isAuthenticated) {
+    if (!error) {
       navigate('/', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [error, navigate]);
 
-  if (isAuthenticated) {
+  if (!error) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <Spin size="large" tip="Redirection..." />
@@ -31,11 +35,7 @@ const AuthCallback: React.FC = () => {
         title="Authentification échouée"
         subTitle="Impossible de terminer la connexion. Veuillez réessayer."
         extra={[
-          <Button
-            type="primary"
-            key="retry"
-            onClick={() => keycloak.login({ redirectUri: window.location.origin + '/auth/callback' })}
-          >
+          <Button type="primary" key="retry" onClick={() => startLogin('/')}>
             Réessayer
           </Button>,
         ]}

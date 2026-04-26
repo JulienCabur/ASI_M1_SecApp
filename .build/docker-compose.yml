@@ -117,6 +117,12 @@ services:
       DATABASE_URL: postgresql://keycloak:${POSTGRES_PASSWORD}@postgres_keycloak:5432/dbbackend
       KEYCLOAK_VERIFY: "true"
       KEYCLOAK_CA_BUNDLE: /app/certs/ca-chain.pem
+      KEYCLOAK_PUBLIC_URL: https://localhost:8443
+      KEYCLOAK_REDIRECT_URI: https://localhost/fastapi/auth/callback
+      FRONTEND_URL: https://localhost
+      SESSION_SECRET: ${SESSION_SECRET}
+      COOKIE_SECURE: "true"
+      COOKIE_DOMAIN: localhost
     depends_on:
       pki:
         condition: service_healthy
@@ -145,10 +151,7 @@ services:
       - ./.env
     environment:
       SERVER_KEY_PASS: ${SERVER_KEY_PASS}
-      VITE_KEYCLOAK_URL: https://keycloak:8443
-      VITE_KEYCLOAK_REALM: health_app
-      VITE_KEYCLOAK_CLIENT_ID: health_app_frontend
-      VITE_API_BASE_URL: http://backend:8000
+      VITE_API_BASE_URL: /fastapi
     volumes:
       - ./nginx/conf/:/etc/nginx/conf.d/:ro
       - ../src/site/dist/:/usr/share/nginx/html/:ro
@@ -221,6 +224,8 @@ services:
       rm -f /tmp/truststore.p12 &&
       keytool -import -alias root-ca -file /opt/keycloak/conf/truststores/root-ca.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
       keytool -import -alias signing-ca -file /opt/keycloak/conf/truststores/signing-ca1.crt -keystore /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt &&
+      mkdir -p /opt/keycloak/data/import &&
+      sed \"s|\\$${KEYCLOAK_CLIENT_SECRET}|$${KEYCLOAK_CLIENT_SECRET}|g\" /tmp/realm.template.json > /opt/keycloak/data/import/realm.json &&
       /opt/keycloak/bin/kc.sh start-dev --import-realm
       "
     env_file:
@@ -233,7 +238,10 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_FEATURES: web-authn
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8443
       KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
       KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/conf/truststores/server.crt
       KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/conf/truststores/server.key
       KC_HTTPS_CERTIFICATE_KEY_PASSWORD: ${SERVER_KEY_PASS}
@@ -251,7 +259,7 @@ services:
       - auth-network
     volumes:
       - ./secrets/keycloak:/opt/keycloak/conf/truststores
-      - ./keycloak/import/realm-export.json:/opt/keycloak/data/import/realm.json
+      - ./keycloak/import/realm-export.json:/tmp/realm.template.json:ro
   mailcatcher:
       image: sj26/mailcatcher
       container_name: mailcatcher

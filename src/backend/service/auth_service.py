@@ -190,3 +190,69 @@ class AuthService:
             user.challenge_timestamp = None
             self.db.commit()
         return True
+
+    def _keycloak_admin(self) -> KeycloakAdmin:
+        return KeycloakAdmin(
+            server_url=os.getenv("KEYCLOAK_SERVER_URL"),
+            username=os.getenv("KEYCLOAK_ADMIN"),
+            password=os.getenv("KEYCLOAK_ADMIN_PASSWORD"),
+            realm_name=os.getenv("KEYCLOAK_REALM"),
+            user_realm_name="master",
+            verify=resolve_keycloak_verify(),
+        )
+
+    # Les deux étapes que comporte un "reset complet" sur ce realm passwordless :
+    # le 2FA (TOTP) et la clé d'accès WebAuthn. Le mot de passe n'existe pas dans
+    # le flow `Password-less`, donc on l'exclut volontairement.
+    _RESET_ACTIONS = ["CONFIGURE_TOTP", "webauthn-register-passwordless"]
+
+    def send_credentials_reset_email(self, email: str) -> None:
+        """Envoie un mail Keycloak pour ré-enrôler les credentials passwordless (TOTP + WebAuthn).
+
+        Le realm est en browserFlow `Password-less` : la "réinitialisation des
+        identifiants" = nouvel OTP + nouvelle passkey. Pas de mot de passe.
+
+        On clear d'abord les `requiredActions` existantes sur le compte (sinon une
+        ancienne `UPDATE_PASSWORD` héritée d'un précédent realm s'exécute en plus
+        du token et redirige vers une page mot de passe inutile).
+
+        Ne lève pas si l'email est inconnu : la route appelante répond toujours 200
+        pour éviter l'énumération.
+
+        On force `client_id` + `redirect_uri` car sans eux Keycloak génère un lien
+        vers le client `account` (page blanche chez nous) et un redirect par défaut
+        qui n'est pas dans nos `redirectUris`."""
+        admin = self._keycloak_admin()
+        users = admin.get_users({"email": email, "exact": True})
+        if not users:
+            return
+        user_id = users[0].get("id")
+        if not user_id:
+            return
+
+        # Remplacement explicite des requiredActions pour balayer toute ancienne
+        # action (UPDATE_PASSWORD résiduelle, VERIFY_EMAIL...).
+        admin.update_user(user_id=user_id, payload={"requiredActions": []})
+
+        client_id = os.getenv("KEYCLOAK_CLIENT_ID", "health_app_frontend")
+        redirect_uri = os.getenv("FRONTEND_URL", "https://localhost").rstrip("/") + "/login"
+        admin.send_update_account(
+            user_id=user_id,
+            payload=self._RESET_ACTIONS,
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            lifespan=3600,
+        )
+
+    def force_credentials_reset(self, username: str) -> None:
+        """Force le ré-enrôlement OTP + passkey à la prochaine connexion (médecin via certificat).
+        Le mot de passe n'est pas dans la liste : ce realm n'en utilise pas pour ce flow."""
+        admin = self._keycloak_admin()
+        users = admin.get_users({"username": username, "exact": True})
+        if not users:
+            raise Exception("Utilisateur introuvable")
+        user_id = users[0].get("id")
+        admin.update_user(
+            user_id=user_id,
+            payload={"requiredActions": list(self._RESET_ACTIONS)},
+        )
