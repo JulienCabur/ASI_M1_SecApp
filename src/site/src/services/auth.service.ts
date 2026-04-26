@@ -141,3 +141,33 @@ export const resetCredentialsWithCertificate = async (payload: CertificateResetP
     body: payload,
   });
 };
+
+/** Enregistrement d'un nouveau médecin : génère côté back un CSR signé par la PKI,
+ *  crée le compte Keycloak et renvoie le .p12 (base64) + son mot de passe.
+ *  Le back attend du multipart/form-data (FastAPI `Form(...)`), pas du JSON. */
+export interface RegisterDoctorInput {
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface RegisterDoctorResult {
+  status: string;
+  username: string;
+  certificate_b64: string;
+  password: string;
+  filename: string;
+}
+
+export const registerDoctor = async (input: RegisterDoctorInput): Promise<RegisterDoctorResult> => {
+  const form = new FormData();
+  form.append('username', input.username);
+  form.append('email', input.email);
+  form.append('first_name', input.first_name);
+  form.append('last_name', input.last_name);
+  return apiFetch<RegisterDoctorResult>('/auth/register_doctor', {
+    method: 'POST',
+    body: form,
+  });
+};
