@@ -8,9 +8,7 @@
  */
 
 import type { Role, User } from '@/types';
-import { apiFetch, ApiError } from '@/services/api';
-
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/fastapi';
+import { api, API_BASE, ApiError } from '@/services/api';
 
 interface MeResponse {
   id: string;
@@ -44,8 +42,8 @@ export const startLogin = (redirectTo: string = '/'): void => {
  *  Renvoie `null` si pas de session valide. */
 export const fetchMe = async (): Promise<User | null> => {
   try {
-    const me = await apiFetch<MeResponse>('/auth/me');
-    return toUser(me);
+    const { data } = await api.get<MeResponse>('/auth/me');
+    return toUser(data);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) return null;
     throw err;
@@ -55,7 +53,7 @@ export const fetchMe = async (): Promise<User | null> => {
 /** Demande au back de rafraîchir le token côté serveur (rotation cookie). */
 export const refreshSession = async (): Promise<boolean> => {
   try {
-    await apiFetch('/auth/refresh', { method: 'POST' });
+    await api.post('/auth/refresh');
     return true;
   } catch {
     return false;
@@ -76,7 +74,7 @@ interface LogoutResponse {
 export const logout = async (): Promise<void> => {
   let logoutUrl = '/login';
   try {
-    const data = await apiFetch<LogoutResponse>('/auth/logout', { method: 'POST' });
+    const { data } = await api.post<LogoutResponse>('/auth/logout');
     if (data?.logout_url) logoutUrl = data.logout_url;
   } catch {
     // Le back peut être indisponible ; on continue le cleanup local quand même.
@@ -109,10 +107,7 @@ const clearClientCookies = (): void => {
  *  Le lien envoyé par Keycloak permet de ré-enrôler une passkey WebAuthn.
  *  Réponse uniforme côté serveur (anti-énumération). */
 export const requestCredentialsReset = async (email: string): Promise<void> => {
-  await apiFetch('/auth/reset/request', {
-    method: 'POST',
-    body: { email },
-  });
+  await api.post('/auth/reset/request', { email });
 };
 
 /** Reset par certificat médecin : challenge -> signature locale -> POST.
@@ -123,8 +118,10 @@ export interface CertificateChallenge {
 }
 
 export const getCertificateChallenge = async (username: string): Promise<CertificateChallenge> => {
-  const params = new URLSearchParams({ username });
-  return apiFetch<CertificateChallenge>(`/auth/challenge?${params.toString()}`);
+  const { data } = await api.get<CertificateChallenge>('/auth/challenge', {
+    params: { username },
+  });
+  return data;
 };
 
 export interface CertificateResetPayload {
@@ -136,10 +133,7 @@ export interface CertificateResetPayload {
 }
 
 export const resetCredentialsWithCertificate = async (payload: CertificateResetPayload): Promise<void> => {
-  await apiFetch('/auth/reset/with-certificate', {
-    method: 'POST',
-    body: payload,
-  });
+  await api.post('/auth/reset/with-certificate', payload);
 };
 
 /** Enregistrement d'un nouveau médecin : génère côté back un CSR signé par la PKI,
@@ -166,8 +160,6 @@ export const registerDoctor = async (input: RegisterDoctorInput): Promise<Regist
   form.append('email', input.email);
   form.append('first_name', input.first_name);
   form.append('last_name', input.last_name);
-  return apiFetch<RegisterDoctorResult>('/auth/register_doctor', {
-    method: 'POST',
-    body: form,
-  });
+  const { data } = await api.post<RegisterDoctorResult>('/auth/register_doctor', form);
+  return data;
 };

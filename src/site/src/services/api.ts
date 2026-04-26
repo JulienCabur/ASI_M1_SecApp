@@ -1,20 +1,20 @@
 /**
- * Helper centralisé pour les appels API vers le backend BFF.
+ * Instance axios centralisée pour les appels au backend BFF.
  *
- * - `credentials: 'include'` pour transporter le cookie session httpOnly.
- * - Pour toute mutation (POST/PUT/PATCH/DELETE), on relit le cookie CSRF
- *   `secuapp_csrf` (lisible côté JS car non httpOnly) et on le renvoie dans
- *   l'en-tête `X-CSRF-Token`. Le back compare cookie vs header (double-submit).
+ * - `withCredentials: true` pour transporter le cookie session httpOnly.
+ * - Interceptor de requête : pour toute mutation (POST/PUT/PATCH/DELETE), on
+ *   relit le cookie CSRF `secuapp_csrf` (lisible côté JS car non httpOnly) et
+ *   on le renvoie dans l'en-tête `X-CSRF-Token`. Le back compare cookie vs
+ *   header (double-submit).
+ * - Interceptor de réponse : on convertit les erreurs HTTP en `ApiError` pour
+ *   garder une surface d'erreur stable côté consommateurs.
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/fastapi';
-const CSRF_COOKIE_NAME = 'secuapp_csrf';
-const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+import axios, { type AxiosError, type AxiosInstance } from 'axios';
 
-const readCsrfToken = (): string | null => {
-  const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE_NAME}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-};
+export const API_BASE = '/fastapi';
+const CSRF_COOKIE_NAME = 'secuapp_csrf';
+const MUTATION_METHODS = new Set(['post', 'put', 'patch', 'delete']);
 
 export class ApiError extends Error {
   status: number;
@@ -26,53 +26,36 @@ export class ApiError extends Error {
   }
 }
 
-interface ApiOptions extends Omit<RequestInit, 'body'> {
-  body?: unknown;
-}
+const readCsrfToken = (): string | null => {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${CSRF_COOKIE_NAME}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+};
 
-export const apiFetch = async <T = unknown>(path: string, options: ApiOptions = {}): Promise<T> => {
-  const method = (options.method ?? 'GET').toUpperCase();
-  const headers = new Headers(options.headers);
+export const api: AxiosInstance = axios.create({
+  baseURL: API_BASE,
+  withCredentials: true,
+});
 
-  let body: BodyInit | undefined;
-  if (options.body !== undefined && options.body !== null) {
-    if (options.body instanceof FormData || options.body instanceof Blob) {
-      body = options.body as BodyInit;
-    } else {
-      headers.set('Content-Type', 'application/json');
-      body = JSON.stringify(options.body);
-    }
-  }
-
+api.interceptors.request.use((config) => {
+  const method = (config.method ?? 'get').toLowerCase();
   if (MUTATION_METHODS.has(method)) {
     const csrf = readCsrfToken();
-    if (csrf) headers.set('X-CSRF-Token', csrf);
+    if (csrf) config.headers.set('X-CSRF-Token', csrf);
   }
+  return config;
+});
 
-  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    method,
-    headers,
-    credentials: 'include',
-    body,
-  });
-
-  const contentType = response.headers.get('content-type') ?? '';
-  const parsed: unknown =
-    response.status === 204
-      ? null
-      : contentType.includes('application/json')
-        ? await response.json()
-        : await response.text();
-
-  if (!response.ok) {
-    const detail =
-      parsed && typeof parsed === 'object' && 'detail' in parsed
-        ? (parsed as { detail: string }).detail
-        : response.statusText;
-    throw new ApiError(detail, response.status, parsed);
-  }
-
-  return parsed as T;
-};
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (error.response) {
+      const body = error.response.data;
+      const detail =
+        body && typeof body === 'object' && 'detail' in body
+          ? String((body as { detail: unknown }).detail)
+          : error.response.statusText;
+      return Promise.reject(new ApiError(detail, error.response.status, body));
+    }
+    return Promise.reject(new ApiError(error.message, 0, null));
+  },
+);
