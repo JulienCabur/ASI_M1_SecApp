@@ -11,6 +11,8 @@ class UserInDB(AuthBase):
 class CertificateRequest(AuthBase):
     first_name: str
     last_name: str
+    organization: str
+    date_of_birth: str
 
 class ChallengeResponse(BaseModel):
     nonce: str

@@ -411,6 +411,71 @@
   "webAuthnPolicyPasswordlessAcceptableAaguids" : [ ],
   "webAuthnPolicyPasswordlessExtraOrigins" : [ ],
   "users" : [ {
+    "id" : "828c1a44-227c-4911-a380-4e5ba2b9941b",
+    "createdTimestamp" : 1777229366189,
+    "username" : "ch11",
+    "enabled" : true,
+    "totp" : true,
+    "emailVerified" : true,
+    "firstName" : "ch11",
+    "lastName" : "ch11",
+    "email" : "etu51177@henallux.be",
+    "attributes" : {
+      "date_of_birth" : [ "2025-12-11" ]
+    },
+    "credentials" : [ {
+      "id" : "7827136a-a886-473e-a4ac-eee148fe9b4c",
+      "type" : "password",
+      "createdDate" : 1777229366243,
+      "secretData" : "{\"value\":\"BaYgPrlun/i6RQqtP7qJPXEycFnu1ge89N8I6MdG4/o=\",\"salt\":\"Ql/ELa+JQQfA6/Y81tZ7ng==\",\"additionalParameters\":{}}",
+      "credentialData" : "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\",\"additionalParameters\":{}}"
+    }, {
+      "id" : "5c3d069b-8b31-4edf-a402-ef5188e13341",
+      "type" : "otp",
+      "userLabel" : "5555",
+      "createdDate" : 1777229388976,
+      "secretData" : "{\"value\":\"peQhnMC5Kq50c6Ovb64z\"}",
+      "credentialData" : "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+    }, {
+      "id" : "15a4a8b1-f3f3-49ec-8dd8-61e0c79ec955",
+      "type" : "webauthn-passwordless",
+      "userLabel" : "WebAuthn Authenticator (Default Label)",
+      "createdDate" : 1777229440381,
+      "secretData" : "{}",
+      "credentialData" : "{\"aaguid\":\"00000000-0000-0000-0000-000000000000\",\"credentialId\":\"A7rcUpJm2yoznileDztOLQ==\",\"counter\":0,\"credentialPublicKey\":\"pQECAyYgASFYIJ0V_uVhKbjmXJj3owdfNSExQmvqIgp5ZhrlrSGWgkSLIlggJam38zVgL5G9s0MZt7GynAqJohsELXhgYiUXLxhR_Ik\",\"attestationStatementFormat\":\"none\",\"transports\":[\"internal\",\"hybrid\"]}"
+    } ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-health_app" ],
+    "notBefore" : 0,
+    "groups" : [ "/Patients" ]
+  }, {
+    "id" : "d0ec2d0b-5451-4a48-bdaa-c67e2f4b1a9d",
+    "createdTimestamp" : 1777242160675,
+    "username" : "dr_chen",
+    "enabled" : true,
+    "totp" : true,
+    "emailVerified" : true,
+    "firstName" : "dr_chen",
+    "lastName" : "dr_chen",
+    "email" : "dr_chen@gmail.com",
+    "attributes" : {
+      "date_of_birth" : [ "2025-11-02" ]
+    },
+    "credentials" : [ {
+      "id" : "cce7d6bc-a282-46bc-b14b-69eae7323a86",
+      "type" : "otp",
+      "userLabel" : "Chen",
+      "createdDate" : 1777242367177,
+      "secretData" : "{\"value\":\"bHilcTPjUvFPB1Tx1qKh\"}",
+      "credentialData" : "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+    } ],
+    "disableableCredentialTypes" : [ ],
+    "requiredActions" : [ ],
+    "realmRoles" : [ "default-roles-health_app" ],
+    "notBefore" : 0,
+    "groups" : [ "/Docteurs" ]
+  }, {
     "id" : "7aa0071f-7dc6-4952-8100-9f5c9d683337",
     "createdTimestamp" : 1776703908175,
     "username" : "dr_robin",
@@ -519,6 +584,9 @@
     "firstName" : "Thomas",
     "lastName" : "Ruelle",
     "email" : "tho.ruelle.20@gmail.com",
+    "attributes" : {
+      "DOB" : [ "1984-07-01" ]
+    },
     "credentials" : [ {
       "id" : "7bf85ecc-3c66-425a-b361-6f8680dbf9aa",
       "type" : "password",
@@ -716,6 +784,23 @@
     "fullScopeAllowed" : true,
     "nodeReRegistrationTimeout" : -1,
     "protocolMappers" : [ {
+      "id" : "907b02d8-ab55-443b-b1c2-bf8f766be649",
+      "name" : "DOB",
+      "protocol" : "openid-connect",
+      "protocolMapper" : "oidc-usermodel-attribute-mapper",
+      "consentRequired" : false,
+      "config" : {
+        "aggregate.attrs" : "false",
+        "introspection.token.claim" : "true",
+        "userinfo.token.claim" : "true",
+        "multivalued" : "false",
+        "user.attribute" : "date_of_birth",
+        "id.token.claim" : "true",
+        "access.token.claim" : "true",
+        "claim.name" : "date_of_birth",
+        "jsonType.label" : "String"
+      }
+    }, {
       "id" : "4b2aaa2a-60d7-4b30-a329-70e1f5fcf45d",
       "name" : "Audience for Backend",
       "protocol" : "openid-connect",
@@ -725,7 +810,8 @@
         "included.client.audience" : "health_app_frontend",
         "id.token.claim" : "false",
         "access.token.claim" : "true",
-        "introspection.token.claim" : "true"
+        "introspection.token.claim" : "true",
+        "userinfo.token.claim" : "false"
       }
     } ],
     "defaultClientScopes" : [ "web-origins", "acr", "roles", "profile", "email" ],
@@ -1375,7 +1461,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "saml-user-property-mapper", "saml-role-list-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-role-list-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-user-attribute-mapper", "saml-user-property-mapper", "oidc-usermodel-property-mapper", "oidc-address-mapper", "oidc-usermodel-attribute-mapper", "oidc-full-name-mapper" ]
       }
     }, {
       "id" : "bed76a0e-6199-4bce-9588-714de1db0458",
@@ -1391,7 +1477,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-usermodel-attribute-mapper", "oidc-usermodel-property-mapper", "saml-role-list-mapper", "oidc-address-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-user-property-mapper", "saml-user-attribute-mapper", "oidc-full-name-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-user-attribute-mapper", "saml-user-property-mapper", "saml-role-list-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-address-mapper", "oidc-usermodel-property-mapper", "oidc-usermodel-attribute-mapper", "oidc-full-name-mapper" ]
       }
     }, {
       "id" : "a3ceee06-2e09-403f-a53e-f57cf3acc5ae",
@@ -1400,6 +1486,14 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : { }
+    } ],
+    "org.keycloak.userprofile.UserProfileProvider" : [ {
+      "id" : "73dc1c2d-b749-4d71-8b7c-8428df656862",
+      "providerId" : "declarative-user-profile",
+      "subComponents" : { },
+      "config" : {
+        "kc.user.profile.config" : [ "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"date_of_birth\",\"displayName\":\"Date of Birth\",\"validations\":{\"pattern\":{\"pattern\":\"^\\\\d{4}-\\\\d{2}-\\\\d{2}$\",\"error-message\":\"Pas bon\"}},\"annotations\":{\"inputType\":\"html5-date\"},\"permissions\":{\"edit\":[\"admin\",\"user\"],\"view\":[\"admin\",\"user\"]},\"required\":{\"roles\":[\"admin\",\"user\"]},\"group\":null}],\"groups\":[]}" ]
+      }
     } ],
     "org.keycloak.keys.KeyProvider" : [ {
       "id" : "863dd605-04c7-46be-89f0-2fabcb46a308",
@@ -2217,6 +2311,7 @@
     "clientOfflineSessionMaxLifespan" : "0",
     "oauth2DevicePollingInterval" : "5",
     "clientSessionIdleTimeout" : "0",
+    "userProfileEnabled" : "true",
     "actionTokenGeneratedByUserLifespan.verify-email" : "",
     "actionTokenGeneratedByUserLifespan.idp-verify-account-via-email" : "",
     "clientOfflineSessionIdleTimeout" : "0",
