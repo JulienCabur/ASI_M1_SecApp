@@ -103,7 +103,6 @@ async def callback_route(
     code: str = Query(default=""),
     state: str = Query(default=""),
     error: str = Query(default=""),
-    db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Callback Keycloak : échange le `code` contre des tokens et pose le cookie session."""
     fail_url = f"{_frontend_url()}/login?error=auth_failed"
@@ -138,22 +137,6 @@ async def callback_route(
 
     claims = _decode_id_or_access_token_unverified(payload.get("access_token", ""))
     user_sub = claims.get("sub")
-
-    # Nettoyage des anciens credentials si un reset a été demandé : si le compte
-    # porte le marqueur `pending_credentials_cleanup`, on supprime maintenant
-    # les TOTP/WebAuthn antérieurs au marqueur (les nouveaux ont survécu au
-    # login => preuve qu'ils fonctionnent). Idempotent et tolérant aux erreurs.
-    if user_sub:
-        try:
-            AuthService(db=db).cleanup_old_credentials_after_reset(user_sub)
-        except Exception:
-            logs_service.add_logs(
-                action="CREDENTIALS_CLEANUP_FAIL",
-                log_level="WARNING",
-                user_id=user_sub,
-                user_role="unknown",
-                patient_id="null",
-            )
 
     logs_service.add_logs(
         action="LOGIN",
@@ -300,9 +283,12 @@ async def reset_request_route(
             user_role="unknown",
             patient_id="null",
         )
-    except Exception:
+    except Exception as exc:
+        # Trace serveur pour debug ; le client reste à 200 pour anti-énumération.
+        import traceback
+        traceback.print_exc()
         logs_service.add_logs(
-            action="RESET_REQUEST_FAIL",
+            action=f"RESET_REQUEST_FAIL:{type(exc).__name__}:{str(exc)[:200]}",
             log_level="WARNING",
             user_id=payload.email,
             user_role="unknown",
