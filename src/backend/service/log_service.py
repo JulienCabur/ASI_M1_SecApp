@@ -134,6 +134,7 @@ class LogsService:
 
         try:
             encrypted_payload = self._encrypt_log_data(log_data)
+            print(encrypted_payload)
             response = requests.post(self.logstash_url, json=encrypted_payload, verify=False, timeout=5)
             response.raise_for_status()
             print(f"Log ECS chiffré envoyé (Séquence: {self.sequence-1})")
