@@ -132,6 +132,7 @@ services:
       - ./secrets/backend:/app/certs:ro
       - pki_doctors_crt:/app/certs_doctors
       - pki_doctors_csr:/app/csr
+      - ./secrets/logstash:/app/logstash:ro
   webserver:
     image: nginx:latest
     ports:
