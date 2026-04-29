@@ -5,32 +5,31 @@ interface AuthStoreState {
   user: User | null;
   isAuthenticated: boolean;
   role: Role | null;
-  token: string | null;
-  setUser: (user: User, token: string) => void;
-  logout: () => void;
+  setUser: (user: User) => void;
+  clear: () => void;
 }
 
+/**
+ * Store d'auth : ne contient AUCUN token (BFF). Les tokens vivent dans le
+ * cookie httpOnly côté serveur ; ici on ne stocke que le profil utilisateur
+ * dérivé de `/auth/me`.
+ */
 export const useAuthStore = create<AuthStoreState>((set) => ({
   user: null,
   isAuthenticated: false,
   role: null,
-  token: null,
 
-  setUser: (user, token) =>
+  setUser: (user) =>
     set({
       user,
-      token,
       isAuthenticated: true,
       role: user.role,
     }),
 
-  logout: () => {
-    // Actual keycloak.logout() is called from the service layer to avoid circular deps
+  clear: () =>
     set({
       user: null,
       isAuthenticated: false,
       role: null,
-      token: null,
-    });
-  },
+    }),
 }));

@@ -1,15 +1,15 @@
 import os
 import httpx
 import jwt
-from typing import Any, Dict
-from fastapi import Depends, HTTPException, status
+from typing import Any, Dict, Optional
+from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer
 from schema.auth_schema import UserInDB
 from dotenv import load_dotenv
 
 load_dotenv()
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def resolve_keycloak_verify() -> bool | str:
@@ -95,15 +95,57 @@ async def validate_jwt_token(token: str) -> Dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Erreur lors de la validation du token: {str(e)}")
 
 
-async def get_current_user(credentials: Any = Depends(security)) -> UserInDB:
+async def _resolve_access_token(
+    request: Request,
+    response: Response,
+    credentials: Any,
+) -> Optional[str]:
+    """
+    Récupère un access_token valide depuis :
+    1. Le cookie session BFF (rafraîchit côté serveur si expiré).
+    2. À défaut, l'en-tête Authorization Bearer (compat tests / clients machine).
+    """
+    # Import local pour éviter une dépendance circulaire au démarrage.
+    from core.session import (
+        get_session_payload,
+        is_session_expired,
+        set_session_cookie,
+    )
+    from core.oidc import refresh_tokens, session_payload_from_token_response
+
+    payload = get_session_payload(request)
+    if payload and payload.get("access_token"):
+        if is_session_expired(payload) and payload.get("refresh_token"):
+            try:
+                token_response = await refresh_tokens(payload["refresh_token"])
+                payload = session_payload_from_token_response(token_response)
+                set_session_cookie(response, payload)
+            except httpx.HTTPError:
+                return None
+        return payload.get("access_token")
+
+    if credentials and getattr(credentials, "credentials", None):
+        return credentials.credentials
+
+    return None
+
+
+async def get_current_user(
+    request: Request,
+    response: Response,
+    credentials: Any = Depends(security),
+) -> UserInDB:
     """
     Dépendance FastAPI pour vérifier l'authentification.
+    Lit le token depuis le cookie session BFF en priorité, sinon Authorization Bearer.
     """
+    token = await _resolve_access_token(request, response, credentials)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session manquante")
     try:
-
-        public_key = await get_public_key(credentials.credentials)
+        public_key = await get_public_key(token)
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             public_key,
             algorithms=["RS256"],
             audience=os.getenv("KEYCLOAK_CLIENT_ID"),
