@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 class AuthBase(BaseModel):
     username: str
-    email: str
+    email: EmailStr
 
 
 class PasswordResetRequest(BaseModel):

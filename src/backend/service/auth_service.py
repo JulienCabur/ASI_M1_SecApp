@@ -24,6 +24,17 @@ import os
 
 load_dotenv()  # Charger les variables d'environnement depuis le fichier .env
 
+def _env(name: str, default=None, required: bool = False):
+    """Lire une variable d'environnement avec un comportement centralisé.
+
+    - `default` retourné si la variable est absente
+    - si `required=True` et la valeur est vide/None -> RuntimeError
+    """
+    val = os.getenv(name, default)
+    if required and (val is None or val == ""):
+        raise RuntimeError(f"Environment variable {name} is required but not set")
+    return val
+
 
 class DoctorConflictError(Exception):
     """Conflit d'unicité côté Keycloak lors de l'enregistrement d'un médecin.
@@ -84,10 +95,10 @@ class AuthService:
 
     def _keycloak_admin(self) -> KeycloakAdmin:
         return KeycloakAdmin(
-            server_url=os.getenv("KEYCLOAK_SERVER_URL"),
-            username=os.getenv("KEYCLOAK_ADMIN"),
-            password=os.getenv("KEYCLOAK_ADMIN_PASSWORD"),
-            realm_name=os.getenv("KEYCLOAK_REALM"),
+            server_url=_env("KEYCLOAK_SERVER_URL"),
+            username=_env("KEYCLOAK_ADMIN"),
+            password=_env("KEYCLOAK_ADMIN_PASSWORD"),
+            realm_name=_env("KEYCLOAK_REALM"),
             user_realm_name="master",
             verify=resolve_keycloak_verify(),
         )
@@ -274,10 +285,10 @@ class AuthService:
 
     def _keycloak_admin(self) -> KeycloakAdmin:
         return KeycloakAdmin(
-            server_url=os.getenv("KEYCLOAK_SERVER_URL"),
-            username=os.getenv("KEYCLOAK_ADMIN"),
-            password=os.getenv("KEYCLOAK_ADMIN_PASSWORD"),
-            realm_name=os.getenv("KEYCLOAK_REALM"),
+            server_url=_env("KEYCLOAK_SERVER_URL"),
+            username=_env("KEYCLOAK_ADMIN"),
+            password=_env("KEYCLOAK_ADMIN_PASSWORD"),
+            realm_name=_env("KEYCLOAK_REALM"),
             user_realm_name="master",
             verify=resolve_keycloak_verify(),
         )
@@ -301,8 +312,8 @@ class AuthService:
         On force `client_id` + `redirect_uri` car sans eux Keycloak génère un
         lien vers le client `account` (page blanche chez nous) et un redirect
         par défaut hors de nos `redirectUris`."""
-        client_id = os.getenv("KEYCLOAK_CLIENT_ID", "health_app_frontend")
-        redirect_uri = os.getenv("FRONTEND_URL", "https://localhost").rstrip("/") + "/login"
+        client_id = _env("KEYCLOAK_CLIENT_ID", "health_app_frontend")
+        redirect_uri = _env("FRONTEND_URL", "https://localhost").rstrip("/") + "/login"
         admin.send_update_account(
             user_id=user_id,
             payload=list(self._RESET_ACTIONS),
