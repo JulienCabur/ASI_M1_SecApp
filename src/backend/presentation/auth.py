@@ -7,6 +7,7 @@ Il utilise des services d'authentification et de journalisation pour gérer les 
 from fastapi import APIRouter, Depends, HTTPException, Query, Form
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
+from service.file_service import FileService
 from core.database import get_db
 from core.auth import get_current_user, validate_jwt_token
 from typing import Dict, Any
@@ -38,6 +39,7 @@ async def register_doctor_route(
     db: Session = Depends(get_db)) -> Dict[str, Any]:
     try:
         auth_service = AuthService(db=db)
+        file_service = FileService(db=db, storage_path=None)
         auth_service.generate_csr(user_info.username, user_info.organization)
         logs_service.add_logs(action="GENERATE_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         time.sleep(5)
@@ -45,7 +47,7 @@ async def register_doctor_route(
         logs_service.add_logs(action="CHECK_CSR_SIGNED", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         p12_password = auth_service.create_doctor_in_keycloak(cert_path, user_info)
         logs_service.add_logs(action="REGISTER_DOCTOR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
-        p12_content = auth_service.get_p12_content(cert_path)
+        p12_content = file_service.get_base64_file_content(cert_path)
         logs_service.add_logs(action="GET_P12_CONTENT", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         auth_service.delete_sensitive_files(user_info.username)
         logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
@@ -86,9 +88,13 @@ async def post_challenge_response(
         raise HTTPException(status_code=400, detail=f"Erreur lors de la soumission de la réponse au challenge: {str(e)}")
 
 @router.get("/user_info", response_model=Dict[str, Any])
-async def get_user_info_route(current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:
+async def get_user_info_route(
+    db: Session = Depends(get_db),
+    current_user: UserInDB = Depends(get_current_user)) -> Dict[str, Any]:
     try:
         logs_service.add_logs(action="GET_USER_INFO", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
+        auth_service = AuthService(db=db)
+        auth_service.store_user(current_user)
         return {
             "id": current_user.id,
             "username": current_user.username,
