@@ -35,7 +35,7 @@ class AuthService:
         self.csr_repository = "/app/csr"
         self.cert_repository = "/app/certs_doctors"
 
-    def generate_csr(self, common_name: str):
+    def generate_csr(self, common_name: str, organization: str) -> str:
         file_csr = common_name + ".csr"
         file_key = common_name + ".key"
 
@@ -44,7 +44,7 @@ class AuthService:
         subject = x509.Name([
             x509.NameAttribute(NameOID.DOMAIN_COMPONENT, "be"),
             x509.NameAttribute(NameOID.DOMAIN_COMPONENT, "healthapp"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Health Application"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization),
             x509.NameAttribute(NameOID.COMMON_NAME, common_name)
         ])
 
@@ -97,6 +97,7 @@ class AuthService:
             "groups": ["/Docteurs"],
             "attributes": {
                 "certificate_serial": serial_hex,
+                "date_of_birth": user_info.date_of_birth,
                 "user_type": "doctor"
             }
         }
