@@ -27,7 +27,7 @@ class LogsService:
         self.service_name = "backend_python"
         self.previous_hash = "0000000000000000000000000000000000000000000000000000000000000000"
         self.source_ip = "0.0.0.0"
-        self.public_cert_path = "/app/logstash/server.crt"
+        self.public_cert_path = "/app/certs/logstash.crt"
 
         self.session_key = None
         self.encrypted_session_key_b64 = None
@@ -75,7 +75,7 @@ class LogsService:
         """
         aes_key, enc_key_b64, session_id = self._get_rotate_session()
 
-        iv = os.urandom(16)
+        iv = os.urandom(12)
         log_bytes = json.dumps(log_data).encode('utf-8')
 
         cipher = Cipher(algorithms.AES(aes_key), modes.GCM(iv))
