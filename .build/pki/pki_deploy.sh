@@ -89,7 +89,7 @@ chmod 644 $EXPORT_DIR/root-ca.crt
 chmod 644 $EXPORT_DIR/ca-chain.pem $EXPORT_DIR/signing-ca2.crt $EXPORT_DIR/signing-ca1.crt $EXPORT_DIR/ca-chain2.pem
 
 
-SERVICES="keycloak webserver elasticsearch kibana logstash backend"
+SERVICES="keycloak webserver elasticsearch kibana backend logstash"
 
 for SERVICE in $SERVICES; do
     SERVICE_EXPORT="$EXPORT_DIR/$SERVICE"
@@ -122,6 +122,11 @@ for SERVICE in $SERVICES; do
         cp $EXPORT_DIR/ca-chain2.pem $SERVICE_EXPORT/ca-chain.pem
     fi
     cp $EXPORT_DIR/root-ca.crt $SERVICE_EXPORT/root-ca.crt
+
+    if [[ "$SERVICE" == "logstash" ]]; then
+        cp $SERVICE_EXPORT/server.crt $EXPORT_DIR/backend/logstash.crt
+        chmod 644 $EXPORT_DIR/backend/logstash.crt
+    fi
 
     chown -R 1000:1000 $SERVICE_EXPORT
     chmod 644 $SERVICE_EXPORT/server.crt $SERVICE_EXPORT/ca-chain.pem $SERVICE_EXPORT/root-ca.crt

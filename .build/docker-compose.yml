@@ -232,7 +232,7 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_FEATURES: web-authn
+      KC_FEATURES: web-authn,declarative-user-profile
       KC_HOSTNAME_STRICT: "false"
       KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/conf/truststores/server.crt
       KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/conf/truststores/server.key
