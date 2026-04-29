@@ -26,3 +26,14 @@ class ChallengeResponseRequest(BaseModel):
     timestamp: str = Field(..., description="Le timestamp ISO reçu lors du challenge")
     signature: str = Field(..., description="Signature hexadécimale (PSS/SHA256)")
     certificate: str = Field(..., description="Le certificat PEM du docteur")
+
+
+class CertLoginProofRequest(ChallengeResponseRequest):
+    """Preuve de possession du certificat avant redirection OIDC.
+    `redirect_to` est conservé dans le cookie `oidc_state` pour ramener
+    l'utilisateur sur la page initialement demandée après le callback Keycloak."""
+    redirect_to: str = Field(default="/", description="Chemin frontend de retour après login")
+
+
+class CertLoginProofResponse(BaseModel):
+    authorize_url: str = Field(..., description="URL Keycloak vers laquelle le navigateur doit naviguer")

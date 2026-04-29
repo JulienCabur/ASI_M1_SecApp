@@ -136,6 +136,35 @@ export const resetCredentialsWithCertificate = async (payload: CertificateResetP
   await api.post('/auth/reset/with-certificate', payload);
 };
 
+/** Login médecin par certificat (gate avant Keycloak).
+ *  Le challenge `/cert/login/...` est distinct de `/auth/challenge` côté back :
+ *  on évite ainsi qu'une preuve produite pour un reset puisse être rejouée
+ *  pour ouvrir une session, et inversement. */
+export const getCertificateLoginChallenge = async (username: string): Promise<CertificateChallenge> => {
+  const { data } = await api.get<CertificateChallenge>('/auth/cert/login/challenge', {
+    params: { username },
+  });
+  return data;
+};
+
+export interface CertificateLoginPayload extends CertificateResetPayload {
+  redirect_to: string;
+}
+
+interface CertificateLoginResponse {
+  authorize_url: string;
+}
+
+/** Soumet la preuve cert au BFF. Au succès, le BFF a posé `secuapp_oidc_state`
+ *  (httpOnly) avec le `cert_proven_username` ; il nous reste à naviguer le
+ *  navigateur vers `authorize_url` pour terminer le flow OIDC normal. */
+export const submitCertificateLoginProof = async (
+  payload: CertificateLoginPayload,
+): Promise<string> => {
+  const { data } = await api.post<CertificateLoginResponse>('/auth/cert/login/proof', payload);
+  return data.authorize_url;
+};
+
 /** Enregistrement d'un nouveau médecin : génère côté back un CSR signé par la PKI,
  *  crée le compte Keycloak et renvoie le .p12 (base64) + son mot de passe.
  *  Le back attend du multipart/form-data (FastAPI `Form(...)`), pas du JSON. */

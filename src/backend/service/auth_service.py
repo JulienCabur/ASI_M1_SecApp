@@ -166,9 +166,22 @@ class AuthService:
         if nonce != challenge_nonce:
             raise Exception("Nonce invalide")
 
-        verification_data = f"{nonce}:{timestamp}".encode()
         try:
             cert = x509.load_pem_x509_certificate(certificate.encode(), default_backend())
+        except Exception as e:
+            raise Exception(f"Certificat illisible: {str(e)}")
+
+        # Lie le certificat à l'username revendiqué : sans cette vérif, un porteur
+        # de cert valide pourrait signer son propre challenge tout en revendiquant
+        # le username d'un autre médecin, et la signature passerait avec la clé
+        # publique du cert fourni.
+        cn_attrs = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        cert_cn = cn_attrs[0].value if cn_attrs else None
+        if not cert_cn or cert_cn != username:
+            raise Exception("Le certificat ne correspond pas à l'utilisateur revendiqué")
+
+        verification_data = f"{nonce}:{timestamp}".encode()
+        try:
             public_key = cert.public_key()
             public_key.verify(
             bytes.fromhex(signature),

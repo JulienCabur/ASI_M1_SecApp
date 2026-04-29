@@ -8,6 +8,7 @@ import {
 import { startLogin } from '@/services/auth.service';
 import EmailResetModal from './EmailResetModal';
 import CertificateResetModal from './CertificateResetModal';
+import CertificateLoginModal from './CertificateLoginModal';
 import DoctorRegistrationModal, { type CertificateIssued } from './DoctorRegistrationModal';
 import IssuedCertificateModal from './IssuedCertificateModal';
 import type { RoleChoice } from './RoleSelection';
@@ -23,10 +24,20 @@ interface LoginActionsProps {
 const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
   const [emailResetOpen, setEmailResetOpen] = useState(false);
   const [certResetOpen, setCertResetOpen] = useState(false);
+  const [certLoginOpen, setCertLoginOpen] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [issuedCert, setIssuedCert] = useState<CertificateIssued | null>(null);
 
-  const handleLogin = () => startLogin('/');
+  // Patient : flow OIDC standard (passkey/TOTP côté Keycloak).
+  // Médecin : on exige une preuve de possession du cert AVANT Keycloak ;
+  // le bouton ouvre le modal cert qui redirigera ensuite sur authorize_url.
+  const handleLogin = () => {
+    if (role === 'doctor') {
+      setCertLoginOpen(true);
+    } else {
+      startLogin('/');
+    }
+  };
 
   return (
     <>
@@ -46,8 +57,14 @@ const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
           <Text type="secondary">Connectez-vous pour continuer</Text>
         </div>
         <div className={style.actions}>
-          <Button type="primary" size="large" block onClick={handleLogin}>
-            Se connecter
+          <Button
+            type="primary"
+            size="large"
+            block
+            icon={role === 'doctor' ? <SafetyCertificateOutlined /> : undefined}
+            onClick={handleLogin}
+          >
+            {role === 'doctor' ? 'Se connecter avec mon certificat' : 'Se connecter'}
           </Button>
           {role === 'patient' ? (
             <Button size="large" block icon={<MailOutlined />} onClick={() => setEmailResetOpen(true)}>
@@ -78,6 +95,11 @@ const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
 
       <EmailResetModal open={emailResetOpen} onClose={() => setEmailResetOpen(false)} />
       <CertificateResetModal open={certResetOpen} onClose={() => setCertResetOpen(false)} />
+      <CertificateLoginModal
+        open={certLoginOpen}
+        onClose={() => setCertLoginOpen(false)}
+        redirectTo="/"
+      />
       <DoctorRegistrationModal
         open={registerOpen}
         onClose={() => setRegisterOpen(false)}
