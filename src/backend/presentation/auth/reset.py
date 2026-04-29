@@ -46,7 +46,7 @@ async def reset_request_route(
         logs_service.add_logs(
             action="RESET_REQUEST_RATE_LIMITED",
             log_level="WARNING",
-            user_id="anonymous",
+            user_id="système",
             user_role="unknown",
             patient_id="null",
         )

@@ -7,6 +7,7 @@ parle jamais à Keycloak directement.
 """
 
 import base64
+import datetime
 import hashlib
 import os
 import secrets
@@ -19,37 +20,41 @@ import httpx
 from core.auth import resolve_keycloak_verify
 
 
+def _env(name: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
+    """Helper generique pour centraliser la lecture des env vars Keycloak/OIDC.
+
+    - `default` retourné si la variable est absente
+    - si `required=True` et la valeur est vide/None -> RuntimeError
+    """
+    val = os.getenv(name, default)
+    if required and (val is None or val == ""):
+        raise RuntimeError(f"Environment variable {name} is required but not set")
+    return val
+
+
 def _server_url() -> str:
-    url = os.getenv("KEYCLOAK_SERVER_URL")
-    if not url:
-        raise RuntimeError("KEYCLOAK_SERVER_URL non défini")
+    url = _env("KEYCLOAK_SERVER_URL", required=True)
     return url.rstrip("/")
 
 
 def _public_url() -> str:
-    return (os.getenv("KEYCLOAK_PUBLIC_URL") or _server_url()).rstrip("/")
+    return (_env("KEYCLOAK_PUBLIC_URL") or _server_url()).rstrip("/")
 
 
 def _realm() -> str:
-    return os.getenv("KEYCLOAK_REALM", "health_app")
+    return _env("KEYCLOAK_REALM", "health_app")
 
 
 def _client_id() -> str:
-    return os.getenv("KEYCLOAK_CLIENT_ID", "health_app_frontend")
+    return _env("KEYCLOAK_CLIENT_ID", "health_app_frontend")
 
 
 def _client_secret() -> str:
-    secret = os.getenv("KEYCLOAK_CLIENT_SECRET")
-    if not secret:
-        raise RuntimeError("KEYCLOAK_CLIENT_SECRET non défini")
-    return secret
+    return _env("KEYCLOAK_CLIENT_SECRET", required=True)
 
 
 def _redirect_uri() -> str:
-    uri = os.getenv("KEYCLOAK_REDIRECT_URI")
-    if not uri:
-        raise RuntimeError("KEYCLOAK_REDIRECT_URI non défini")
-    return uri
+    return _env("KEYCLOAK_REDIRECT_URI", required=True)
 
 
 def generate_pkce_pair() -> Tuple[str, str]:
@@ -101,7 +106,11 @@ async def exchange_code_for_tokens(code: str, code_verifier: str) -> dict:
         "code_verifier": code_verifier,
     }
     url = f"{_server_url()}/realms/{_realm()}/protocol/openid-connect/token"
-    async with httpx.AsyncClient(verify=resolve_keycloak_verify(), timeout=15.0) as client:
+    try:
+        verify = resolve_keycloak_verify()
+    except Exception:
+        verify = True
+    async with httpx.AsyncClient(verify=verify, timeout=15.0) as client:
         response = await client.post(url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
         response.raise_for_status()
         return response.json()
@@ -115,7 +124,11 @@ async def refresh_tokens(refresh_token: str) -> dict:
         "client_secret": _client_secret(),
     }
     url = f"{_server_url()}/realms/{_realm()}/protocol/openid-connect/token"
-    async with httpx.AsyncClient(verify=resolve_keycloak_verify(), timeout=15.0) as client:
+    try:
+        verify = resolve_keycloak_verify()
+    except Exception:
+        verify = True
+    async with httpx.AsyncClient(verify=verify, timeout=15.0) as client:
         response = await client.post(url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
         response.raise_for_status()
         return response.json()
@@ -129,7 +142,11 @@ async def end_session(refresh_token: str) -> None:
         "refresh_token": refresh_token,
     }
     url = f"{_server_url()}/realms/{_realm()}/protocol/openid-connect/logout"
-    async with httpx.AsyncClient(verify=resolve_keycloak_verify(), timeout=15.0) as client:
+    try:
+        verify = resolve_keycloak_verify()
+    except Exception:
+        verify = True
+    async with httpx.AsyncClient(verify=verify, timeout=15.0) as client:
         try:
             await client.post(url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
         except httpx.HTTPError:
@@ -138,15 +155,19 @@ async def end_session(refresh_token: str) -> None:
 
 
 def session_payload_from_token_response(token_response: dict) -> dict:
-    """Construit le payload qu'on stocke dans le cookie session."""
-    now = int(time.time())
+    """Construit le payload qu'on stocke dans le cookie session.
+    
+    Format datetime harmonisé avec auth_service : timestamp ISO avec millisecondes + 'Z'
+    """
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+    now_epoch = int(time.time())
     expires_in = int(token_response.get("expires_in") or 0)
     refresh_expires_in = int(token_response.get("refresh_expires_in") or 0)
     return {
         "access_token": token_response.get("access_token"),
         "refresh_token": token_response.get("refresh_token"),
         "id_token": token_response.get("id_token"),
-        "access_exp": now + expires_in,
-        "refresh_exp": now + refresh_expires_in if refresh_expires_in else None,
-        "issued_at": now,
+        "access_exp": now_epoch + expires_in,
+        "refresh_exp": now_epoch + refresh_expires_in if refresh_expires_in else None,
+        "issued_at": now_iso,
     }

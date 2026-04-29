@@ -283,16 +283,6 @@ class AuthService:
             self.db.commit()
         return True
 
-    def _keycloak_admin(self) -> KeycloakAdmin:
-        return KeycloakAdmin(
-            server_url=_env("KEYCLOAK_SERVER_URL"),
-            username=_env("KEYCLOAK_ADMIN"),
-            password=_env("KEYCLOAK_ADMIN_PASSWORD"),
-            realm_name=_env("KEYCLOAK_REALM"),
-            user_realm_name="master",
-            verify=resolve_keycloak_verify(),
-        )
-
     # Les deux étapes que comporte un "reset complet" sur ce realm passwordless :
     # le 2FA (TOTP) et la clé d'accès WebAuthn. Le mot de passe n'existe pas dans
     # le flow `Password-less`, donc on l'exclut volontairement.
