@@ -22,7 +22,7 @@ async def register_doctor_route(
 ) -> Dict[str, Any]:
     try:
         auth_service = AuthService(db=db)
-        auth_service.generate_csr(user_info.username)
+        auth_service.generate_csr(user_info.username, user_info.organization)
         logs_service.add_logs(action="GENERATE_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         time.sleep(5)
         cert_path = auth_service.check_csr_signed(user_info.username)

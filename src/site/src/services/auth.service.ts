@@ -173,6 +173,8 @@ export interface RegisterDoctorInput {
   email: string;
   first_name: string;
   last_name: string;
+  date_of_birth: string;
+  organization: string;
 }
 
 export interface RegisterDoctorResult {
@@ -189,6 +191,8 @@ export const registerDoctor = async (input: RegisterDoctorInput): Promise<Regist
   form.append('email', input.email);
   form.append('first_name', input.first_name);
   form.append('last_name', input.last_name);
+  form.append('date_of_birth', input.date_of_birth);
+  form.append('organization', input.organization);
   const { data } = await api.post<RegisterDoctorResult>('/auth/register_doctor', form);
   return data;
 };

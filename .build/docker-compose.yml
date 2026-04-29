@@ -226,8 +226,8 @@ services:
       /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt
       && mkdir -p /opt/keycloak/data/import && sed
       \"s|\\$${KEYCLOAK_CLIENT_SECRET}|$${KEYCLOAK_CLIENT_SECRET}|g\"
-      /tmp/realm.template.json > /opt/keycloak/data/import/realm.json &&
-      /opt/keycloak/bin/kc.sh start-dev --import-realm "
+      /opt/keycloak/data/import/realm.json && /opt/keycloak/bin/kc.sh start-dev
+      --import-realm "
     env_file:
       - .env
     environment:

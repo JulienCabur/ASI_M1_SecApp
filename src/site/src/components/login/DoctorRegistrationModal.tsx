@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Alert, Form, Input, Modal, message } from 'antd';
+import { Alert, DatePicker, Form, Input, Modal, message } from 'antd';
+import type { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 import { registerDoctor } from '@/services/auth.service';
 
 export interface CertificateIssued {
@@ -12,6 +14,8 @@ interface CertificateFormValues {
   email: string;
   first_name: string;
   last_name: string;
+  date_of_birth: Dayjs;
+  organization: string;
 }
 
 interface DoctorRegistrationModalProps {
@@ -44,7 +48,14 @@ const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open,
   const handleSubmit = async (values: CertificateFormValues) => {
     setSubmitting(true);
     try {
-      const result = await registerDoctor(values);
+      const result = await registerDoctor({
+        username: values.username,
+        email: values.email,
+        first_name: values.first_name,
+        last_name: values.last_name,
+        date_of_birth: values.date_of_birth.format('YYYY-MM-DD'),
+        organization: values.organization.trim(),
+      });
       triggerP12Download(result.certificate_b64, result.filename);
       onIssued({ filename: result.filename, password: result.password });
       form.resetFields();
@@ -116,6 +127,42 @@ const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open,
           rules={[{ required: true, message: 'Nom requis' }]}
         >
           <Input placeholder="Dupont" />
+        </Form.Item>
+        <Form.Item
+          name="date_of_birth"
+          label="Date de naissance"
+          rules={[
+            { required: true, message: 'Date de naissance requise' },
+            {
+              validator: (_, value: Dayjs | undefined) => {
+                if (!value) return Promise.resolve();
+                if (value.isAfter(dayjs(), 'day')) {
+                  return Promise.reject(new Error('La date doit être dans le passé'));
+                }
+                if (value.isBefore(dayjs('1900-01-01'), 'day')) {
+                  return Promise.reject(new Error('Date invalide'));
+                }
+                return Promise.resolve();
+              },
+            },
+          ]}
+        >
+          <DatePicker
+            style={{ width: '100%' }}
+            format="DD/MM/YYYY"
+            placeholder="JJ/MM/AAAA"
+            disabledDate={(d) => d.isAfter(dayjs(), 'day')}
+          />
+        </Form.Item>
+        <Form.Item
+          name="organization"
+          label="Organisation"
+          rules={[
+            { required: true, message: 'Organisation requise' },
+            { max: 120, message: '120 caractères maximum' },
+          ]}
+        >
+          <Input placeholder="Hôpital Saint-Pierre" />
         </Form.Item>
       </Form>
     </Modal>

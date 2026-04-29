@@ -54,14 +54,18 @@ export const signChallengeWithP12 = async (
   const md = forge.md.sha256.create();
   md.update(data, 'utf8');
 
-  // RSA-PSS / SHA-256 / MGF1(SHA-256) / salt = hash length (équivalent à PSS.MAX_LENGTH côté back).
+  // RSA-PSS / SHA-256 / MGF1(SHA-256) / salt = MAX_LENGTH (cryptography.PSS.MAX_LENGTH côté back).
+  // Pour RSA-2048 + SHA-256 : keyBytes(256) − hashLen(32) − 2 = 222.
+  const rsaKey = privateKey as forge.pki.rsa.PrivateKey;
+  const keyBytes = Math.ceil(rsaKey.n.bitLength() / 8);
+  const saltLength = keyBytes - 32 - 2;
   const pss = forge.pss.create({
     md: forge.md.sha256.create(),
     mgf: forge.mgf.mgf1.create(forge.md.sha256.create()),
-    saltLength: 32,
+    saltLength,
   });
 
-  const signatureBytes = (privateKey as forge.pki.rsa.PrivateKey).sign(md, pss);
+  const signatureBytes = rsaKey.sign(md, pss);
   const certificatePem = forge.pki.certificateToPem(certificate);
 
   return {
