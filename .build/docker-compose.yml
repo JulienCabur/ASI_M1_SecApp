@@ -259,7 +259,8 @@ services:
       - auth-network
     volumes:
       - ./secrets/keycloak:/opt/keycloak/conf/truststores
-      - ./keycloak/import/realm-export.json:/tmp/realm.template.json:ro
+      - ./keycloak/import/realm-export.json:/opt/keycloak/data/import/realm.json
+
   mailcatcher:
     image: sj26/mailcatcher
     container_name: mailcatcher
