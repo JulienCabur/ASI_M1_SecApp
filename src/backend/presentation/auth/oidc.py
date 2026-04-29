@@ -6,6 +6,7 @@ routes et la session utilisateur est portée par un cookie httpOnly signé.
 
 import secrets
 from typing import Any, Dict
+from models.user import User
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -32,6 +33,7 @@ from core.session import (
     set_oidc_state_cookie,
     set_session_cookie,
 )
+from schema.auth_schema import UserInDB
 from service.auth_service import AuthService
 from service.log_service import LogsService
 
@@ -71,6 +73,7 @@ async def callback_route(
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Callback Keycloak : échange le `code` contre des tokens et pose le cookie session."""
+    auth_service = AuthService(db=db)
     fail_url = f"{frontend_url()}/login?error=auth_failed"
     if error:
         return RedirectResponse(url=fail_url, status_code=302)
@@ -126,6 +129,30 @@ async def callback_route(
         except Exception:
             logs_service.add_logs(
                 action="CRED_CLEANUP_FAIL",
+                log_level="WARNING",
+                user_id=user_sub,
+                user_role=user_role,
+                patient_id="null",
+            )
+        try:
+            if not db.query(User).filter(User.id == user_sub).first():
+                user_data = UserInDB(
+                    id=user_sub,
+                    username=claims.get("preferred_username", user_sub),
+                    email=claims.get("email", ""),
+                    roles=[user_role] if user_role != "unknown" else []
+                )
+                auth_service.store_user(user_data)
+                logs_service.add_logs(
+                    action="USER_CREATED_IN_DB",
+                    log_level="INFO",
+                    user_id=user_sub,
+                    user_role=user_role,
+                    patient_id="null",
+                )
+        except Exception as e:
+            logs_service.add_logs(
+                action="USER_CREATION_FAIL",
                 log_level="WARNING",
                 user_id=user_sub,
                 user_role=user_role,

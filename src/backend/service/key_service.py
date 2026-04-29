@@ -1,7 +1,7 @@
 
 from sqlalchemy.orm import Session
 from schema.key_schema import KeyBase
-from models.auth import User
+from models.user import User
 from dotenv import load_dotenv
 
 load_dotenv()  # Charger les variables d'environnement depuis le fichier .env

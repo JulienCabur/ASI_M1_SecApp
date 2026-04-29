@@ -4,7 +4,7 @@ import secrets
 from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
-from models.auth import User
+from models.user import User
 from keycloak import KeycloakAdmin
 from keycloak.exceptions import KeycloakPostError
 from dotenv import load_dotenv

@@ -2,7 +2,7 @@ import base64
 import os
 from sqlalchemy.orm import Session
 from schema.file_schema import FileBase
-from models.auth import File
+from models.file import File
 import base64
 import uuid
 from datetime import datetime

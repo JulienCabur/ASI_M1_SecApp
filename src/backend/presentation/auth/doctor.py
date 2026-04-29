@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from schema.auth_schema import CertificateRequest, ChallengeResponse
 from service.auth_service import AuthService, DoctorConflictError
+from service.file_service import FileService
 from service.log_service import LogsService
 
 router = APIRouter()
@@ -21,6 +22,7 @@ async def register_doctor_route(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     auth_service = AuthService(db=db)
+    file_service = FileService(db=db, storage_path=None)
     try:
         # Pré-vérification d'unicité avant d'émettre un certificat PKI : un doublon
         # détecté ici évite une révocation derrière. La création Keycloak revérifie
@@ -33,7 +35,7 @@ async def register_doctor_route(
         logs_service.add_logs(action="CHECK_CSR_SIGNED", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         p12_password = auth_service.create_doctor_in_keycloak(cert_path, user_info)
         logs_service.add_logs(action="REGISTER_DOCTOR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
-        p12_content = auth_service.get_p12_content(cert_path)
+        p12_content = file_service.get_base64_file_content(cert_path)
         logs_service.add_logs(action="GET_P12_CONTENT", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         auth_service.delete_sensitive_files(user_info.username)
         logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
