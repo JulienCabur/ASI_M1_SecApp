@@ -6,6 +6,7 @@ from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
 import base64
 from models.auth import User
 from keycloak import KeycloakAdmin
+from keycloak.exceptions import KeycloakPostError
 from dotenv import load_dotenv
 from core.auth import resolve_keycloak_verify
 from cryptography import x509
@@ -21,6 +22,18 @@ import os
 
 
 load_dotenv()  # Charger les variables d'environnement depuis le fichier .env
+
+
+class DoctorConflictError(Exception):
+    """Conflit d'unicité côté Keycloak lors de l'enregistrement d'un médecin.
+
+    `field` vaut "username" ou "email" et permet à la couche présentation de
+    renvoyer un message ciblé sans réinterpréter la chaîne d'erreur Keycloak.
+    """
+
+    def __init__(self, field: str, message: str):
+        super().__init__(message)
+        self.field = field
 
 
 class AuthService:
@@ -68,6 +81,53 @@ class AuthService:
             raise Exception("Certificat non trouvé")
         return path
 
+    def _keycloak_admin(self) -> KeycloakAdmin:
+        return KeycloakAdmin(
+            server_url=os.getenv("KEYCLOAK_SERVER_URL"),
+            username=os.getenv("KEYCLOAK_ADMIN"),
+            password=os.getenv("KEYCLOAK_ADMIN_PASSWORD"),
+            realm_name=os.getenv("KEYCLOAK_REALM"),
+            user_realm_name="master",
+            verify=resolve_keycloak_verify(),
+        )
+
+    def check_doctor_uniqueness(self, username: str, email: str) -> None:
+        """Vérifie auprès de Keycloak qu'aucun compte ne porte déjà ce username
+        ou cet email. Lève `DoctorConflictError` si un conflit est détecté.
+
+        Cette pré-vérification évite d'émettre un certificat PKI qui devrait
+        être révoqué juste après si la création Keycloak échoue."""
+        admin = self._keycloak_admin()
+
+        # `search=` matche aussi les sous-chaînes ; on filtre sur l'égalité exacte.
+        username_norm = (username or "").strip().lower()
+        email_norm = (email or "").strip().lower()
+
+        if username_norm:
+            for u in admin.get_users(query={"username": username_norm, "exact": True}):
+                if (u.get("username") or "").lower() == username_norm:
+                    raise DoctorConflictError("username", "Ce nom d'utilisateur est déjà utilisé.")
+
+        if email_norm:
+            for u in admin.get_users(query={"email": email_norm, "exact": True}):
+                if (u.get("email") or "").lower() == email_norm:
+                    raise DoctorConflictError("email", "Cette adresse e-mail est déjà utilisée.")
+
+    @staticmethod
+    def _conflict_field_from_keycloak(err: KeycloakPostError) -> str | None:
+        raw = getattr(err, "error_message", None) or getattr(err, "response_body", b"")
+        if isinstance(raw, (bytes, bytearray)):
+            try:
+                raw = raw.decode("utf-8", errors="replace")
+            except Exception:
+                raw = str(raw)
+        text = (raw or "").lower()
+        if "same username" in text or "username" in text:
+            return "username"
+        if "same email" in text or "email" in text:
+            return "email"
+        return None
+
     def create_doctor_in_keycloak(self, cert_path: str, user_info: CertificateRequest) -> str:
         with open(cert_path, "rb") as f:
             cert_data = f.read()
@@ -80,14 +140,7 @@ class AuthService:
 
         print(f"Création de l'utilisateur dans Keycloak avec le certificat: {cert_path}, numéro de série: {serial_hex}")
 
-        keycloak_admin = KeycloakAdmin(
-            server_url=os.getenv("KEYCLOAK_SERVER_URL"),
-            username=os.getenv("KEYCLOAK_ADMIN"),
-            password=os.getenv("KEYCLOAK_ADMIN_PASSWORD"),
-            realm_name=os.getenv("KEYCLOAK_REALM"),
-            user_realm_name="master",
-            verify=resolve_keycloak_verify()
-        )
+        keycloak_admin = self._keycloak_admin()
 
         user_payload = {
             "email": user_info.email,
@@ -123,6 +176,18 @@ class AuthService:
             self.db.commit()
             
             return p12_password
+        except KeycloakPostError as e:
+            self.delete_sensitive_files(user_info.username)
+            if getattr(e, "response_code", None) == 409:
+                field = self._conflict_field_from_keycloak(e)
+                if field == "username":
+                    raise DoctorConflictError("username", "Ce nom d'utilisateur est déjà utilisé.")
+                if field == "email":
+                    raise DoctorConflictError("email", "Cette adresse e-mail est déjà utilisée.")
+            raise Exception(f"Erreur lors de la création de l'utilisateur dans Keycloak: {str(e)}")
+        except DoctorConflictError:
+            self.delete_sensitive_files(user_info.username)
+            raise
         except Exception as e:
             self.delete_sensitive_files(user_info.username)
             raise Exception(f"Erreur lors de la création de l'utilisateur dans Keycloak: {str(e)}")

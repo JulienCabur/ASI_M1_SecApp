@@ -1,13 +1,3 @@
-/**
- * Helpers pour signer un challenge d'authentification avec un certificat .p12.
- *
- * Utilisé par le flow "reset par certificat" côté médecin :
- *   1. backend → challenge { nonce, timestamp }
- *   2. ici : on déchiffre le .p12 (PBE) avec le mot de passe utilisateur,
- *      on extrait clé privée + cert PEM, on signe `${nonce}:${timestamp}`
- *      en RSA-PSS / SHA256 (max salt) — équivalent à la verif Python côté back.
- *   3. front → POST { username, nonce, timestamp, signature(hex), certificate(PEM) }
- */
 
 import forge from 'node-forge';
 

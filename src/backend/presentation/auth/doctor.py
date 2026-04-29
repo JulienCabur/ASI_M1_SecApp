@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from schema.auth_schema import CertificateRequest, ChallengeResponse
-from service.auth_service import AuthService
+from service.auth_service import AuthService, DoctorConflictError
 from service.log_service import LogsService
 
 router = APIRouter()
@@ -20,8 +20,12 @@ async def register_doctor_route(
     user_info: CertificateRequest = Form(...),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
+    auth_service = AuthService(db=db)
     try:
-        auth_service = AuthService(db=db)
+        # Pré-vérification d'unicité avant d'émettre un certificat PKI : un doublon
+        # détecté ici évite une révocation derrière. La création Keycloak revérifie
+        # de toute façon (course possible entre deux requêtes simultanées).
+        auth_service.check_doctor_uniqueness(user_info.username, user_info.email)
         auth_service.generate_csr(user_info.username, user_info.organization)
         logs_service.add_logs(action="GENERATE_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         time.sleep(5)
@@ -40,6 +44,15 @@ async def register_doctor_route(
             "password": p12_password,
             "filename": f"{user_info.username}.p12",
         }
+    except DoctorConflictError as e:
+        # 409 ciblé : la couche présentation préserve `field` pour que le front
+        # surligne le bon input (username ou email) sans parser un message libre.
+        raise HTTPException(
+            status_code=409,
+            detail={"message": str(e), "field": e.field},
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du médecin: {str(e)}")
 

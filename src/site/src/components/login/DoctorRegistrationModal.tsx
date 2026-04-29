@@ -3,6 +3,7 @@ import { Alert, DatePicker, Form, Input, Modal, message } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { registerDoctor } from '@/services/auth.service';
+import { ApiError } from '@/services/api';
 
 export interface CertificateIssued {
   filename: string;
@@ -61,6 +62,17 @@ const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open,
       form.resetFields();
       onClose();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        const body = err.body as { detail?: { field?: string; message?: string } } | null;
+        const field = body?.detail?.field;
+        const detailMsg = body?.detail?.message ?? err.message;
+        if (field === 'username' || field === 'email') {
+          form.setFields([{ name: field, errors: [detailMsg] }]);
+          return;
+        }
+        message.error(detailMsg);
+        return;
+      }
       const detail = err instanceof Error ? err.message : 'Création du certificat impossible';
       message.error(detail);
     } finally {
