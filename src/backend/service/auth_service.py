@@ -1,6 +1,7 @@
 
 import datetime
 import secrets
+from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
 import base64
@@ -286,27 +287,16 @@ class AuthService:
     # le flow `Password-less`, donc on l'exclut volontairement.
     _RESET_ACTIONS = ["CONFIGURE_TOTP", "webauthn-register-passwordless"]
 
-    # Types de credentials Keycloak supprimés au reset.
+    # Types de credentials Keycloak considérés comme "reset-ables".
     _RESET_CREDENTIAL_TYPES = ("otp", "webauthn-passwordless")
 
-    def _delete_credentials_of_types(self, admin: KeycloakAdmin, user_id: str) -> None:
-        """Supprime tous les TOTP et passkeys passwordless du compte.
-        Le compte devient inutilisable jusqu'au ré-enrôlement via le mail
-        d'action — c'est précisément ce que doit faire un reset."""
-        for cred in admin.get_credentials(user_id) or []:
-            cred_type = cred.get("type")
-            cred_id = cred.get("id")
-            if cred_type not in self._RESET_CREDENTIAL_TYPES:
-                continue
-            if not cred_id:
-                continue
-            admin.delete_credential(user_id, cred_id)
+    _ACTION_TOKEN_LIFESPAN_SECONDS = 3600
 
     def _send_reenrollment_email(self, admin: KeycloakAdmin, user_id: str) -> None:
         """Envoie un mail Keycloak avec un action token qui force CONFIGURE_TOTP
         + webauthn-register-passwordless. Le token authentifie l'utilisateur
-        sans credentials existants, ce qui est nécessaire puisqu'on vient de
-        les supprimer.
+        sans qu'il ait à présenter ses credentials existants, et les required
+        actions ajoutent de *nouveaux* credentials sans toucher aux anciens.
 
         On force `client_id` + `redirect_uri` car sans eux Keycloak génère un
         lien vers le client `account` (page blanche chez nous) et un redirect
@@ -318,36 +308,70 @@ class AuthService:
             payload=list(self._RESET_ACTIONS),
             client_id=client_id,
             redirect_uri=redirect_uri,
-            lifespan=3600,
+            lifespan=self._ACTION_TOKEN_LIFESPAN_SECONDS,
         )
 
+    def cleanup_stale_credentials(self, user_id: str) -> None:
+        """Pour chaque type "reset-able" (TOTP, passkey passwordless), si le
+        user en a plus d'un, on garde le plus récent (le credential fraîchement
+        enrôlé) et on supprime les autres.
+
+        Hook appelé après chaque callback OIDC : c'est ainsi qu'on supprime
+        l'ancien TOTP/passkey *après* la création du nouveau dans le flow
+        de reset. En régime nominal (un seul credential de chaque type), c'est
+        un no-op. Aucun signal explicite de "reset en cours" n'est nécessaire :
+        la pluralité des credentials suffit."""
+        admin = self._keycloak_admin()
+        try:
+            credentials = admin.get_credentials(user_id) or []
+        except Exception:
+            return
+
+        by_type: Dict[str, List[Dict[str, Any]]] = {t: [] for t in self._RESET_CREDENTIAL_TYPES}
+        for cred in credentials:
+            cred_type = cred.get("type")
+            if cred_type in by_type and cred.get("id"):
+                by_type[cred_type].append(cred)
+
+        for creds in by_type.values():
+            if len(creds) <= 1:
+                continue
+            # `createdDate` est en epoch millis. Le plus grand = le plus récent
+            # = celui que l'utilisateur vient d'enrôler. On garde celui-là et
+            # on supprime tout le reste (anciens credentials du flow de reset).
+            creds.sort(key=lambda c: c.get("createdDate") or 0, reverse=True)
+            for stale in creds[1:]:
+                try:
+                    admin.delete_credential(user_id, stale["id"])
+                except Exception:
+                    # Un id déjà supprimé ou introuvable ne doit pas bloquer
+                    # le nettoyage des autres.
+                    pass
+
     def send_credentials_reset_email(self, email: str) -> None:
-        """Reset eager pour patient : supprime immédiatement TOTP + passkey,
-        puis envoie le mail d'action pour le ré-enrôlement.
+        """Reset différé pour patient : on n'efface rien immédiatement, on
+        envoie juste le mail d'action. Les required actions Keycloak font
+        enrôler de nouveaux credentials *à côté* des anciens. La suppression
+        des anciens a lieu au prochain callback OIDC, via
+        `cleanup_stale_credentials` — c'est-à-dire seulement une fois que les
+        nouveaux sont en place. Si le mail est perdu, l'utilisateur garde son
+        accès.
 
         Ne lève pas si l'email est inconnu : la route appelante répond toujours
         200 pour éviter l'énumération."""
-
         admin = self._keycloak_admin()
-
         users = admin.get_users({"email": email, "exact": True})
         if not users:
             return
         user_id = users[0].get("id")
         if not user_id:
             return
-
-        admin.update_user(user_id=user_id, payload={"requiredActions": []})
-
-        self._delete_credentials_of_types(admin, user_id)
-
         self._send_reenrollment_email(admin, user_id)
 
-
     def force_credentials_reset(self, username: str) -> None:
-        """Reset eager pour médecin (via certificat) : supprime TOTP + passkey
-        et envoie un mail d'action pour ré-enrôler. L'action token est le seul
-        chemin de récupération une fois les credentials supprimés."""
+        """Reset différé pour médecin (via certificat) : on envoie le mail
+        d'action sans toucher aux credentials existants. Cleanup des anciens
+        au prochain callback OIDC une fois les nouveaux enrôlés."""
         admin = self._keycloak_admin()
         users = admin.get_users({"username": username, "exact": True})
         if not users:
@@ -355,13 +379,4 @@ class AuthService:
         user_id = users[0].get("id")
         if not user_id:
             raise Exception("Utilisateur introuvable")
-
-        admin.update_user(user_id=user_id, payload={"requiredActions": []})
-        self._delete_credentials_of_types(admin, user_id)
         self._send_reenrollment_email(admin, user_id)
-        self.logs_service.add_logs(
-            action="RESET_REENROLLMENT_EMAIL_SENT",
-            log_level="INFO",
-            user_id=user_id,
-            user_role="doctor",
-        )

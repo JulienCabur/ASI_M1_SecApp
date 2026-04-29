@@ -8,10 +8,12 @@ import secrets
 from typing import Any, Dict
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy.orm import Session
 
 from core.auth import validate_jwt_token
+from core.database import get_db
 from core.oidc import (
     build_authorize_url,
     build_logout_url,
@@ -30,6 +32,7 @@ from core.session import (
     set_oidc_state_cookie,
     set_session_cookie,
 )
+from service.auth_service import AuthService
 from service.log_service import LogsService
 
 from ._helpers import decode_token_unverified, frontend_url
@@ -65,6 +68,7 @@ async def callback_route(
     code: str = Query(default=""),
     state: str = Query(default=""),
     error: str = Query(default=""),
+    db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Callback Keycloak : échange le `code` contre des tokens et pose le cookie session."""
     fail_url = f"{frontend_url()}/login?error=auth_failed"
@@ -109,6 +113,24 @@ async def callback_route(
                 patient_id="null",
             )
             return RedirectResponse(url=fail_url, status_code=302)
+
+    # Cleanup post-reset : si l'utilisateur vient de finir le flow d'action
+    # email (CONFIGURE_TOTP + webauthn-register-passwordless), il a un nouveau
+    # TOTP/passkey *en plus* des anciens. On garde le plus récent de chaque
+    # type et on supprime les autres. Hors flow de reset c'est un no-op
+    # (un seul credential par type). Une exception ici ne doit pas casser
+    # le login : sera retenté à la prochaine connexion.
+    if user_sub:
+        try:
+            AuthService(db=db).cleanup_stale_credentials(user_sub)
+        except Exception:
+            logs_service.add_logs(
+                action="CRED_CLEANUP_FAIL",
+                log_level="WARNING",
+                user_id=user_sub,
+                user_role=user_role,
+                patient_id="null",
+            )
 
     payload = session_payload_from_token_response(token_response)
     set_session_cookie(response, payload)
