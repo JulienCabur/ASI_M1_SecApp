@@ -118,7 +118,7 @@ export interface CertificateChallenge {
 }
 
 export const getCertificateChallenge = async (username: string): Promise<CertificateChallenge> => {
-  const { data } = await api.get<CertificateChallenge>('/auth/challenge', {
+  const { data } = await api.get<CertificateChallenge>('/auth/cert/login/challenge', {
     params: { username },
   });
   return data;
