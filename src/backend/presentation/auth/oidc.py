@@ -176,6 +176,27 @@ async def callback_route(
     return response
 
 
+@router.get("/debug/token")
+async def debug_token_route(request: Request) -> Dict[str, Any]:
+    """Endpoint debug temporaire pour récupérer le JWT stocké dans la session BFF.
+
+    Le frontend n'ayant pas accès au cookie httpOnly, cette route permet de
+    récupérer le access_token côté serveur pour des tests manuels.
+    """
+    payload = get_session_payload(request)
+    if not payload or not payload.get("access_token"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Non authentifié")
+
+    return {
+        "access_token": payload.get("access_token"),
+        "id_token": payload.get("id_token"),
+        "refresh_token": payload.get("refresh_token"),
+        "access_exp": payload.get("access_exp"),
+        "refresh_exp": payload.get("refresh_exp"),
+        "issued_at": payload.get("issued_at"),
+    }
+
+
 @router.post("/logout")
 async def logout_route(request: Request) -> JSONResponse:
     payload = get_session_payload(request)

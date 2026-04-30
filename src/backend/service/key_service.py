@@ -30,10 +30,10 @@ class KeyService:
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
             raise Exception("Utilisateur non trouvé")
-        if self.db.query(Device).filter(Device.name == device_name, Device.user_id == user_id).first():
-            new_device = Device(name=device_name, user_id=user_id, is_verified=False, public_key=public_key)
+        if self.db.query(Device).filter(Device.device_name == device_name, Device.user_id == user_id).first():
+            new_device = Device(device_name=device_name, user_id=user_id, is_verified=False, public_key=public_key)
         else:
-            new_device = Device(name=device_name, user_id=user_id, is_verified=True, public_key=public_key)
+            new_device = Device(device_name=device_name, user_id=user_id, is_verified=True, public_key=public_key)
         self.db.add(new_device)
         self.db.commit()
         self.db.refresh(new_device)
