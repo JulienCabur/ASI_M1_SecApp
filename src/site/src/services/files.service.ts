@@ -18,12 +18,14 @@
 import { api } from '@/services/api';
 import {
   decryptFileWithKEK,
+  decryptMetadataWithKEK,
   encryptFileWithKEK,
   type EncryptedFile,
 } from '@/services/crypto.service';
 import { useCryptoStore } from '@/store/crypto.store';
 
 export interface RemoteFile {
+  id: string;
   name: string;
   date: string;
   cipheredDek: string;
@@ -35,7 +37,7 @@ interface ListFilesResponse {
 
 interface DownloadResponse {
   file_content: string; // base64 du ciphertext stocké côté serveur
-  key: string;          // enveloppe (JSON-base64) telle qu'envoyée à l'upload
+  key: string;
   filename: string;
 }
 
@@ -43,6 +45,8 @@ interface DekEnvelope {
   fileIv: string;
   wrappedDek: string;
   dekIv: string;
+  nameIv: string;
+  dateIv: string;
 }
 
 const toBase64 = (buf: ArrayBuffer): string => {
@@ -59,23 +63,38 @@ const fromBase64 = (b64: string): ArrayBuffer => {
   return bytes.buffer;
 };
 
-const encodeEnvelope = (enc: Pick<EncryptedFile, 'fileIv' | 'wrappedDek' | 'dekIv'>): string =>
+const toBase64Url = (buf: ArrayBuffer): string =>
+  toBase64(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+const fromBase64Url = (b64url: string): ArrayBuffer => {
+  const padded = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = padded.length % 4 === 0 ? '' : '='.repeat(4 - (padded.length % 4));
+  return fromBase64(padded + pad);
+};
+
+const encodeEnvelope = (
+  enc: Pick<EncryptedFile, 'fileIv' | 'wrappedDek' | 'dekIv' | 'nameIv' | 'dateIv'>,
+): string =>
   btoa(
     JSON.stringify({
       fileIv: toBase64(enc.fileIv),
       wrappedDek: toBase64(enc.wrappedDek),
       dekIv: toBase64(enc.dekIv),
+      nameIv: toBase64(enc.nameIv),
+      dateIv: toBase64(enc.dateIv),
     } satisfies DekEnvelope),
   );
 
 const decodeEnvelope = (
   encoded: string,
-): Pick<EncryptedFile, 'fileIv' | 'wrappedDek' | 'dekIv'> => {
+): Pick<EncryptedFile, 'fileIv' | 'wrappedDek' | 'dekIv' | 'nameIv' | 'dateIv'> => {
   const json = JSON.parse(atob(encoded)) as DekEnvelope;
   return {
     fileIv: fromBase64(json.fileIv),
     wrappedDek: fromBase64(json.wrappedDek),
     dekIv: fromBase64(json.dekIv),
+    nameIv: fromBase64(json.nameIv),
+    dateIv: fromBase64(json.dateIv),
   };
 };
 
@@ -88,25 +107,46 @@ const requireKek = (): CryptoKey => {
 };
 
 export const listFiles = async (): Promise<RemoteFile[]> => {
+  const kek = requireKek();
   const { data } = await api.get<ListFilesResponse>('/files/list_files');
-  return data.files.map((f) => ({
-    name: f.name,
-    date: f.date,
-    cipheredDek: f.ciphered_dek,
-  }));
+  const decrypted = await Promise.all(
+    data.files.map(async (f) => {
+      const env = decodeEnvelope(f.ciphered_dek);
+      const meta = await decryptMetadataWithKEK(
+        {
+          ...env,
+          nameCiphertext: fromBase64Url(f.name),
+          dateCiphertext: fromBase64(f.date),
+        },
+        kek,
+      );
+      return {
+        id: f.name,
+        name: meta.name,
+        date: meta.date,
+        cipheredDek: f.ciphered_dek,
+      };
+    }),
+  );
+  return decrypted;
 };
 
 export const uploadFile = async (file: File): Promise<void> => {
   const kek = requireKek();
   const plain = await file.arrayBuffer();
-  const enc = await encryptFileWithKEK(plain, kek);
+  const enc = await encryptFileWithKEK(
+    plain,
+    { name: file.name, date: new Date().toISOString() },
+    kek,
+  );
   const envelope = encodeEnvelope(enc);
+  const cipheredName = toBase64Url(enc.nameCiphertext);
+  const cipheredDate = toBase64(enc.dateCiphertext);
 
   const form = new FormData();
-  // Le 3e argument fixe le nom de fichier côté backend, on garde l'original.
-  form.append('file', new Blob([enc.ciphertext]), file.name);
+  form.append('file', new Blob([enc.ciphertext]), cipheredName);
   await api.post('/files/upload_file', form, {
-    params: { dek: envelope },
+    params: { dek: envelope, date: cipheredDate },
   });
 };
 
@@ -131,25 +171,27 @@ const guessMimeType = (filename: string): string => {
   }
 };
 
-export const downloadFile = async (name: string): Promise<DecryptedFile> => {
+export const downloadFile = async (file: RemoteFile): Promise<DecryptedFile> => {
   const kek = requireKek();
   const { data } = await api.get<DownloadResponse>('/files/download_file', {
-    params: { file: name },
+    params: { file: file.id },
   });
   const env = decodeEnvelope(data.key);
   const plain = await decryptFileWithKEK(
     {
       ciphertext: fromBase64(data.file_content),
-      ...env,
+      fileIv: env.fileIv,
+      wrappedDek: env.wrappedDek,
+      dekIv: env.dekIv,
     },
     kek,
   );
   return {
-    blob: new Blob([plain], { type: guessMimeType(data.filename) }),
-    filename: data.filename,
+    blob: new Blob([plain], { type: guessMimeType(file.name) }),
+    filename: file.name,
   };
 };
 
-export const deleteFile = async (name: string): Promise<void> => {
-  await api.post('/files/delete_file', null, { params: { file: name } });
+export const deleteFile = async (id: string): Promise<void> => {
+  await api.post('/files/delete_file', null, { params: { file: id } });
 };

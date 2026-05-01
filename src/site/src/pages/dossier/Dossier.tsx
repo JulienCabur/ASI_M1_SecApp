@@ -74,7 +74,7 @@ const Dossier: React.FC = () => {
 
   const decryptAndOpen = async (file: RemoteFile, asDownload: boolean) => {
     try {
-      const decrypted = await downloadFile(file.name);
+      const decrypted = await downloadFile(file);
       if (asDownload) {
         triggerBrowserDownload(decrypted);
       } else {
@@ -96,7 +96,7 @@ const Dossier: React.FC = () => {
       cancelText: 'Annuler',
       onOk: async () => {
         try {
-          await deleteFile(file.name);
+          await deleteFile(file.id);
           message.success('Fichier supprimé.');
           await loadFiles();
         } catch (err) {
@@ -185,7 +185,7 @@ const Dossier: React.FC = () => {
       <Table
         columns={columns}
         dataSource={files}
-        rowKey="name"
+        rowKey="id"
         loading={loading}
         locale={{ emptyText: 'Aucun fichier dans le dossier' }}
       />

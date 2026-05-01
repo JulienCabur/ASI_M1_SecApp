@@ -52,12 +52,13 @@ async def download_file(
 async def upload_file(
     file: UploadFile,
     dek: str,
+    date: str,
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
 
     file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    message = file_service.upload_file(file=file, username=str(current_user.id), dek=dek)
+    message = file_service.upload_file(file=file, username=str(current_user.id), dek=dek, date=date)
     log_service.add_logs(action="UPLOAD_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
     return {"message": message}
 

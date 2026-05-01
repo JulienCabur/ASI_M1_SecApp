@@ -166,17 +166,22 @@ export const unwrapKEKWithRSAKey = async (
 
 /**---------------------------------------------------------------------------------------
  * Chiffrement de fichier avec DEK (Data Encryption Key) symétrique protégée par KEK
- *
- * Pour chaque fichier on tire un DEK AES-GCM 256 frais (jamais réutilisé),
- * on chiffre le contenu, puis on wrap le DEK avec la KEK. Le bundle résultat
- * contient tout le nécessaire pour déchiffrer si on possède la KEK.
  ---------------------------------------------------------------------------------------*/
 
 export interface EncryptedFile {
     ciphertext: ArrayBuffer;
-    fileIv: ArrayBuffer;     // 12 octets, IV AES-GCM du chiffrement fichier
-    wrappedDek: ArrayBuffer; // DEK chiffré par la KEK
-    dekIv: ArrayBuffer;      // 12 octets, IV AES-GCM utilisé pour wrap le DEK
+    fileIv: ArrayBuffer;    
+    wrappedDek: ArrayBuffer;
+    dekIv: ArrayBuffer;
+    nameCiphertext: ArrayBuffer; 
+    nameIv: ArrayBuffer;
+    dateCiphertext: ArrayBuffer;
+    dateIv: ArrayBuffer;
+}
+
+export interface FileMetadata {
+    name: string;
+    date: string;
 }
 
 const randomIv = (): ArrayBuffer => {
@@ -187,6 +192,7 @@ const randomIv = (): ArrayBuffer => {
 
 export const encryptFileWithKEK = async (
     data: ArrayBuffer,
+    metadata: FileMetadata,
     kek: CryptoKey,
 ): Promise<EncryptedFile> => {
     if (kek.type !== 'secret' || (kek.algorithm as AesKeyAlgorithm).name !== 'AES-GCM') {
@@ -198,7 +204,7 @@ export const encryptFileWithKEK = async (
 
     const dek = await crypto.subtle.generateKey(
         { name: 'AES-GCM', length: 256 },
-        true, // extractable obligatoire pour le wrap ci-dessous
+        true,
         ['encrypt', 'decrypt'],
     );
 
@@ -209,6 +215,20 @@ export const encryptFileWithKEK = async (
         data,
     );
 
+    const enc = new TextEncoder();
+    const nameIv = randomIv();
+    const nameCiphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: nameIv },
+        dek,
+        enc.encode(metadata.name),
+    );
+    const dateIv = randomIv();
+    const dateCiphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: dateIv },
+        dek,
+        enc.encode(metadata.date),
+    );
+
     const dekIv = randomIv();
     const wrappedDek = await crypto.subtle.wrapKey(
         'raw',
@@ -217,11 +237,20 @@ export const encryptFileWithKEK = async (
         { name: 'AES-GCM', iv: dekIv },
     );
 
-    return { ciphertext, fileIv, wrappedDek, dekIv };
+    return {
+        ciphertext,
+        fileIv,
+        wrappedDek,
+        dekIv,
+        nameCiphertext,
+        nameIv,
+        dateCiphertext,
+        dateIv,
+    };
 };
 
 export const decryptFileWithKEK = async (
-    encrypted: EncryptedFile,
+    encrypted: Pick<EncryptedFile, 'ciphertext' | 'fileIv' | 'wrappedDek' | 'dekIv'>,
     kek: CryptoKey,
 ): Promise<ArrayBuffer> => {
     if (!kek.usages.includes('unwrapKey')) {
@@ -234,7 +263,7 @@ export const decryptFileWithKEK = async (
         kek,
         { name: 'AES-GCM', iv: encrypted.dekIv },
         { name: 'AES-GCM', length: 256 },
-        false, // DEK reconstruit non-extractable
+        false,
         ['decrypt'],
     );
 
@@ -243,4 +272,30 @@ export const decryptFileWithKEK = async (
         dek,
         encrypted.ciphertext,
     );
+};
+
+export const decryptMetadataWithKEK = async (
+    payload: Pick<EncryptedFile, 'wrappedDek' | 'dekIv' | 'nameCiphertext' | 'nameIv' | 'dateCiphertext' | 'dateIv'>,
+    kek: CryptoKey,
+): Promise<FileMetadata> => {
+    if (!kek.usages.includes('unwrapKey')) {
+        throw new Error('La KEK doit avoir l\'usage "unwrapKey".');
+    }
+    const dek = await crypto.subtle.unwrapKey(
+        'raw',
+        payload.wrappedDek,
+        kek,
+        { name: 'AES-GCM', iv: payload.dekIv },
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['decrypt'],
+    );
+    const dec = new TextDecoder();
+    const name = dec.decode(
+        await crypto.subtle.decrypt({ name: 'AES-GCM', iv: payload.nameIv }, dek, payload.nameCiphertext),
+    );
+    const date = dec.decode(
+        await crypto.subtle.decrypt({ name: 'AES-GCM', iv: payload.dateIv }, dek, payload.dateCiphertext),
+    );
+    return { name, date };
 };
