@@ -1,167 +1,156 @@
-import { useEffect, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Modal,
-  Space,
-  Table,
-  Typography,
-  Upload,
-  App,
-} from 'antd';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, App, Button, Modal, Space, Table, Typography, Upload } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload';
 import { useAuth } from '@/hooks/useAuth';
-import { getFiles, uploadFile, deleteFile, replaceFile } from '@/services/files.service';
-import { addNotification, getNotifications } from '@/services/notifications.service';
-import { useNotificationsStore } from '@/store/notifications.store';
-import type { MedicalFile } from '@/types';
+import { deleteFile, downloadFile, listFiles, uploadFile, type DecryptedFile, type RemoteFile } from '@/services/files.service';
+import { useCryptoStore } from '@/store/crypto.store';
 import style from './dossier.module.scss';
 
 const { Title } = Typography;
 const { Dragger } = Upload;
 
+interface PreviewState {
+  filename: string;
+  url: string;
+  mime: string;
+}
+
 const Dossier: React.FC = () => {
   const { user } = useAuth();
-  const { modal } = App.useApp();
-  const { notifications, setNotifications } = useNotificationsStore();
-  const isDoctor = user?.role === 'role_docteurs';
-  const patientId = isDoctor ? 'mock-patient' : (user?.id ?? 'mock-patient');
+  const { message, modal } = App.useApp();
+  const kek = useCryptoStore((s) => s.kek);
 
-  const [files, setFiles] = useState<MedicalFile[]>([]);
+  const [files, setFiles] = useState<RemoteFile[]>([]);
   const [loading, setLoading] = useState(false);
-  const [viewingFile, setViewingFile] = useState<MedicalFile | null>(null);
   const [uploadVisible, setUploadVisible] = useState(false);
-  const [replaceTarget, setReplaceTarget] = useState<MedicalFile | null>(null);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
 
-  const loadFiles = () => {
+  const cryptoReady = useMemo(() => Boolean(kek), [kek]);
+
+  const loadFiles = useCallback(async () => {
     setLoading(true);
-    getFiles(patientId)
-      .then(setFiles)
-      .finally(() => setLoading(false));
-  };
+    try {
+      setFiles(await listFiles());
+    } catch (err) {
+      message.error(`Impossible de charger les fichiers : ${(err as Error).message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [message]);
 
   useEffect(() => {
+    if (!user) return;
     loadFiles();
-  }, [patientId]);
+  }, [user, loadFiles]);
+
+  // Libération des Object URLs pour éviter de garder le buffer déchiffré
+  // accroché à un Blob URL au-delà de l'usage.
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview.url);
+    };
+  }, [preview]);
 
   const handleUpload = async () => {
-    const rawFile = fileList[0]?.originFileObj;
-    if (!rawFile || !user) return;
-
+    const raw = fileList[0]?.originFileObj;
+    if (!raw) return;
     setUploading(true);
     try {
-      if (isDoctor) {
-        // Doctor upload requires patient approval — create a notification
-        await addNotification({
-          type: 'file_upload',
-          description: `Dr. ${user.lastName} souhaite téléverser "${rawFile.name}" dans votre dossier.`,
-          timestamp: new Date().toISOString(),
-          status: 'pending',
-          targetPatientId: patientId,
-          initiatorName: `Dr. ${user.firstName} ${user.lastName}`,
-          payload: { fileName: rawFile.name, fileType: rawFile.type },
-        });
-      } else {
-        await uploadFile(patientId, rawFile, `${user.firstName} ${user.lastName}`, user.id, user.role);
-        loadFiles();
-      }
+      await uploadFile(raw as File);
+      message.success(`"${raw.name}" téléversé et chiffré.`);
       setUploadVisible(false);
       setFileList([]);
+      await loadFiles();
+    } catch (err) {
+      message.error(`Échec du téléversement : ${(err as Error).message}`);
     } finally {
       setUploading(false);
     }
   };
 
-  const handleReplace = async () => {
-    const rawFile = fileList[0]?.originFileObj;
-    if (!rawFile || !replaceTarget || !user) return;
-
-    setUploading(true);
+  const decryptAndOpen = async (file: RemoteFile, asDownload: boolean) => {
     try {
-      if (isDoctor) {
-        await addNotification({
-          type: 'file_edit',
-          description: `Dr. ${user.lastName} souhaite modifier "${replaceTarget.name}".`,
-          timestamp: new Date().toISOString(),
-          status: 'pending',
-          targetPatientId: patientId,
-          initiatorName: `Dr. ${user.firstName} ${user.lastName}`,
-          payload: { fileId: replaceTarget.id },
-        });
-        const updated = await getNotifications(user.id);
-        setNotifications(updated);
+      const decrypted = await downloadFile(file.name);
+      if (asDownload) {
+        triggerBrowserDownload(decrypted);
       } else {
-        await replaceFile(replaceTarget.id, rawFile, `${user.firstName} ${user.lastName}`, user.id, user.role);
-        loadFiles();
+        const url = URL.createObjectURL(decrypted.blob);
+        if (preview) URL.revokeObjectURL(preview.url);
+        setPreview({ filename: decrypted.filename, url, mime: decrypted.blob.type });
       }
-      setReplaceTarget(null);
-      setFileList([]);
-    } finally {
-      setUploading(false);
+    } catch (err) {
+      message.error(`Déchiffrement impossible : ${(err as Error).message}`);
     }
   };
 
-  const handleDelete = (file: MedicalFile) => {
-    if (!user) return;
-
-    if (isDoctor) {
-      modal.confirm({
-        title: 'Demande de suppression',
-        content: `Une demande d'approbation sera envoyée au patient pour supprimer "${file.name}".`,
-        okText: 'Envoyer la demande',
-        cancelText: 'Annuler',
-        onOk: async () => {
-          await addNotification({
-            type: 'file_delete',
-            description: `Dr. ${user.lastName} souhaite supprimer "${file.name}".`,
-            timestamp: new Date().toISOString(),
-            status: 'pending',
-            targetPatientId: patientId,
-            initiatorName: `Dr. ${user.firstName} ${user.lastName}`,
-            payload: { fileId: file.id },
-          });
-          const updated = await getNotifications(user.id);
-          setNotifications(updated);
-        },
-      });
-    } else {
-      modal.confirm({
-        title: 'Supprimer ce fichier ?',
-        content: `Êtes-vous sûr de vouloir supprimer "${file.name}" ? Cette action est irréversible.`,
-        okText: 'Supprimer',
-        okType: 'danger',
-        cancelText: 'Annuler',
-        onOk: async () => {
-          await deleteFile(file.id);
-          loadFiles();
-        },
-      });
-    }
+  const handleDelete = (file: RemoteFile) => {
+    modal.confirm({
+      title: 'Supprimer ce fichier ?',
+      content: `"${file.name}" sera retiré du serveur. Action irréversible.`,
+      okText: 'Supprimer',
+      okType: 'danger',
+      cancelText: 'Annuler',
+      onOk: async () => {
+        try {
+          await deleteFile(file.name);
+          message.success('Fichier supprimé.');
+          await loadFiles();
+        } catch (err) {
+          message.error(`Suppression impossible : ${(err as Error).message}`);
+        }
+      },
+    });
   };
 
-  const renderFileViewer = () => {
-    if (!viewingFile) return null;
-    const { type, url, name } = viewingFile;
+  const closePreview = () => {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  };
 
-    if (type.startsWith('image/')) {
-      return <img src={url ?? ''} alt={name} style={{ maxWidth: '100%', maxHeight: '70vh' }} />;
+  const renderPreview = () => {
+    if (!preview) return null;
+    if (preview.mime.startsWith('image/')) {
+      return <img src={preview.url} alt={preview.filename} style={{ maxWidth: '100%', maxHeight: '70vh' }} />;
     }
-    if (type === 'application/pdf') {
-      return <iframe src={url ?? ''} title={name} style={{ width: '100%', height: '70vh', border: 'none' }} />;
+    if (preview.mime === 'application/pdf') {
+      return <iframe src={preview.url} title={preview.filename} style={{ width: '100%', height: '70vh', border: 'none' }} />;
     }
     return (
       <div style={{ textAlign: 'center', padding: 24 }}>
         <p>Aperçu non disponible pour ce type de fichier.</p>
-        <Button type="primary" href={url ?? '#'} download={name}>
+        <Button type="primary" href={preview.url} download={preview.filename}>
           Télécharger
         </Button>
       </div>
     );
   };
+
+  const columns: ColumnsType<RemoteFile> = [
+    { title: 'Nom', dataIndex: 'name', key: 'name', ellipsis: true },
+    { title: 'Date', dataIndex: 'date', key: 'date', width: 200 },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 280,
+      render: (_, file) => (
+        <Space>
+          <Button size="small" disabled={!cryptoReady} onClick={() => decryptAndOpen(file, false)}>
+            Voir
+          </Button>
+          <Button size="small" disabled={!cryptoReady} onClick={() => decryptAndOpen(file, true)}>
+            Télécharger
+          </Button>
+          <Button size="small" danger onClick={() => handleDelete(file)}>
+            Supprimer
+          </Button>
+        </Space>
+      ),
+    },
+  ];
 
   const uploadProps = {
     fileList,
@@ -170,46 +159,25 @@ const Dossier: React.FC = () => {
     maxCount: 1,
   };
 
-  const columns: ColumnsType<MedicalFile> = [
-    { title: 'Nom', dataIndex: 'name', key: 'name', ellipsis: true },
-    { title: 'Date', dataIndex: 'date', key: 'date', width: 120 },
-    { title: 'Type', dataIndex: 'type', key: 'type', width: 160, ellipsis: true },
-    { title: 'Ajouté par', dataIndex: 'uploaderName', key: 'uploaderName' },
-    {
-      title: 'Actions',
-      key: 'actions',
-      width: 220,
-      render: (_, file) => (
-        <Space>
-          <Button size="small" onClick={() => setViewingFile(file)}>Voir</Button>
-          <Button size="small" onClick={() => { setReplaceTarget(file); setFileList([]); }}>Remplacer</Button>
-          <Button size="small" danger onClick={() => handleDelete(file)}>Supprimer</Button>
-        </Space>
-      ),
-    },
-  ];
-
-  // Pending notifications in store (for informational banner)
-  const pendingFileNotifs = notifications.filter(
-    (n) => (n.type === 'file_upload' || n.type === 'file_edit' || n.type === 'file_delete') &&
-           n.status === 'pending' &&
-           n.targetPatientId === patientId
-  );
-
   return (
     <div className={style.container}>
       <div className={style.header}>
         <Title level={2} style={{ margin: 0 }}>Mon dossier médical</Title>
-        <Button type="primary" onClick={() => { setUploadVisible(true); setFileList([]); }}>
+        <Button
+          type="primary"
+          disabled={!cryptoReady}
+          onClick={() => { setUploadVisible(true); setFileList([]); }}
+        >
           Téléverser un fichier
         </Button>
       </div>
 
-      {isDoctor && pendingFileNotifs.length > 0 && (
+      {!cryptoReady && (
         <Alert
           type="warning"
           showIcon
-          message={`${pendingFileNotifs.length} action(s) en attente d'approbation du patient.`}
+          message="Session crypto indisponible"
+          description="La KEK n'a pas pu être restaurée pour cet appareil. Le chiffrement et le déchiffrement local sont désactivés. Reconnecte-toi ou réinitialise l'appareil depuis Crypto Lab."
           style={{ marginBottom: 16 }}
         />
       )}
@@ -217,23 +185,21 @@ const Dossier: React.FC = () => {
       <Table
         columns={columns}
         dataSource={files}
-        rowKey="id"
+        rowKey="name"
         loading={loading}
         locale={{ emptyText: 'Aucun fichier dans le dossier' }}
       />
 
-      {/* File viewer modal */}
       <Modal
-        title={viewingFile?.name}
-        open={!!viewingFile}
-        onCancel={() => setViewingFile(null)}
+        title={preview?.filename}
+        open={!!preview}
+        onCancel={closePreview}
         footer={null}
         width={800}
       >
-        {renderFileViewer()}
+        {renderPreview()}
       </Modal>
 
-      {/* Upload modal */}
       <Modal
         title="Téléverser un fichier"
         open={uploadVisible}
@@ -244,61 +210,38 @@ const Dossier: React.FC = () => {
             key="upload"
             type="primary"
             loading={uploading}
-            disabled={fileList.length === 0}
+            disabled={fileList.length === 0 || !cryptoReady}
             onClick={handleUpload}
           >
-            {isDoctor ? 'Envoyer la demande' : 'Téléverser'}
+            Téléverser
           </Button>,
         ]}
       >
-        {isDoctor && (
-          <Alert
-            type="info"
-            showIcon
-            message="En tant que médecin, votre téléversement nécessite l'approbation du patient."
-            style={{ marginBottom: 16 }}
-          />
-        )}
+        <Alert
+          type="info"
+          showIcon
+          message="Le fichier est chiffré localement avant envoi. Le serveur ne voit jamais son contenu en clair."
+          style={{ marginBottom: 16 }}
+        />
         <Dragger {...uploadProps}>
           <p className="ant-upload-drag-icon"><InboxOutlined /></p>
           <p className="ant-upload-text">Cliquez ou glissez un fichier ici</p>
-          <p className="ant-upload-hint">Formats supportés : PDF, images, documents</p>
-        </Dragger>
-      </Modal>
-
-      {/* Replace modal */}
-      <Modal
-        title={`Remplacer "${replaceTarget?.name ?? ''}"`}
-        open={!!replaceTarget}
-        onCancel={() => setReplaceTarget(null)}
-        footer={[
-          <Button key="cancel" onClick={() => setReplaceTarget(null)}>Annuler</Button>,
-          <Button
-            key="replace"
-            type="primary"
-            loading={uploading}
-            disabled={fileList.length === 0}
-            onClick={handleReplace}
-          >
-            {isDoctor ? 'Envoyer la demande' : 'Remplacer'}
-          </Button>,
-        ]}
-      >
-        {isDoctor && (
-          <Alert
-            type="info"
-            showIcon
-            message="En tant que médecin, votre modification nécessite l'approbation du patient."
-            style={{ marginBottom: 16 }}
-          />
-        )}
-        <Dragger {...uploadProps}>
-          <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-          <p className="ant-upload-text">Glissez le fichier de remplacement ici</p>
+          <p className="ant-upload-hint">Tout type de fichier accepté</p>
         </Dragger>
       </Modal>
     </div>
   );
+};
+
+const triggerBrowserDownload = ({ blob, filename }: DecryptedFile): void => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 export default Dossier;

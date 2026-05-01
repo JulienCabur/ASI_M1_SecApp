@@ -86,6 +86,12 @@ export const logout = async (): Promise<void> => {
   } catch {
     // ignore
   }
+  try {
+    const { useCryptoStore } = await import('@/store/crypto.store');
+    useCryptoStore.getState().clear();
+  } catch {
+    // ignore
+  }
   window.location.replace(logoutUrl);
 };
 
