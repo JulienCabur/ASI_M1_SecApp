@@ -37,12 +37,6 @@ class FileService:
         with open(cert_path, "rb") as f:
             p12_content = base64.b64encode(f.read()).decode('utf-8')
         return p12_content
-
-    def get_file_dek(self, file: str, username: str) -> str:
-        file_record = self.db.query(File).filter(File.name == file, File.user_id == username).first()
-        if not file_record:
-            raise Exception(f"Aucun enregistrement de fichier trouvé pour '{file}' et l'utilisateur '{username}'.")
-        return file_record.ciphered_dek
     
     def save_file(self, file, username: str) -> FileBase:
         """
@@ -113,14 +107,21 @@ class FileService:
     
     def list_files(self, username: str) -> list:
         """
-        Liste les fichiers d'un utilisateur donné.
+        Liste les fichiers d'un utilisateur donné. 
         :param username: Nom de l'utilisateur pour lequel lister les fichiers.
         :return: Liste des fichiers de l'utilisateur.
         """
         user_directory = self.create_directory_service(username)
-        if not os.path.exists(user_directory):
-            return []
-        return os.listdir(user_directory)
+        files_list = []
+        for file in os.listdir(user_directory):
+            file_record = self.db.query(File).filter(File.name == file, File.user_id == username).first()
+            if file_record:
+                files_list.append({
+                    "name": file,
+                    "date": file_record.date,
+                    "ciphered_dek": file_record.ciphered_dek
+                })
+        return files_list
 
     def edit_file(self, file: str, new_content: bytes, username: str) -> str:
         """

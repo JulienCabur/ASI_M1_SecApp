@@ -25,13 +25,13 @@ logs_service = LogsService()
 
 @router.post("/register_device", response_model=Dict[str, Any])
 def register_device_route(
-    device_data: DeviceRegister = Form(...),
+    device_data: DeviceRegister,
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
     try:
         key_service = KeyService(db=db)
-        device = key_service.register_device(user_id=current_user.id, device_name=device_data.name, public_key=device_data.public_key)
+        device = key_service.register_device(user_id=current_user.id, device_name=device_data.name, public_key=device_data.public_key.model_dump())
         logs_service.add_logs(action="REGISTER_DEVICE", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
         return {"device_id": device.id}
     except Exception as e:
@@ -65,16 +65,16 @@ def get_device_keys_route(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des clés: {str(e)}")
 
-@router.get("/get_device_public_key", response_model=Dict[str, str])
-def get_device_public_key_route(
-    target_user_id: str = Query(..., description="ID de l'utilisateur dont la clé publique doit être récupérée"),
-    db: Session = Depends(get_db),
-    current_user: UserInDB = Depends(get_current_user)
-) -> Dict[str, str]:
-    try:
-        key_service = KeyService(db=db)
-        user_keys = key_service.get_device_public_key(user_id=target_user_id)
-        logs_service.add_logs(action="GET_DEVICE_PUBLIC_KEY", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
-        return {"public_key": user_keys.public_key}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération de la clé publique: {str(e)}")
+# @router.get("/get_device_public_key", response_model=Dict[str, str])
+# def get_device_public_key_route(
+#     target_user_id: str = Query(..., description="ID de l'utilisateur dont la clé publique doit être récupérée"),
+#     db: Session = Depends(get_db),
+#     current_user: UserInDB = Depends(get_current_user)
+# ) -> Dict[str, str]:
+#     try:
+#         key_service = KeyService(db=db)
+#         user_keys = key_service.get_device_public_key(user_id=target_user_id)
+#         logs_service.add_logs(action="GET_DEVICE_PUBLIC_KEY", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
+#         return {"public_key": user_keys.public_key}
+#     except Exception as e:
+#         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération de la clé publique: {str(e)}")
