@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotificationsStore } from '@/store/notifications.store';
 import { getDoctors } from '@/services/doctors.service';
-import { getFiles } from '@/services/files.service';
+import { listFiles, type RemoteFile } from '@/services/files.service';
 import { getNotifications } from '@/services/notifications.service';
-import type { Doctor, MedicalFile } from '@/types';
+import type { Doctor } from '@/types';
 import style from './dashboard.module.scss';
 
 const { Title, Text } = Typography;
@@ -17,15 +17,15 @@ const PatientDashboard: React.FC = () => {
   const navigate = useNavigate();
 
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [recentFiles, setRecentFiles] = useState<MedicalFile[]>([]);
+  const [recentFiles, setRecentFiles] = useState<RemoteFile[]>([]);
 
   const patientId = user?.id ?? 'mock-patient';
 
   useEffect(() => {
     getDoctors(patientId).then(setDoctors);
-    getFiles(patientId).then((files) => {
-      setRecentFiles(files.slice(-3).reverse());
-    });
+    listFiles()
+      .then((files) => setRecentFiles(files.slice(-3).reverse()))
+      .catch(() => setRecentFiles([]));
     getNotifications(patientId).then(setNotifications);
   }, [patientId, setNotifications]);
 

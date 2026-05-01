@@ -109,7 +109,7 @@ async def register_doctor_route(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     auth_service = AuthService(db=db)
-    file_service = FileService(db=db, storage_path=None)
+    file_service = FileService(db=db, storage_path="./cert_storage")
     try:
         # Pré-vérification d'unicité avant d'émettre un certificat PKI : un doublon
         # détecté ici évite une révocation derrière. La création Keycloak revérifie

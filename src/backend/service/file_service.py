@@ -5,7 +5,6 @@ from schema.file_schema import FileBase
 from models.file import File
 import base64
 import uuid
-from datetime import datetime
 
 class FileService:
     """
@@ -56,17 +55,19 @@ class FileService:
 
         return FileBase(path=file_path, name=file, ciphered_dek=file_record.ciphered_dek)
     
-    def upload_file(self, file, username: str, dek: str) -> str:
+    def upload_file(self, file, username: str, dek: str, date: str) -> str:
         """
         Gère le processus de téléversement d'un fichier pour un utilisateur donné.
-        :param file: Fichier à téléverser.
+        :param file: Fichier à téléverser. `file.filename` est attendu sous forme
+                     de nom chiffré (b64url) — le serveur ne l'interprète jamais en clair.
         :param username: Nom de l'utilisateur pour lequel téléverser le fichier.
-        :param dek: La clé de chiffrement du fichier.
+        :param dek: Enveloppe (JSON-base64) contenant le DEK wrappé et les IVs.
+        :param date: Date d'upload chiffrée côté client (b64), opaque pour le serveur.
         :return: Chemin du fichier téléchargé.
         """
         try:
             contents = file.file.read()
-            file_record = File(uuid=uuid.uuid4(), name=file.filename, date=datetime.now().isoformat(), user_id=username, ciphered_dek=dek)
+            file_record = File(uuid=uuid.uuid4(), name=file.filename, date=date, user_id=username, ciphered_dek=dek)
             self.db.add(file_record)
             self.db.commit()
             with open(os.path.join(self.storage_path, username, file.filename), 'wb') as f:
