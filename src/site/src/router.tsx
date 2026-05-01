@@ -8,6 +8,7 @@ import AuthCallback from '@/pages/auth/AuthCallback';
 import Doctors from '@/pages/doctors/Doctors';
 import Dossier from '@/pages/dossier/Dossier';
 import Notifications from '@/pages/notifications/Notifications';
+import CryptoLab from '@/pages/crypto-lab/CryptoLab';
 
 const MainLayout = () => {
   return (
@@ -35,6 +36,7 @@ const Router = () => {
             <Route path="/dossier" element={<Dossier />} />
             <Route path="/doctors" element={<Doctors />} />
             <Route path="/notifications" element={<Notifications />} />
+            <Route path="/crypto-lab" element={<CryptoLab />} />
           </Route>
         </Route>
       </Routes>
