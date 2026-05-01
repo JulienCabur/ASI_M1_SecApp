@@ -10,6 +10,7 @@ from core.session import CSRF_COOKIE_NAME
 from presentation.file import router as file_router
 from presentation.auth import router as auth_router
 from presentation.check_authenticity import router as check_authenticity_router
+from presentation.key import router as key_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -53,6 +54,18 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if request.url.path in _CSRF_EXEMPT_PATHS:
             return await call_next(request)
+        # Dev/testing helper: when enabled, allow skipping CSRF if a Bearer
+        # Authorization header is present. This helps testing via the
+        # Swagger UI (/fastapi/docs) where adding X-CSRF-Token is awkward.
+        # MUST NOT be enabled in production.
+        try:
+            if os.getenv("DISABLE_CSRF_FOR_BEARER", "false").lower() == "true":
+                auth = request.headers.get("Authorization")
+                if auth and auth.lower().startswith("bearer "):
+                    return await call_next(request)
+        except Exception:
+            # If anything goes wrong, fall back to normal CSRF enforcement.
+            pass
         cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
         if cookie_token:
             header_token = request.headers.get("X-CSRF-Token")
@@ -69,6 +82,7 @@ app.add_middleware(CSRFMiddleware)
 app.include_router(file_router)
 app.include_router(auth_router)
 app.include_router(check_authenticity_router)
+app.include_router(key_router)
 
 
 @app.get("/")

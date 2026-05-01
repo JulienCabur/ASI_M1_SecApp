@@ -6,6 +6,7 @@ routes et la session utilisateur est portée par un cookie httpOnly signé.
 
 import secrets
 from typing import Any, Dict
+from models.user import User
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -32,6 +33,7 @@ from core.session import (
     set_oidc_state_cookie,
     set_session_cookie,
 )
+from schema.auth_schema import UserInDB
 from service.auth_service import AuthService
 from service.log_service import LogsService
 
@@ -71,6 +73,7 @@ async def callback_route(
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Callback Keycloak : échange le `code` contre des tokens et pose le cookie session."""
+    auth_service = AuthService(db=db)
     fail_url = f"{frontend_url()}/login?error=auth_failed"
     if error:
         return RedirectResponse(url=fail_url, status_code=302)
@@ -131,6 +134,30 @@ async def callback_route(
                 user_role=user_role,
                 patient_id="null",
             )
+        try:
+            if not db.query(User).filter(User.id == user_sub).first():
+                user_data = UserInDB(
+                    id=user_sub,
+                    username=claims.get("preferred_username", user_sub),
+                    email=claims.get("email", ""),
+                    roles=[user_role] if user_role != "unknown" else []
+                )
+                auth_service.store_user(user_data)
+                logs_service.add_logs(
+                    action="USER_CREATED_IN_DB",
+                    log_level="INFO",
+                    user_id=user_sub,
+                    user_role=user_role,
+                    patient_id="null",
+                )
+        except Exception as e:
+            logs_service.add_logs(
+                action="USER_CREATION_FAIL",
+                log_level="WARNING",
+                user_id=user_sub,
+                user_role=user_role,
+                patient_id="null",
+            )
 
     payload = session_payload_from_token_response(token_response)
     set_session_cookie(response, payload)
@@ -147,6 +174,27 @@ async def callback_route(
     redirect_to = expected.get("redirect_to", "/")
     response.headers["location"] = f"{frontend_url()}{redirect_to}"
     return response
+
+
+@router.get("/debug/token")
+async def debug_token_route(request: Request) -> Dict[str, Any]:
+    """Endpoint debug temporaire pour récupérer le JWT stocké dans la session BFF.
+
+    Le frontend n'ayant pas accès au cookie httpOnly, cette route permet de
+    récupérer le access_token côté serveur pour des tests manuels.
+    """
+    payload = get_session_payload(request)
+    if not payload or not payload.get("access_token"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Non authentifié")
+
+    return {
+        "access_token": payload.get("access_token"),
+        "id_token": payload.get("id_token"),
+        "refresh_token": payload.get("refresh_token"),
+        "access_exp": payload.get("access_exp"),
+        "refresh_exp": payload.get("refresh_exp"),
+        "issued_at": payload.get("issued_at"),
+    }
 
 
 @router.post("/logout")
