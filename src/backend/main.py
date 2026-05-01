@@ -10,7 +10,7 @@ from core.session import CSRF_COOKIE_NAME
 from presentation.file import router as file_router
 from presentation.auth import router as auth_router
 from presentation.check_authenticity import router as check_authenticity_router
-from presentation.key import router as key_router
+from presentation.device import router as key_router
 
 Base.metadata.create_all(bind=engine)
 

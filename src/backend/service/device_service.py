@@ -1,16 +1,16 @@
 
 from sqlalchemy.orm import Session
 from models.devices import Device
-from schema.key_schema import KeyBase, KeyResponse
+from schema.key_schema import KeyResponse
 from models.user import User
 from dotenv import load_dotenv
 
 load_dotenv()  # Charger les variables d'environnement depuis le fichier .env
 
 
-class KeyService:
+class DeviceService:
     """
-    Classe pour gérer les opérations liées aux clés.
+    Classe pour gérer les opérations liées aux dispositifs.
     """
     def __init__(self, db: Session):
         """
@@ -30,7 +30,7 @@ class KeyService:
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
             raise Exception("Utilisateur non trouvé")
-        if self.db.query(Device).filter(Device.device_name == device_name, Device.user_id == user_id).first():
+        if self.db.query(Device).filter(Device.user_id == user_id).first():
             new_device = Device(device_name=device_name, user_id=user_id, is_verified=False, public_key=public_key)
         else:
             new_device = Device(device_name=device_name, user_id=user_id, is_verified=True, public_key=public_key)
@@ -38,6 +38,34 @@ class KeyService:
         self.db.commit()
         self.db.refresh(new_device)
         return new_device
+
+    def list_unverified_devices(self, user_id: str) -> list:
+        """
+        Liste les dispositifs non vérifiés pour un utilisateur donné.
+        :param user_id: ID de l'utilisateur.
+        :return: Liste des dispositifs non vérifiés.
+        """
+        devices = self.db.query(Device).filter(Device.user_id == user_id, Device.is_verified.is_(False)).all()
+        return devices
+
+    def verify_device(self, user_id: str, device_id: str, ciphered_kek: str) -> Device:
+        """
+        Vérifie un dispositif pour un utilisateur donné.
+        :param user_id: ID de l'utilisateur.
+        :param device_id: ID du dispositif à vérifier.
+        :param ciphered_kek: KEK chiffré du dispositif à vérifier.
+        :return: Le dispositif vérifié.
+        """
+        device = self.db.query(Device).filter(Device.id == device_id).first()
+        if not device:
+            raise Exception("Dispositif non trouvé")
+        if device.user_id != user_id:
+            raise Exception("Le dispositif n'appartient pas à l'utilisateur")
+        device.is_verified = True
+        device.ciphered_kek = ciphered_kek
+        self.db.commit()
+        self.db.refresh(device)
+        return device
 
     def store_device_keys(self, user_id: str, ciphered_kek: str, device_id: str) -> None:
         """
