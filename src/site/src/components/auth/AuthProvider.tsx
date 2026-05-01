@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { App, Spin } from 'antd';
 import { fetchMe } from '@/services/auth.service';
 import { useAuthStore } from '@/store/auth.store';
+import { initCryptoSession } from '@/hooks/useCryptoSession';
 import styles from './AuthProvider.module.scss';
 
 interface AuthProviderProps {
@@ -23,10 +24,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     let cancelled = false;
     fetchMe()
-      .then((user) => {
+      .then(async (user) => {
         if (cancelled) return;
-        if (user) setUser(user);
-        else clear();
+        if (!user) {
+          clear();
+          return;
+        }
+        setUser(user);
+        try {
+          await initCryptoSession(user.id);
+        } catch (err) {
+          // La crypto n'est pas bloquante pour l'auth : on log et on laisse
+          // l'app charger. Les pages qui ont besoin de la KEK afficheront
+          // un état dégradé.
+          console.error('Bootstrap crypto échoué :', err);
+        }
       })
       .catch(() => {
         if (!cancelled) clear();
