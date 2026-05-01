@@ -164,3 +164,83 @@ export const unwrapKEKWithRSAKey = async (
     );
 };
 
+/**---------------------------------------------------------------------------------------
+ * Chiffrement de fichier avec DEK (Data Encryption Key) symétrique protégée par KEK
+ *
+ * Pour chaque fichier on tire un DEK AES-GCM 256 frais (jamais réutilisé),
+ * on chiffre le contenu, puis on wrap le DEK avec la KEK. Le bundle résultat
+ * contient tout le nécessaire pour déchiffrer si on possède la KEK.
+ ---------------------------------------------------------------------------------------*/
+
+export interface EncryptedFile {
+    ciphertext: ArrayBuffer;
+    fileIv: ArrayBuffer;     // 12 octets, IV AES-GCM du chiffrement fichier
+    wrappedDek: ArrayBuffer; // DEK chiffré par la KEK
+    dekIv: ArrayBuffer;      // 12 octets, IV AES-GCM utilisé pour wrap le DEK
+}
+
+const randomIv = (): ArrayBuffer => {
+    const buf = new ArrayBuffer(12);
+    crypto.getRandomValues(new Uint8Array(buf));
+    return buf;
+};
+
+export const encryptFileWithKEK = async (
+    data: ArrayBuffer,
+    kek: CryptoKey,
+): Promise<EncryptedFile> => {
+    if (kek.type !== 'secret' || (kek.algorithm as AesKeyAlgorithm).name !== 'AES-GCM') {
+        throw new Error('encryptFileWithKEK attend une KEK AES-GCM.');
+    }
+    if (!kek.usages.includes('wrapKey')) {
+        throw new Error('La KEK doit avoir l\'usage "wrapKey".');
+    }
+
+    const dek = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true, // extractable obligatoire pour le wrap ci-dessous
+        ['encrypt', 'decrypt'],
+    );
+
+    const fileIv = randomIv();
+    const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: fileIv },
+        dek,
+        data,
+    );
+
+    const dekIv = randomIv();
+    const wrappedDek = await crypto.subtle.wrapKey(
+        'raw',
+        dek,
+        kek,
+        { name: 'AES-GCM', iv: dekIv },
+    );
+
+    return { ciphertext, fileIv, wrappedDek, dekIv };
+};
+
+export const decryptFileWithKEK = async (
+    encrypted: EncryptedFile,
+    kek: CryptoKey,
+): Promise<ArrayBuffer> => {
+    if (!kek.usages.includes('unwrapKey')) {
+        throw new Error('La KEK doit avoir l\'usage "unwrapKey".');
+    }
+
+    const dek = await crypto.subtle.unwrapKey(
+        'raw',
+        encrypted.wrappedDek,
+        kek,
+        { name: 'AES-GCM', iv: encrypted.dekIv },
+        { name: 'AES-GCM', length: 256 },
+        false, // DEK reconstruit non-extractable
+        ['decrypt'],
+    );
+
+    return crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: encrypted.fileIv },
+        dek,
+        encrypted.ciphertext,
+    );
+};
