@@ -119,6 +119,7 @@ services:
       KEYCLOAK_CA_BUNDLE: /app/certs/ca-chain.pem
       KEYCLOAK_PUBLIC_URL: https://localhost:8443
       KEYCLOAK_REDIRECT_URI: https://localhost/fastapi/auth/callback
+      DISABLE_CSRF_FOR_BEARER: "true"
       FRONTEND_URL: https://localhost
       SESSION_SECRET: ${SESSION_SECRET}
       COOKIE_SECURE: "true"

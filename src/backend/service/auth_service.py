@@ -4,8 +4,7 @@ import secrets
 from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
-import base64
-from models.auth import User
+from models.user import User
 from keycloak import KeycloakAdmin
 from keycloak.exceptions import KeycloakPostError
 from dotenv import load_dotenv
@@ -60,6 +59,20 @@ class AuthService:
         self.db = db
         self.csr_repository = "/app/csr"
         self.cert_repository = "/app/certs_doctors"
+
+    def store_user(self, user_data: UserInDB) -> User:
+        """
+        Stocke un nouvel utilisateur dans la base de données.
+        :param user_data: Données de l'utilisateur à stocker.
+        :return: L'utilisateur stocké.
+        """
+        if self.db.query(User).filter(User.id == user_data.id).first():
+            raise Exception("Utilisateur déjà existant")
+        user = User(id=user_data.id, username=user_data.username, roles=",".join(user_data.roles))
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user
 
     def generate_csr(self, common_name: str, organization: str) -> str:
         file_csr = common_name + ".csr"
@@ -203,11 +216,6 @@ class AuthService:
         except Exception as e:
             self.delete_sensitive_files(user_info.username)
             raise Exception(f"Erreur lors de la création de l'utilisateur dans Keycloak: {str(e)}")
-    
-    def get_p12_content(self, cert_path: str) -> bytes:
-        with open(cert_path, "rb") as f:
-            p12_content = base64.b64encode(f.read()).decode('utf-8')
-        return p12_content
 
     def delete_sensitive_files(self, common_name: str):
         csr_path = os.path.join(self.csr_repository, common_name + ".csr")
