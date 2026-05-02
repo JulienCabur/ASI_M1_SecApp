@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { App, Spin } from 'antd';
 import { fetchMe } from '@/services/auth.service';
 import { useAuthStore } from '@/store/auth.store';
+import { useCryptoStore } from '@/store/crypto.store';
 import { initCryptoSession } from '@/hooks/useCryptoSession';
+import { useDeviceEvents } from '@/hooks/useDeviceEvents';
+import PendingApproval from './PendingApproval';
 import styles from './AuthProvider.module.scss';
 
 interface AuthProviderProps {
@@ -20,6 +23,9 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [initialized, setInitialized] = useState(false);
   const { setUser, clear } = useAuthStore();
+  const isPending = useCryptoStore((s) => s.isPending);
+
+  useDeviceEvents();
 
   useEffect(() => {
     let cancelled = false;
@@ -59,5 +65,5 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     );
   }
 
-  return <App>{children}</App>;
+  return <App>{isPending ? <PendingApproval /> : children}</App>;
 };

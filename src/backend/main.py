@@ -1,4 +1,6 @@
+import asyncio
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,14 +13,24 @@ from presentation.file import router as file_router
 from presentation.auth import router as auth_router
 from presentation.check_authenticity import router as check_authenticity_router
 from presentation.device import router as key_router
+from presentation.events import router as events_router
+from service.sse_service import sse_manager
 
 Base.metadata.create_all(bind=engine)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    sse_manager.set_loop(asyncio.get_event_loop())
+    yield
+
 
 app = FastAPI(
     title="UNamur Medical Institute",
     description="Core API for the UNamur Medical Institute project",
     version="1.0.0",
     root_path="/fastapi",
+    lifespan=lifespan,
 )
 
 # Avec `allow_credentials=True` les wildcards sont interdits par la spec CORS,
@@ -83,6 +95,7 @@ app.include_router(file_router)
 app.include_router(auth_router)
 app.include_router(check_authenticity_router)
 app.include_router(key_router)
+app.include_router(events_router)
 
 
 @app.get("/")

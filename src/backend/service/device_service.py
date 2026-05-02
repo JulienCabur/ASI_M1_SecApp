@@ -39,6 +39,44 @@ class DeviceService:
         self.db.refresh(new_device)
         return new_device
 
+    def list_all_devices(self, user_id: str) -> list:
+        """
+        Liste tous les dispositifs d'un utilisateur donné.
+        :param user_id: ID de l'utilisateur.
+        :return: Liste de tous les dispositifs.
+        """
+        return self.db.query(Device).filter(Device.user_id == user_id).all()
+
+    def revoke_device(self, user_id: str, device_id: str) -> None:
+        """
+        Révoque et supprime un dispositif (vérifié ou non) appartenant à l'utilisateur.
+        :param user_id: ID de l'utilisateur.
+        :param device_id: ID du dispositif à révoquer.
+        """
+        device = self.db.query(Device).filter(Device.id == device_id).first()
+        if not device:
+            raise Exception("Dispositif non trouvé")
+        if device.user_id != user_id:
+            raise Exception("Le dispositif n'appartient pas à l'utilisateur")
+        self.db.delete(device)
+        self.db.commit()
+
+    def reject_device(self, user_id: str, device_id: str) -> None:
+        """
+        Rejette et supprime un dispositif en attente d'approbation.
+        :param user_id: ID de l'utilisateur.
+        :param device_id: ID du dispositif à rejeter.
+        """
+        device = self.db.query(Device).filter(Device.id == device_id).first()
+        if not device:
+            raise Exception("Dispositif non trouvé")
+        if device.user_id != user_id:
+            raise Exception("Le dispositif n'appartient pas à l'utilisateur")
+        if device.is_verified:
+            raise Exception("Impossible de rejeter un dispositif déjà vérifié")
+        self.db.delete(device)
+        self.db.commit()
+
     def list_unverified_devices(self, user_id: str) -> list:
         """
         Liste les dispositifs non vérifiés pour un utilisateur donné.
@@ -99,4 +137,8 @@ class DeviceService:
             raise Exception("Dispositif non trouvé")
         if device.user_id != user_id:
             raise Exception("Le dispositif n'appartient pas à l'utilisateur")
-        return KeyResponse(public_key=device.public_key, ciphered_kek=device.ciphered_kek)
+        return KeyResponse(
+            public_key=device.public_key,
+            ciphered_kek=device.ciphered_kek,
+            is_verified=device.is_verified,
+        )

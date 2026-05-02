@@ -12,17 +12,18 @@ import { api } from '@/services/api';
 
 export interface DeviceRegisterResponse {
   device_id: string;
+  is_verified: boolean;
 }
 
 export const registerDevice = async (
   name: string,
   publicKeyJwk: JsonWebKey,
-): Promise<string> => {
+): Promise<{ deviceId: string; isVerified: boolean }> => {
   const { data } = await api.post<DeviceRegisterResponse>('/keys/register_device', {
     name,
     public_key: publicKeyJwk,
   });
-  return data.device_id;
+  return { deviceId: data.device_id, isVerified: data.is_verified };
 };
 
 export const storeKek = async (deviceId: string, cipheredKek: string): Promise<void> => {
@@ -38,7 +39,8 @@ export const storeKek = async (deviceId: string, cipheredKek: string): Promise<v
 
 export interface DeviceKeysResponse {
   public_key: JsonWebKey;
-  ciphered_kek: string;
+  ciphered_kek: string | null;
+  is_verified: boolean;
 }
 
 export const getDeviceKeys = async (deviceId: string): Promise<DeviceKeysResponse> => {
@@ -46,4 +48,51 @@ export const getDeviceKeys = async (deviceId: string): Promise<DeviceKeysRespons
     params: { device_id: deviceId },
   });
   return data;
+};
+
+export interface PendingDevice {
+  id: string;
+  device_name: string;
+  public_key: JsonWebKey;
+}
+
+export interface ConnectedDevice {
+  id: string;
+  device_name: string;
+  is_verified: boolean;
+}
+
+export const listUnverifiedDevices = async (): Promise<PendingDevice[]> => {
+  const { data } = await api.get<PendingDevice[]>('/keys/list_unverified_devices');
+  return data;
+};
+
+export const listAllDevices = async (): Promise<ConnectedDevice[]> => {
+  const { data } = await api.get<ConnectedDevice[]>('/keys/list_devices');
+  return data;
+};
+
+export const verifyDevice = async (deviceId: string, cipheredKek: string): Promise<void> => {
+  const form = new URLSearchParams();
+  form.append('device_id', deviceId);
+  form.append('ciphered_kek', cipheredKek);
+  await api.post('/keys/verify_device', form, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
+};
+
+export const revokeDevice = async (deviceId: string): Promise<void> => {
+  const form = new URLSearchParams();
+  form.append('device_id', deviceId);
+  await api.post('/keys/revoke_device', form, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
+};
+
+export const rejectDevice = async (deviceId: string): Promise<void> => {
+  const form = new URLSearchParams();
+  form.append('device_id', deviceId);
+  await api.post('/keys/reject_device', form, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
 };

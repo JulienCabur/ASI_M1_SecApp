@@ -12,6 +12,7 @@ from core.auth import get_current_user
 from typing import Dict, Any, List
 from service.log_service import LogsService
 from service.device_service import DeviceService
+from service.sse_service import sse_manager
 from sqlalchemy.orm import Session
 from schema.key_schema import KeyBase, KeyResponse
 from schema.device_schema import DeviceRegister, DeviceResponse
@@ -33,6 +34,12 @@ def register_device_route(
         device_service = DeviceService(db=db)
         device = device_service.register_device(user_id=current_user.id, device_name=device_data.name, public_key=device_data.public_key.model_dump())
         logs_service.add_logs(action="REGISTER_DEVICE", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
+        if not device.is_verified:
+            sse_manager.publish(current_user.id, "device_pending", {
+                "device_id": device.id,
+                "device_name": device.device_name,
+                "is_verified": device.is_verified,
+            })
         return {"device_id": device.id, "is_verified": device.is_verified}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du dispositif: {str(e)}")
@@ -63,7 +70,22 @@ def get_device_keys_route(
         logs_service.add_logs(action="GET_DEVICE_KEYS", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
         return device_keys
     except Exception as e:
+        if "non trouvé" in str(e):
+            raise HTTPException(status_code=404, detail="Dispositif non trouvé")
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des clés: {str(e)}")
+
+@router.get("/list_devices", response_model=List[DeviceResponse])
+def list_devices_route(
+    db: Session = Depends(get_db),
+    current_user: UserInDB = Depends(get_current_user)
+) -> List[DeviceResponse]:
+    try:
+        device_service = DeviceService(db=db)
+        devices = device_service.list_all_devices(user_id=current_user.id)
+        logs_service.add_logs(action="LIST_DEVICES", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
+        return devices
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la liste des dispositifs: {str(e)}")
 
 @router.get("/list_unverified_devices", response_model=List[DeviceResponse])
 def list_unverified_devices_route(
@@ -89,6 +111,43 @@ def verify_device_route(
         device_service = DeviceService(db=db)
         device = device_service.verify_device(user_id=current_user.id, device_id=device_id, ciphered_kek=ciphered_kek)
         logs_service.add_logs(action="VERIFY_DEVICE", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
+        sse_manager.publish(current_user.id, "device_approved", {
+            "device_id": device.id,
+            "is_verified": device.is_verified,
+            "ciphered_kek": device.ciphered_kek,
+        })
         return {"device_id": device.id, "is_verified": device.is_verified}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la vérification du dispositif: {str(e)}")
+
+@router.post("/revoke_device", response_model=Dict[str, Any])
+def revoke_device_route(
+    device_id: str = Form(..., description="ID du dispositif à révoquer"),
+    db: Session = Depends(get_db),
+    current_user: UserInDB = Depends(get_current_user)
+) -> Dict[str, Any]:
+    try:
+        device_service = DeviceService(db=db)
+        device_service.revoke_device(user_id=current_user.id, device_id=device_id)
+        logs_service.add_logs(action="REVOKE_DEVICE", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
+        sse_manager.publish(current_user.id, "device_revoked", {"device_id": device_id})
+        return {"status": "Dispositif révoqué"}
+    except Exception as e:
+        if "non trouvé" in str(e):
+            raise HTTPException(status_code=404, detail="Dispositif non trouvé")
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la révocation du dispositif: {str(e)}")
+
+@router.post("/reject_device", response_model=Dict[str, Any])
+def reject_device_route(
+    device_id: str = Form(..., description="ID du dispositif à rejeter"),
+    db: Session = Depends(get_db),
+    current_user: UserInDB = Depends(get_current_user)
+) -> Dict[str, Any]:
+    try:
+        device_service = DeviceService(db=db)
+        device_service.reject_device(user_id=current_user.id, device_id=device_id)
+        logs_service.add_logs(action="REJECT_DEVICE", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
+        sse_manager.publish(current_user.id, "device_rejected", {"device_id": device_id})
+        return {"status": "Dispositif rejeté"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors du rejet du dispositif: {str(e)}")

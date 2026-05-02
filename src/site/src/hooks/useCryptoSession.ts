@@ -47,7 +47,7 @@ const fromBase64 = (b64: string): ArrayBuffer => {
 const generateDeviceName = (): string => {
   const ua = navigator.userAgent.replace(/[^\w]/g, '').slice(0, 20);
   const rnd = crypto.randomUUID().slice(0, 8);
-  return `secuapp-${ua}-${rnd}`;
+  return `device-${ua}-${rnd}`;
 };
 
 const bootstrapDevice = async (userId: string): Promise<void> => {
@@ -56,19 +56,33 @@ const bootstrapDevice = async (userId: string): Promise<void> => {
   await savePublicKey(pair.publicKey);
 
   const jwk = await exportPublicKeyJwk(pair.publicKey);
-  const deviceId = await registerDevice(generateDeviceName(), jwk);
+  const { deviceId, isVerified } = await registerDevice(generateDeviceName(), jwk);
   localStorage.setItem(deviceIdKey(userId), deviceId);
 
-  const sealed = await generateKEKFromRSAKey(pair.publicKey);
-  await storeKek(deviceId, toBase64(sealed.wrappedKek));
-  useCryptoStore.getState().setSession(deviceId, sealed.kek);
+  if (isVerified) {
+    // Premier appareil : on génère la KEK et on démarre la session
+    const sealed = await generateKEKFromRSAKey(pair.publicKey);
+    await storeKek(deviceId, toBase64(sealed.wrappedKek));
+    useCryptoStore.getState().setSession(deviceId, sealed.kek);
+  } else {
+    // Appareil secondaire : on attend que DA approuve et fournisse la KEK partagée
+    useCryptoStore.getState().setPending(deviceId);
+  }
 };
 
 const recoverDevice = async (deviceId: string): Promise<boolean> => {
+  useCryptoStore.getState().setPending(deviceId);
+
   const privateKey = await loadPrivateKey();
   if (!privateKey) return false;
 
   const remote = await getDeviceKeys(deviceId);
+
+  if (!remote.is_verified || !remote.ciphered_kek) {
+    useCryptoStore.getState().setPending(deviceId);
+    return true;
+  }
+
   const wrappedKek = fromBase64(remote.ciphered_kek);
   const kek = await unwrapKEKWithRSAKey(wrappedKek, privateKey);
   useCryptoStore.getState().setSession(deviceId, kek);
