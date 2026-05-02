@@ -20,7 +20,7 @@ class AuthenticityService:
         Télécharge le fichier de l'autorité de certification.
         :return: Chemin du fichier de l'autorité de certification.
         """
-        ca_file = "root-ca.crt"  # Nom du fichier de l'autorité de certification
+        ca_file = "ca-chain.pem"  # Nom du fichier de l'autorité de certification
         ca_path = os.path.join(self.path, ca_file)
 
         if not os.path.exists(ca_path):
