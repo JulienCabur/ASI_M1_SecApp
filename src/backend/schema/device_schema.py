@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
-from typing import Dict, Any, List, Optional
+from pydantic import BaseModel, Field, ConfigDict
+from uuid import UUID
+from typing import List, Optional
 
 class JWKSchema(BaseModel):
     kty: str = Field(..., description="Key Type (ex: RSA)")
@@ -15,3 +16,10 @@ class JWKSchema(BaseModel):
 class DeviceRegister(BaseModel):
     name: str
     public_key: JWKSchema
+
+class DeviceResponse(BaseModel):
+    id: UUID
+    device_name: str
+    is_verified: bool
+    public_key: JWKSchema
+    model_config = ConfigDict(from_attributes=True)

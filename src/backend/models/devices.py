@@ -14,3 +14,4 @@ class Device(Base):
     ciphered_kek = Column(String, nullable=True)
     is_verified = Column(Boolean, default=False)
     user = relationship("User", back_populates="devices")
+
