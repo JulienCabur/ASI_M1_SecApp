@@ -71,21 +71,21 @@ const bootstrapDevice = async (userId: string): Promise<void> => {
 };
 
 const recoverDevice = async (deviceId: string): Promise<boolean> => {
-  useCryptoStore.getState().setPending(deviceId);
-
   const privateKey = await loadPrivateKey();
-  if (!privateKey) return false;
-
-  const remote = await getDeviceKeys(deviceId);
-
-  if (!remote.is_verified || !remote.ciphered_kek) {
+  if (!privateKey) {
     useCryptoStore.getState().setPending(deviceId);
     return true;
   }
 
-  const wrappedKek = fromBase64(remote.ciphered_kek);
-  const kek = await unwrapKEKWithRSAKey(wrappedKek, privateKey);
-  useCryptoStore.getState().setSession(deviceId, kek);
+  const remote = await getDeviceKeys(deviceId);
+
+  if (remote.is_verified && remote.ciphered_kek) {
+    const wrappedKek = fromBase64(remote.ciphered_kek);
+    const kek = await unwrapKEKWithRSAKey(wrappedKek, privateKey);
+    useCryptoStore.getState().setSession(deviceId, kek);
+  } else {
+    useCryptoStore.getState().setPending(deviceId);
+  }
   return true;
 };
 
@@ -95,8 +95,13 @@ export const initCryptoSession = async (userId: string): Promise<void> => {
     try {
       const ok = await recoverDevice(stored);
       if (ok) return;
-    } catch {
-      // récupération impossible → on repart sur un device frais
+    } catch (err) {
+      // Si c'est une erreur d'authentification (401), interrompre immédiatement
+      if (err instanceof Error && err.message.includes('401')) {
+        useCryptoStore.getState().clear();
+        throw err;
+      }
+      // Sinon, récupération impossible → on repart sur un device frais
     }
     localStorage.removeItem(deviceIdKey(userId));
   }
