@@ -6,6 +6,7 @@ import {
   FaSignOutAlt,
   FaUserMd,
   FaBell,
+  FaMobileAlt,
 } from 'react-icons/fa';
 import { FaFileMedical } from 'react-icons/fa6';
 import { logout } from '@/services/auth.service';
@@ -42,6 +43,12 @@ export const NavItem = ({ label, to }: { label: string; to: string }) => {
       return (
         <div className={style.navItem} onClick={() => navigate(to)}>
           <FaFolderOpen className={style.icon} />
+        </div>
+      );
+    case 'Devices':
+      return (
+        <div className={style.navItem} onClick={() => navigate(to)}>
+          <FaMobileAlt className={style.icon} />
         </div>
       );
     case 'Logout':

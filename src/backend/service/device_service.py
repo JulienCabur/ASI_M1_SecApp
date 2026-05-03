@@ -87,6 +87,32 @@ class DeviceService:
         self.db.refresh(device)
         return device
 
+    def list_verified_devices(self, user_id: str) -> list:
+        devices = self.db.query(Device).filter(Device.user_id == user_id, Device.is_verified.is_(True)).all()
+        return devices
+
+    def reject_device(self, user_id: str, device_id: str) -> None:
+        device = self.db.query(Device).filter(Device.id == device_id).first()
+        if not device:
+            raise Exception("Dispositif non trouvé")
+        if device.user_id != user_id:
+            raise Exception("Le dispositif n'appartient pas à l'utilisateur")
+        if device.is_verified:
+            raise Exception("Impossible de refuser un dispositif déjà vérifié")
+        self.db.delete(device)
+        self.db.commit()
+
+    def revoke_device(self, user_id: str, device_id: str) -> None:
+        device = self.db.query(Device).filter(Device.id == device_id).first()
+        if not device:
+            raise Exception("Dispositif non trouvé")
+        if device.user_id != user_id:
+            raise Exception("Le dispositif n'appartient pas à l'utilisateur")
+        if not device.is_verified:
+            raise Exception("Impossible de révoquer un dispositif non vérifié")
+        self.db.delete(device)
+        self.db.commit()
+
     def get_device_keys(self, user_id: str, device_id: str) -> KeyResponse:
         """
         Récupère les clés du dispositif depuis la base de données.

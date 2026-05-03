@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router';
-import { Typography } from 'antd';
+import { Button, Typography } from 'antd';
+import { SafetyCertificateOutlined } from '@ant-design/icons';
 import { useAuth } from '@/hooks/useAuth';
 import LoginActions from '@/components/login/LoginActions';
 import RoleSelection, { type RoleChoice } from '@/components/login/RoleSelection';
+import CAInfoModal from '@/components/login/CAInfoModal';
 import style from './login.module.scss';
 
 const { Title, Text } = Typography;
@@ -11,6 +13,7 @@ const { Title, Text } = Typography;
 const Login: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [choice, setChoice] = useState<RoleChoice | null>(null);
+  const [caInfoOpen, setCaInfoOpen] = useState(false);
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -29,6 +32,16 @@ const Login: React.FC = () => {
       ) : (
         <LoginActions role={choice} onBack={() => setChoice(null)} />
       )}
+      <Button
+        type="link"
+        size="small"
+        icon={<SafetyCertificateOutlined />}
+        className={style.caBtn}
+        onClick={() => setCaInfoOpen(true)}
+      >
+        Informations sur le certificat CA
+      </Button>
+      <CAInfoModal open={caInfoOpen} onClose={() => setCaInfoOpen(false)} />
     </div>
   );
 };

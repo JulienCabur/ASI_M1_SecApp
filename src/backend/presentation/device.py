@@ -92,3 +92,44 @@ def verify_device_route(
         return {"device_id": device.id, "is_verified": device.is_verified}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la vérification du dispositif: {str(e)}")
+
+@router.get("/list_verified_devices", response_model=List[DeviceResponse])
+def list_verified_devices_route(
+    db: Session = Depends(get_db),
+    current_user: UserInDB = Depends(get_current_user)
+) -> List[DeviceResponse]:
+    try:
+        device_service = DeviceService(db=db)
+        verified_devices = device_service.list_verified_devices(user_id=current_user.id)
+        logs_service.add_logs(action="LIST_VERIFIED_DEVICES", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
+        return verified_devices
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la liste des dispositifs vérifiés: {str(e)}")
+
+@router.post("/reject_device", response_model=Dict[str, Any])
+def reject_device_route(
+    device_id: str = Form(..., description="ID du dispositif à refuser"),
+    db: Session = Depends(get_db),
+    current_user: UserInDB = Depends(get_current_user)
+) -> Dict[str, Any]:
+    try:
+        device_service = DeviceService(db=db)
+        device_service.reject_device(user_id=current_user.id, device_id=device_id)
+        logs_service.add_logs(action="REJECT_DEVICE", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
+        return {"status": "Dispositif refusé avec succès"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors du refus du dispositif: {str(e)}")
+
+@router.post("/revoke_device", response_model=Dict[str, Any])
+def revoke_device_route(
+    device_id: str = Form(..., description="ID du dispositif à révoquer"),
+    db: Session = Depends(get_db),
+    current_user: UserInDB = Depends(get_current_user)
+) -> Dict[str, Any]:
+    try:
+        device_service = DeviceService(db=db)
+        device_service.revoke_device(user_id=current_user.id, device_id=device_id)
+        logs_service.add_logs(action="REVOKE_DEVICE", log_level="INFO", user_id=current_user.id, user_role="unknown", patient_id="null")
+        return {"status": "Dispositif révoqué avec succès"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la révocation du dispositif: {str(e)}")

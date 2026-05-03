@@ -1,22 +1,31 @@
 /**
  * Bootstrap de la session crypto au login.
  *
- * Trois trajectoires :
- *  1. Premier login (jamais d'appareil enregistré pour cet utilisateur sur ce
- *     navigateur) → on génère une paire RSA, on la persiste (privée non-
- *     extractable) en IndexedDB, on enregistre l'appareil côté backend, on
- *     produit une KEK scellée par RSA-OAEP et on la stocke.
- *  2. Reconnexion (privée présente en IDB et device_id en localStorage) → on
- *     récupère la KEK chiffrée du back, on la déballe localement avec la
- *     privée, et on la met en mémoire (store crypto).
- *  3. Incohérence (l'un des deux manque) → on repasse par le chemin (1).
+ * Quatre trajectoires possibles :
+ *
+ *  1. Premier login — Device A (premier device de l'utilisateur)
+ *     → générer paire RSA + KEK, tout persister, setSession → accès immédiat
+ *
+ *  2. Premier login — Device B (un autre device existe déjà pour cet utilisateur)
+ *     → générer paire RSA, envoyer clé publique, recevoir is_verified: false
+ *     → setDeviceId + setPending(true), PAS de KEK → attente d'approbation par Device A
+ *
+ *  3. Reconnexion — device vérifié (ciphered_kek présent)
+ *     → récupérer ciphered_kek, déchiffrer avec clé privée d'IndexedDB, setSession
+ *
+ *  4. Reconnexion — device toujours en attente (ciphered_kek null)
+ *     → setDeviceId + setPending(true) → réaffiche PendingApproval
+ *
+ * En cas de 404 (device révoqué/rejeté) ou d'incohérence IDB/localStorage :
+ *     → purge locale + nouveau bootstrap (retour au cas 1 ou 2)
  *
  * À aucun moment la matière clé symétrique ou la privée RSA ne quittent le
- * navigateur en clair. Ni les logs, ni le serveur, ni un admin du back ne
- * voient quoi que ce soit d'exploitable.
+ * navigateur en clair.
  */
 
 import {
+  clearPrivateKey,
+  clearPublicKey,
   exportPublicKeyJwk,
   generateKEKFromRSAKey,
   generateKeyPair,
@@ -28,7 +37,8 @@ import {
 import { getDeviceKeys, registerDevice, storeKek } from '@/services/device.service';
 import { useCryptoStore } from '@/store/crypto.store';
 
-const deviceIdKey = (userId: string) => `secuapp.device_id.${userId}`;
+const deviceIdKey   = (userId: string) => `secuapp.device_id.${userId}`;
+const deviceNameKey = (userId: string) => `secuapp.device_name.${userId}`;
 
 const toBase64 = (buf: ArrayBuffer): string => {
   const bytes = new Uint8Array(buf);
@@ -50,41 +60,105 @@ const generateDeviceName = (): string => {
   return `secuapp-${ua}-${rnd}`;
 };
 
+/**
+ * Enregistre un nouveau device.
+ *
+ * - Si is_verified: true  → Device A : génère et auto-emballe la KEK, charge la session.
+ * - Si is_verified: false → Device B : stocke uniquement le deviceId, lève isPending.
+ *   La KEK arrivera de Device A via /keys/verify_device.
+ */
 const bootstrapDevice = async (userId: string): Promise<void> => {
+  const store = useCryptoStore.getState();
+
   const pair = await generateKeyPair();
   await savePrivateKey(pair.privateKey);
   await savePublicKey(pair.publicKey);
 
   const jwk = await exportPublicKeyJwk(pair.publicKey);
-  const deviceId = await registerDevice(generateDeviceName(), jwk);
-  localStorage.setItem(deviceIdKey(userId), deviceId);
+  const name = generateDeviceName();
+  const { device_id, is_verified } = await registerDevice(name, jwk);
 
+  // Persister l'identité de cet appareil pour les reconnexions.
+  localStorage.setItem(deviceIdKey(userId), device_id);
+  localStorage.setItem(deviceNameKey(userId), name);
+  store.setDeviceName(name);
+
+  if (!is_verified) {
+    // Device B : en attente d'approbation par Device A.
+    // On ne génère pas de KEK ici — elle sera poussée par Device A.
+    store.setDeviceId(device_id);
+    store.setPending(true);
+    return;
+  }
+
+  // Device A (premier device) : auto-générer et auto-emballer la KEK.
   const sealed = await generateKEKFromRSAKey(pair.publicKey);
-  await storeKek(deviceId, toBase64(sealed.wrappedKek));
-  useCryptoStore.getState().setSession(deviceId, sealed.kek);
+  await storeKek(device_id, toBase64(sealed.wrappedKek));
+  store.setSession(device_id, sealed.kek);
 };
 
-const recoverDevice = async (deviceId: string): Promise<boolean> => {
-  const privateKey = await loadPrivateKey();
-  if (!privateKey) return false;
+type RecoveryResult = 'ok' | 'pending' | 'failed';
 
-  const remote = await getDeviceKeys(deviceId);
+/**
+ * Tente de récupérer la session d'un device déjà enregistré.
+ *
+ * Retourne :
+ *   'ok'      → KEK déchiffrée, session chargée
+ *   'pending' → device existe mais pas encore approuvé (ciphered_kek null)
+ *   'failed'  → device introuvable (404) ou clé privée absente → re-bootstrap nécessaire
+ */
+const recoverDevice = async (deviceId: string, userId: string): Promise<RecoveryResult> => {
+  const privateKey = await loadPrivateKey();
+  if (!privateKey) return 'failed';
+
+  // Restaurer le nom de l'appareil depuis localStorage (persisté au bootstrap).
+  const savedName = localStorage.getItem(deviceNameKey(userId));
+  if (savedName) useCryptoStore.getState().setDeviceName(savedName);
+
+  let remote;
+  try {
+    remote = await getDeviceKeys(deviceId);
+  } catch {
+    // 404 ou erreur réseau : le device n'existe plus côté backend.
+    return 'failed';
+  }
+
+  if (!remote.ciphered_kek) {
+    // Device enregistré mais Device A n'a pas encore approuvé.
+    useCryptoStore.getState().setDeviceId(deviceId);
+    useCryptoStore.getState().setPending(true);
+    return 'pending';
+  }
+
   const wrappedKek = fromBase64(remote.ciphered_kek);
   const kek = await unwrapKEKWithRSAKey(wrappedKek, privateKey);
   useCryptoStore.getState().setSession(deviceId, kek);
-  return true;
+  return 'ok';
 };
 
+/**
+ * Point d'entrée appelé par AuthProvider après un fetchMe() réussi.
+ *
+ * Ne touche PAS isInitializing — c'est AuthProvider qui le gère dans son
+ * .finally() afin de garantir que le spinner disparaît dans tous les cas.
+ */
 export const initCryptoSession = async (userId: string): Promise<void> => {
   const stored = localStorage.getItem(deviceIdKey(userId));
+
   if (stored) {
-    try {
-      const ok = await recoverDevice(stored);
-      if (ok) return;
-    } catch {
-      // récupération impossible → on repart sur un device frais
+    const result = await recoverDevice(stored, userId);
+    if (result === 'ok' || result === 'pending') {
+      // 'pending' : isPending est déjà positionné dans recoverDevice.
+      return;
     }
+
+    // 'failed' : device disparu côté backend ou IDB corrompue.
+    // On purge les artefacts locaux avant de re-bootstrapper.
     localStorage.removeItem(deviceIdKey(userId));
+    localStorage.removeItem(deviceNameKey(userId));
+    await clearPrivateKey();
+    await clearPublicKey();
   }
+
   await bootstrapDevice(userId);
 };
