@@ -159,7 +159,7 @@ export const unwrapKEKWithRSAKey = async (
         privateKey,
         { name: 'RSA-OAEP' },
         { name: 'AES-GCM', length: 256 },
-        true,
+        false,
         ['wrapKey', 'unwrapKey'],
     );
 };

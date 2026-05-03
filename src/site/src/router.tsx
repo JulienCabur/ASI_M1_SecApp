@@ -8,7 +8,6 @@ import AuthCallback from '@/pages/auth/AuthCallback';
 import Doctors from '@/pages/doctors/Doctors';
 import Dossier from '@/pages/dossier/Dossier';
 import Notifications from '@/pages/notifications/Notifications';
-import Devices from '@/pages/devices/Devices';
 
 const MainLayout = () => {
   return (
@@ -36,7 +35,6 @@ const Router = () => {
             <Route path="/dossier" element={<Dossier />} />
             <Route path="/doctors" element={<Doctors />} />
             <Route path="/notifications" element={<Notifications />} />
-            <Route path="/devices" element={<Devices />} />
           </Route>
         </Route>
       </Routes>

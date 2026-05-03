@@ -11,25 +11,13 @@ import { create } from 'zustand';
 interface CryptoStoreState {
   deviceId: string | null;
   kek: CryptoKey | null;
-  isPending: boolean;
-  isRejected: boolean;
-  pendingSignal: number;
   setSession: (deviceId: string, kek: CryptoKey) => void;
-  setPending: (deviceId: string) => void;
-  setRejected: () => void;
-  incPendingSignal: () => void;
   clear: () => void;
 }
 
 export const useCryptoStore = create<CryptoStoreState>((set) => ({
   deviceId: null,
   kek: null,
-  isPending: true,
-  isRejected: false,
-  pendingSignal: 0,
-  setSession: (deviceId, kek) => set({ deviceId, kek, isPending: false, isRejected: false }),
-  setPending: (deviceId) => set({ deviceId, kek: null, isPending: true, isRejected: false }),
-  setRejected: () => set({ isRejected: true }),
-  incPendingSignal: () => set((s) => ({ pendingSignal: s.pendingSignal + 1 })),
-  clear: () => set({ deviceId: null, kek: null, isPending: false, isRejected: false, pendingSignal: 0 }),
+  setSession: (deviceId, kek) => set({ deviceId, kek }),
+  clear: () => set({ deviceId: null, kek: null }),
 }));
