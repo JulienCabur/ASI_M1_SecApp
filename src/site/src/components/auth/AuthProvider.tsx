@@ -23,7 +23,6 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [initialized, setInitialized] = useState(false);
   const { setUser, clear } = useAuthStore();
-  const isInitializing = useCryptoStore((s) => s.isInitializing);
   const isPending = useCryptoStore((s) => s.isPending);
 
   useDeviceEvents();
@@ -35,7 +34,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (cancelled) return;
         if (!user) {
           clear();
-          useCryptoStore.getState().clear();
           return;
         }
         setUser(user);
@@ -46,14 +44,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           // l'app charger. Les pages qui ont besoin de la KEK afficheront
           // un état dégradé.
           console.error('Bootstrap crypto échoué :', err);
-          useCryptoStore.getState().clear();
         }
       })
       .catch(() => {
-        if (!cancelled) {
-          clear();
-          useCryptoStore.getState().clear();
-        }
+        if (!cancelled) clear();
       })
       .finally(() => {
         if (!cancelled) setInitialized(true);
@@ -63,7 +57,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     };
   }, [setUser, clear]);
 
-  if (!initialized || isInitializing) {
+  if (!initialized) {
     return (
       <div className={styles.loader}>
         <Spin size="large" />
