@@ -128,6 +128,15 @@ class RelationService:
             self.db.delete(relation)
         self.db.commit()
     
+        
+    def list_doctors(self):
+        """
+        Récupère la liste de tous les médecins.
+        :return: Liste de tous les médecins.
+        """
+        doctors = self.db.query(User).filter(User.roles == "doctor").all()
+        return doctors
+    
     # temporary
     def create_doctors(self):
         """
@@ -140,12 +149,5 @@ class RelationService:
         doctor1_device2 = Device(user_id="doctor4", device_name="Ben's Second Device", public_key={"kty": "RSA", "n": "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86eX", "e": "AQAB"}, is_verified=True)
         self.db.add(doctor1_device2)
         self.db.commit()
-    
-    def list_doctors(self):
-        """
-        Récupère la liste de tous les médecins.
-        :return: Liste de tous les médecins.
-        """
-        doctors = self.db.query(User).filter(User.roles == "doctor").all()
-        return doctors
+
     

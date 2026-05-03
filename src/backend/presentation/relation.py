@@ -113,6 +113,18 @@ async def store_kek(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors du stockage du KEK: {str(e)}")
 
+@router.get("/list_doctors")
+async def list_doctors(
+    db = Depends(get_db),
+    current_user = Depends(get_current_user)):
+    try:
+        relation_service = RelationService(db=db)
+        doctors = relation_service.list_doctors()
+
+        return {"doctors": doctors}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des médecins: {str(e)}")
+
 # temporary route
 @router.get("/create_doctors")
 async def create_doctors(
@@ -126,14 +138,3 @@ async def create_doctors(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la création des médecins: {str(e)}")
 
-@router.get("/list_doctors")
-async def list_doctors(
-    db = Depends(get_db),
-    current_user = Depends(get_current_user)):
-    try:
-        relation_service = RelationService(db=db)
-        doctors = relation_service.list_doctors()
-
-        return {"doctors": doctors}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des médecins: {str(e)}")
