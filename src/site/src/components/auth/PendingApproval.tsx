@@ -24,9 +24,9 @@ const fromBase64 = (b64: string): ArrayBuffer => {
  * Trois scénarios au clic sur "Vérifier mon statut" :
  *
  *  A — Approuvé  : ciphered_kek présent → déchiffrer KEK → lever isPending → accès app
- *  B — Refusé    : HTTP 404 (ApiError.status === 404, device supprimé par Device A)
+ *  B — Refusé    : HTTP 404 (device supprimé) ou 401 (session invalide)
  *                  → purge complète (stores + localStorage) → logout → /login
- *  C — En attente: ciphered_kek null → afficher message d'attente, rien d'autre
+ *  C — En attente: ciphered_kek null/undefined → afficher message d'attente
  */
 export const PendingApproval = () => {
   const { deviceId, deviceName, setSession, setPending, clear: clearCrypto } = useCryptoStore();
@@ -60,25 +60,21 @@ export const PendingApproval = () => {
         return;
       }
 
-      // Scénario C — Toujours en attente (ciphered_kek null).
+      // Scénario C — Toujours en attente (ciphered_kek null ou undefined).
       setStillPending(true);
 
     } catch (err: unknown) {
-      // Scénario B — ApiError.status === 404 : Device A a refusé la demande.
+      // Scénario B — 404 (device supprimé par Device A) ou 401 (session expirée/invalide).
       // L'api interceptor transforme TOUTES les erreurs HTTP en ApiError(message, status, body).
-      // On ne cherche donc JAMAIS err.response.status ici.
-      if (err instanceof ApiError && err.status === 404) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 401)) {
         clearCrypto();
         clearAuth();
-        // window.location.replace (pas useNavigate) car PendingApproval est monté par
-        // AuthProvider, lui-même en dehors du <BrowserRouter> dans main.tsx.
-        // replace() évite que l'utilisateur puisse revenir en arrière vers cet écran.
         void logout();
         window.location.replace('/login');
         return;
       }
 
-      // Erreur réseau ou autre erreur non-404 : ne pas déconnecter, laisser réessayer.
+      // Erreur réseau ou autre erreur non-404/401 : ne pas déconnecter, laisser réessayer.
       console.error('[PendingApproval] handleCheck error:', err);
       setStillPending(true);
     } finally {
