@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { getDeviceKeys } from '@/services/device.service';
 import { loadPrivateKey, unwrapKEKWithRSAKey } from '@/services/crypto.service';
 import { logout } from '@/services/auth.service';
+import { ApiError } from '@/services/api';
 import styles from './PendingApproval.module.scss';
 
 const { Text } = Typography;
@@ -23,11 +24,12 @@ const fromBase64 = (b64: string): ArrayBuffer => {
  * Trois scénarios au clic sur "Vérifier mon statut" :
  *
  *  A — Approuvé  : ciphered_kek présent → déchiffrer KEK → lever isPending → accès app
- *  B — Refusé    : HTTP 404 (device supprimé par Device A) → purge complète → logout
- *  C — En attente: ciphered_kek null → afficher message d'attente, pas d'action
+ *  B — Refusé    : HTTP 404 (ApiError.status === 404, device supprimé par Device A)
+ *                  → purge complète (stores + localStorage) → logout → /login
+ *  C — En attente: ciphered_kek null → afficher message d'attente, rien d'autre
  */
 export const PendingApproval = () => {
-  const { deviceId, setSession, setPending, clear: clearCrypto } = useCryptoStore();
+  const { deviceId, deviceName, setSession, setPending, clear: clearCrypto } = useCryptoStore();
   const { clear: clearAuth } = useAuthStore();
 
   const [checking, setChecking] = useState(false);
@@ -46,15 +48,15 @@ export const PendingApproval = () => {
       if (remote.ciphered_kek) {
         const privateKey = await loadPrivateKey();
         if (!privateKey) {
-          // IDB corrompue : impossible de déchiffrer → forcer un nouveau bootstrap.
-          // On traite ça comme un refus pour simplifier le parcours utilisateur.
-          throw Object.assign(new Error('private key missing'), { isRejection: true });
+          // IDB corrompue : impossible de déchiffrer. Traité comme un refus
+          // pour éviter de laisser l'utilisateur bloqué indéfiniment.
+          throw new ApiError('Clé privée introuvable en IndexedDB', 404, null);
         }
         const wrappedKek = fromBase64(remote.ciphered_kek);
         const kek = await unwrapKEKWithRSAKey(wrappedKek, privateKey);
+        // setSession remet isPending à false → AuthProvider bascule vers children.
         setSession(deviceId, kek);
         setPending(false);
-        // AuthProvider re-rend automatiquement children grâce à isPending: false.
         return;
       }
 
@@ -62,28 +64,22 @@ export const PendingApproval = () => {
       setStillPending(true);
 
     } catch (err: unknown) {
-      // Scénario B — HTTP 404 : Device A a refusé la demande, le device a été supprimé.
-      // On purge tout et on redirige vers /login.
-      const isAxios404 =
-        typeof err === 'object' &&
-        err !== null &&
-        'response' in err &&
-        (err as { response?: { status?: number } }).response?.status === 404;
-
-      const isRejection =
-        typeof err === 'object' &&
-        err !== null &&
-        'isRejection' in err;
-
-      if (isAxios404 || isRejection) {
+      // Scénario B — ApiError.status === 404 : Device A a refusé la demande.
+      // L'api interceptor transforme TOUTES les erreurs HTTP en ApiError(message, status, body).
+      // On ne cherche donc JAMAIS err.response.status ici.
+      if (err instanceof ApiError && err.status === 404) {
         clearCrypto();
         clearAuth();
-        await logout();
-        // logout() gère la redirection vers /login.
+        // window.location.replace (pas useNavigate) car PendingApproval est monté par
+        // AuthProvider, lui-même en dehors du <BrowserRouter> dans main.tsx.
+        // replace() évite que l'utilisateur puisse revenir en arrière vers cet écran.
+        void logout();
+        window.location.replace('/login');
         return;
       }
 
-      // Erreur réseau ou autre : ne pas déconnecter, laisser l'utilisateur réessayer.
+      // Erreur réseau ou autre erreur non-404 : ne pas déconnecter, laisser réessayer.
+      console.error('[PendingApproval] handleCheck error:', err);
       setStillPending(true);
     } finally {
       setChecking(false);
@@ -97,8 +93,12 @@ export const PendingApproval = () => {
         title="Appareil en attente d'approbation"
         subTitle={
           <div className={styles.subtitle}>
+            {deviceName && (
+              <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                Cet appareil : <code>{deviceName}</code>
+              </Text>
+            )}
             <Text>
-              Cet appareil a été enregistré mais n'est pas encore approuvé.
               Connectez-vous sur votre appareil principal, accédez à{' '}
               <strong>Mes Appareils</strong> et cliquez sur{' '}
               <strong>Accepter</strong> pour cet appareil.

@@ -159,7 +159,9 @@ export const unwrapKEKWithRSAKey = async (
         privateKey,
         { name: 'RSA-OAEP' },
         { name: 'AES-GCM', length: 256 },
-        false,
+        // true est requis : wrapKey lève InvalidAccessError si extractable === false.
+        // Doit correspondre à generateKEKFromRSAKey qui génère aussi avec true.
+        true,
         ['wrapKey', 'unwrapKey'],
     );
 };

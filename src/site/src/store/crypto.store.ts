@@ -17,6 +17,7 @@ import { create } from 'zustand';
  */
 interface CryptoStoreState {
   deviceId: string | null;
+  deviceName: string | null;
   kek: CryptoKey | null;
   isInitializing: boolean;
   isPending: boolean;
@@ -25,6 +26,8 @@ interface CryptoStoreState {
   setSession: (deviceId: string, kek: CryptoKey) => void;
   /** Uniquement le deviceId, sans KEK — utilisé quand le device est en attente. */
   setDeviceId: (deviceId: string) => void;
+  /** Nom lisible de cet appareil, généré à l'enregistrement et affiché dans PendingApproval. */
+  setDeviceName: (name: string) => void;
   setInitializing: (v: boolean) => void;
   setPending: (v: boolean) => void;
   clear: () => void;
@@ -32,6 +35,7 @@ interface CryptoStoreState {
 
 export const useCryptoStore = create<CryptoStoreState>((set) => ({
   deviceId: null,
+  deviceName: null,
   kek: null,
   // Démarre à true : le spinner est visible dès le montage d'AuthProvider.
   isInitializing: true,
@@ -39,7 +43,14 @@ export const useCryptoStore = create<CryptoStoreState>((set) => ({
 
   setSession: (deviceId, kek) => set({ deviceId, kek, isPending: false }),
   setDeviceId: (deviceId) => set({ deviceId }),
+  setDeviceName: (name) => set({ deviceName: name }),
   setInitializing: (v) => set({ isInitializing: v }),
   setPending: (v) => set({ isPending: v }),
-  clear: () => set({ deviceId: null, kek: null, isInitializing: false, isPending: false }),
+  clear: () => set({
+    deviceId: null,
+    deviceName: null,
+    kek: null,
+    isInitializing: false,
+    isPending: false,
+  }),
 }));

@@ -37,7 +37,8 @@ import {
 import { getDeviceKeys, registerDevice, storeKek } from '@/services/device.service';
 import { useCryptoStore } from '@/store/crypto.store';
 
-const deviceIdKey = (userId: string) => `secuapp.device_id.${userId}`;
+const deviceIdKey   = (userId: string) => `secuapp.device_id.${userId}`;
+const deviceNameKey = (userId: string) => `secuapp.device_name.${userId}`;
 
 const toBase64 = (buf: ArrayBuffer): string => {
   const bytes = new Uint8Array(buf);
@@ -74,8 +75,13 @@ const bootstrapDevice = async (userId: string): Promise<void> => {
   await savePublicKey(pair.publicKey);
 
   const jwk = await exportPublicKeyJwk(pair.publicKey);
-  const { device_id, is_verified } = await registerDevice(generateDeviceName(), jwk);
+  const name = generateDeviceName();
+  const { device_id, is_verified } = await registerDevice(name, jwk);
+
+  // Persister l'identité de cet appareil pour les reconnexions.
   localStorage.setItem(deviceIdKey(userId), device_id);
+  localStorage.setItem(deviceNameKey(userId), name);
+  store.setDeviceName(name);
 
   if (!is_verified) {
     // Device B : en attente d'approbation par Device A.
@@ -101,9 +107,13 @@ type RecoveryResult = 'ok' | 'pending' | 'failed';
  *   'pending' → device existe mais pas encore approuvé (ciphered_kek null)
  *   'failed'  → device introuvable (404) ou clé privée absente → re-bootstrap nécessaire
  */
-const recoverDevice = async (deviceId: string): Promise<RecoveryResult> => {
+const recoverDevice = async (deviceId: string, userId: string): Promise<RecoveryResult> => {
   const privateKey = await loadPrivateKey();
   if (!privateKey) return 'failed';
+
+  // Restaurer le nom de l'appareil depuis localStorage (persisté au bootstrap).
+  const savedName = localStorage.getItem(deviceNameKey(userId));
+  if (savedName) useCryptoStore.getState().setDeviceName(savedName);
 
   let remote;
   try {
@@ -136,7 +146,7 @@ export const initCryptoSession = async (userId: string): Promise<void> => {
   const stored = localStorage.getItem(deviceIdKey(userId));
 
   if (stored) {
-    const result = await recoverDevice(stored);
+    const result = await recoverDevice(stored, userId);
     if (result === 'ok' || result === 'pending') {
       // 'pending' : isPending est déjà positionné dans recoverDevice.
       return;
@@ -145,6 +155,7 @@ export const initCryptoSession = async (userId: string): Promise<void> => {
     // 'failed' : device disparu côté backend ou IDB corrompue.
     // On purge les artefacts locaux avant de re-bootstrapper.
     localStorage.removeItem(deviceIdKey(userId));
+    localStorage.removeItem(deviceNameKey(userId));
     await clearPrivateKey();
     await clearPublicKey();
   }

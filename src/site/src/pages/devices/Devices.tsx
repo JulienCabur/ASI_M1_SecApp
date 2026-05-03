@@ -19,7 +19,9 @@ const { Title, Text } = Typography;
 
 const Devices: React.FC = () => {
   const { modal, message } = App.useApp();
-  const { deviceId, kek } = useCryptoStore();
+  // On lit uniquement deviceId depuis le hook React pour le badge "Cet appareil".
+  // La KEK est lue via getState() dans les handlers async pour éviter les closures stales.
+  const { deviceId } = useCryptoStore();
 
   const [unverified, setUnverified] = useState<DeviceInfo[]>([]);
   const [verified, setVerified] = useState<DeviceInfo[]>([]);
@@ -32,7 +34,8 @@ const Devices: React.FC = () => {
       const [u, v] = await Promise.all([listUnverifiedDevices(), listVerifiedDevices()]);
       setUnverified(u);
       setVerified(v);
-    } catch {
+    } catch (err) {
+      console.error('[Devices] fetchDevices error:', err);
       void message.error('Impossible de charger les appareils.');
     } finally {
       setLoading(false);
@@ -44,21 +47,32 @@ const Devices: React.FC = () => {
   }, []);
 
   const handleAccept = async (device: DeviceInfo) => {
+    // Lire la KEK directement depuis le store (escape hatch Zustand) pour éviter
+    // qu'une closure stale après re-render retourne une référence périmée.
+    const kek = useCryptoStore.getState().kek;
+
     if (!kek) {
       void message.error('Session cryptographique non disponible. Reconnectez-vous.');
       return;
     }
+
     setAccepting(device.id);
     try {
       const recipientPublicKey = await importPublicKeyJwk(device.public_key);
       const cipheredKek = await wrapKEKWithRecipientPublicKey(kek, recipientPublicKey);
       await verifyDeviceWithKek(device.id, cipheredKek);
+      // Libérer le verrou AVANT fetchDevices pour que les autres boutons
+      // soient réactivés sans attendre le rechargement de la liste.
+      setAccepting(null);
       void message.success(`Appareil "${device.device_name}" approuvé.`);
       await fetchDevices();
-    } catch {
-      void message.error("Erreur lors de l'approbation. Réessayez.");
-    } finally {
+    } catch (err) {
+      console.error('[Devices] handleAccept failed for device', device.id, ':', err);
+      if (err instanceof Error) {
+        console.error('[Devices] Error name:', err.name, '— Message:', err.message);
+      }
       setAccepting(null);
+      void message.error("Erreur lors de l'approbation. Vérifiez la console pour le détail.");
     }
   };
 
@@ -70,9 +84,14 @@ const Devices: React.FC = () => {
       okType: 'danger',
       cancelText: 'Annuler',
       onOk: async () => {
-        await rejectDevice(device.id);
-        void message.success('Appareil refusé.');
-        await fetchDevices();
+        try {
+          await rejectDevice(device.id);
+          void message.success('Appareil refusé.');
+          await fetchDevices();
+        } catch (err) {
+          console.error('[Devices] handleReject failed for device', device.id, ':', err);
+          void message.error('Erreur lors du refus. Réessayez.');
+        }
       },
     });
   };
@@ -85,9 +104,14 @@ const Devices: React.FC = () => {
       okType: 'danger',
       cancelText: 'Annuler',
       onOk: async () => {
-        await revokeDevice(device.id);
-        void message.success('Appareil révoqué.');
-        await fetchDevices();
+        try {
+          await revokeDevice(device.id);
+          void message.success('Appareil révoqué.');
+          await fetchDevices();
+        } catch (err) {
+          console.error('[Devices] handleRevoke failed for device', device.id, ':', err);
+          void message.error('Erreur lors de la révocation. Réessayez.');
+        }
       },
     });
   };
@@ -113,8 +137,10 @@ const Devices: React.FC = () => {
                 <Button
                   danger
                   size="small"
-                  onClick={() => handleReject(device)}
+                  // Désactiver uniquement si une acceptation est en cours
+                  // (le refus lui-même ne bloque pas les autres boutons).
                   disabled={accepting !== null}
+                  onClick={() => handleReject(device)}
                 >
                   Refuser
                 </Button>
@@ -122,6 +148,7 @@ const Devices: React.FC = () => {
                   type="primary"
                   size="small"
                   loading={accepting === device.id}
+                  // Désactiver les AUTRES appareils pendant une opération d'acceptation.
                   disabled={accepting !== null && accepting !== device.id}
                   onClick={() => { void handleAccept(device); }}
                 >
