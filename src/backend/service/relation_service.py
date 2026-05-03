@@ -137,6 +137,22 @@ class RelationService:
         doctors = self.db.query(User).filter(User.roles == "doctor").all()
         return doctors
     
+    def verify_relation(self, patient_id: str, doctor_device_id: str, ciphered_kek: str):
+        """
+        Vérifie une relation entre un patient et un médecin en utilisant le device_id du médecin et en stockant le KEK chiffré.
+        :param patient_id: ID du patient.
+        :param doctor_device_id: ID du dispositif du médecin.
+        :param ciphered_kek: KEK chiffré à stocker pour la relation vérifiée.
+        """
+        relation = self.db.query(Relation).filter(Relation.patient_id == patient_id, Relation.doctor_device_id == doctor_device_id).first()
+        if not relation:
+            raise ValueError(f"Aucune relation trouvée pour le patient '{patient_id}' avec le dispositif du médecin '{doctor_device_id}'.")
+        
+        relation.is_verified = True
+        relation.ciphered_kek = ciphered_kek
+        self.db.commit()
+        return relation.id
+    
     # temporary
     def create_doctors(self):
         """

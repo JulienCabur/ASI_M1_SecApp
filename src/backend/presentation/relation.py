@@ -92,9 +92,9 @@ async def patient_verify_doctor(
     current_user = Depends(get_current_user)):
     try:
         relation_service = RelationService(db=db)
-        relation_service.verify_relation(patient_id=current_user.id, doctor_device_id=doctor_device_id, ciphered_kek=ciphered_kek)
+        relation_id = relation_service.verify_relation(patient_id=current_user.id, doctor_device_id=doctor_device_id, ciphered_kek=ciphered_kek)
 
-        return {"status": "Relation vérifiée avec succès"}
+        return {"status": f"Relation avec l'id {relation_id} vérifiée avec succès"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la vérification de la relation: {str(e)}")
 
