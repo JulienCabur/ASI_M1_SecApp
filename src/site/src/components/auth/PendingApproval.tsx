@@ -4,7 +4,7 @@ import { MobileOutlined } from '@ant-design/icons';
 import { useCryptoStore } from '@/store/crypto.store';
 import { useAuthStore } from '@/store/auth.store';
 import { getDeviceKeys } from '@/services/device.service';
-import { loadPrivateKey, unwrapKEKWithRSAKey } from '@/services/crypto.service';
+import { clearPrivateKey, clearPublicKey, loadPrivateKey, unwrapKEKWithRSAKey } from '@/services/crypto.service';
 import { logout } from '@/services/auth.service';
 import { ApiError } from '@/services/api';
 import styles from './PendingApproval.module.scss';
@@ -22,11 +22,11 @@ const fromBase64 = (b64: string): ArrayBuffer => {
  * Écran de blocage pour un Device B non encore approuvé.
  *
  * Trois scénarios au clic sur "Vérifier mon statut" :
- *
  *  A — Approuvé  : ciphered_kek présent → déchiffrer KEK → lever isPending → accès app
- *  B — Refusé    : HTTP 404 (device supprimé) ou 401 (session invalide)
- *                  → purge complète (stores + localStorage) → logout → /login
- *  C — En attente: ciphered_kek null/undefined → afficher message d'attente
+ *  B — Refusé    : HTTP 404 ou 401 → purge + logout → /login
+ *  C — En attente: ciphered_kek null → afficher message d'attente
+ *
+ * Porte de sortie manuelle : "Se déconnecter" → purge + logout → /login immédiat.
  */
 export const PendingApproval = () => {
   const { deviceId, deviceName, setSession, setPending, clear: clearCrypto } = useCryptoStore();
@@ -34,6 +34,16 @@ export const PendingApproval = () => {
 
   const [checking, setChecking] = useState(false);
   const [stillPending, setStillPending] = useState(false);
+
+  const handleCancel = async () => {
+    await clearPrivateKey();
+    await clearPublicKey();
+    localStorage.clear();
+    clearCrypto();
+    clearAuth();
+    await logout();
+    window.location.replace('/login');
+  };
 
   const handleCheck = async () => {
     if (!deviceId) return;
@@ -48,13 +58,10 @@ export const PendingApproval = () => {
       if (remote.ciphered_kek) {
         const privateKey = await loadPrivateKey();
         if (!privateKey) {
-          // IDB corrompue : impossible de déchiffrer. Traité comme un refus
-          // pour éviter de laisser l'utilisateur bloqué indéfiniment.
           throw new ApiError('Clé privée introuvable en IndexedDB', 404, null);
         }
         const wrappedKek = fromBase64(remote.ciphered_kek);
         const kek = await unwrapKEKWithRSAKey(wrappedKek, privateKey);
-        // setSession remet isPending à false → AuthProvider bascule vers children.
         setSession(deviceId, kek);
         setPending(false);
         return;
@@ -64,17 +71,11 @@ export const PendingApproval = () => {
       setStillPending(true);
 
     } catch (err: unknown) {
-      // Scénario B — 404 (device supprimé par Device A) ou 401 (session expirée/invalide).
-      // L'api interceptor transforme TOUTES les erreurs HTTP en ApiError(message, status, body).
+      // Scénario B — device supprimé (404) ou session expirée (401).
       if (err instanceof ApiError && (err.status === 404 || err.status === 401)) {
-        clearCrypto();
-        clearAuth();
-        void logout();
-        window.location.replace('/login');
+        await handleCancel();
         return;
       }
-
-      // Erreur réseau ou autre erreur non-404/401 : ne pas déconnecter, laisser réessayer.
       console.error('[PendingApproval] handleCheck error:', err);
       setStillPending(true);
     } finally {
@@ -110,6 +111,14 @@ export const PendingApproval = () => {
             onClick={() => { void handleCheck(); }}
           >
             Vérifier mon statut
+          </Button>,
+          <Button
+            key="cancel"
+            size="large"
+            danger
+            onClick={() => { void handleCancel(); }}
+          >
+            Se déconnecter
           </Button>,
         ]}
       />
