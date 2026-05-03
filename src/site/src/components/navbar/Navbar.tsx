@@ -15,6 +15,7 @@ const Navbar = () => {
         <NavItem label="Home" to="/" />
         <NavItem label="Dossier" to="/dossier" />
         <NavItem label="Doctors" to="/doctors" />
+        <NavItem label="Devices" to="/devices" />
         <NavItem label="Logout" to="/logout" />
       </div>
 

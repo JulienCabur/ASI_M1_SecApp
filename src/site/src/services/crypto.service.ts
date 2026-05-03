@@ -164,6 +164,32 @@ export const unwrapKEKWithRSAKey = async (
     );
 };
 
+export const importPublicKeyJwk = async (jwk: JsonWebKey): Promise<CryptoKey> =>
+    crypto.subtle.importKey(
+        'jwk',
+        jwk,
+        { name: 'RSA-OAEP', hash: 'SHA-512' },
+        false,
+        ['wrapKey'],
+    );
+
+export const wrapKEKWithRecipientPublicKey = async (
+    kek: CryptoKey,
+    recipientPublicKey: CryptoKey,
+): Promise<string> => {
+    if (kek.type !== 'secret') {
+        throw new Error('wrapKEKWithRecipientPublicKey attend une KEK AES-GCM.');
+    }
+    if (recipientPublicKey.type !== 'public') {
+        throw new Error('wrapKEKWithRecipientPublicKey attend une clé publique RSA-OAEP.');
+    }
+    const wrapped = await crypto.subtle.wrapKey('raw', kek, recipientPublicKey, { name: 'RSA-OAEP' });
+    const bytes = new Uint8Array(wrapped);
+    let bin = '';
+    for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+};
+
 /**---------------------------------------------------------------------------------------
  * Chiffrement de fichier avec DEK (Data Encryption Key) symétrique protégée par KEK
  ---------------------------------------------------------------------------------------*/
