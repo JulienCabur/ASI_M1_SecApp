@@ -68,7 +68,7 @@ class AuthService:
         """
         if self.db.query(User).filter(User.id == user_data.id).first():
             raise Exception("Utilisateur déjà existant")
-        user = User(id=user_data.id, username=user_data.username, roles=",".join(user_data.roles))
+        user = User(id=user_data.id, username=user_data.username, roles="patient")
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
