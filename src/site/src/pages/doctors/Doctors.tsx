@@ -14,9 +14,15 @@ import {
   listDoctors,
   patientAddDoctor,
   patientRemoveDoctor,
+  storeRelationKek,
   type RelationSummary,
   type RelationUser,
 } from '@/services/relation.service';
+import {
+  importPublicKeyJwk,
+  wrapKEKWithRecipientPublicKey,
+} from '@/services/crypto.service';
+import { useCryptoStore } from '@/store/crypto.store';
 import style from './doctors.module.scss';
 
 const { Title } = Typography;
@@ -63,7 +69,30 @@ const Doctors: React.FC = () => {
     if (!selectedDoctor) return;
     setAddLoading(true);
     try {
-      await patientAddDoctor(selectedDoctor.id);
+      const kek = useCryptoStore.getState().kek;
+      if (!kek) {
+        throw new Error('Session cryptographique non initialisée. Reconnectez-vous.');
+      }
+
+      const createdRelations = await patientAddDoctor(selectedDoctor.id);
+
+      // Wrap la KEK locale avec la public_key de chaque device du médecin et
+      // pousse le résultat sur la relation correspondante. Sans ça, le médecin
+      // ne pourrait pas déchiffrer le dossier (ciphered_kek=null côté back).
+      try {
+        await Promise.all(
+          createdRelations.map(async (rel) => {
+            const recipientKey = await importPublicKeyJwk(rel.public_key);
+            const cipheredKek = await wrapKEKWithRecipientPublicKey(kek, recipientKey);
+            await storeRelationKek(rel.relation_id, cipheredKek);
+          }),
+        );
+      } catch (wrapErr) {
+        // Rollback : la relation existe côté back mais sans KEK exploitable.
+        await patientRemoveDoctor(selectedDoctor.id).catch(() => {});
+        throw wrapErr;
+      }
+
       void message.success(`Médecin "${selectedDoctor.username}" ajouté.`);
       setSearchVisible(false);
       setSelectedDoctor(null);

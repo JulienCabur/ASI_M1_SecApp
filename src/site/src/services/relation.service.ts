@@ -1,11 +1,3 @@
-/**
- * Service relation — gestion des liens patient/médecin via le BFF FastAPI.
- *
- * Le backend (`presentation/relation.py`) expose des endpoints qui attendent
- * du `application/x-www-form-urlencoded` (FastAPI `Form(...)`), donc on
- * envoie via `URLSearchParams` plutôt qu'en JSON, comme `device.service.ts`.
- */
-
 import { api } from '@/services/api';
 
 export interface RelationUser {
@@ -65,6 +57,17 @@ interface FindPatientResponse {
   patient: { id: string; username: string };
 }
 
+/** Une relation fraîchement créée par `patient_add_doctor` : un objet par device
+ *  du médecin, avec la public_key RSA-OAEP nécessaire pour wrap la KEK. */
+export interface CreatedRelation {
+  relation_id: string;
+  public_key: JsonWebKey;
+}
+
+interface PatientAddDoctorResponse {
+  relations: { relation: CreatedRelation[] };
+}
+
 /** Liste tous les médecins disponibles (catalogue côté patient pour ajout). */
 export const listDoctors = async (): Promise<RelationUser[]> => {
   const { data } = await api.get<ListDoctorsResponse>('/relation/list_doctors');
@@ -97,13 +100,28 @@ export const getUnverifiedRelations = async (): Promise<UnverifiedRelation[]> =>
 
 /** Patient → ajoute un médecin. Le back renvoie une liste de relations + clé
  *  publique de chaque device du médecin pour permettre le wrap de la KEK. */
-export const patientAddDoctor = async (doctorId: string): Promise<unknown> => {
+export const patientAddDoctor = async (doctorId: string): Promise<CreatedRelation[]> => {
   const form = new URLSearchParams();
   form.append('doctor_id', doctorId);
-  const { data } = await api.post('/relation/patient_add_doctor', form, {
+  const { data } = await api.post<PatientAddDoctorResponse>('/relation/patient_add_doctor', form, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   });
-  return data;
+  return data.relations?.relation ?? [];
+};
+
+/** Stocke la KEK patient (wrappée avec la public_key d'un device médecin) sur
+ *  une relation précise. À appeler juste après `patientAddDoctor` pour chaque
+ *  device retourné, sinon le médecin ne pourra pas déchiffrer le dossier. */
+export const storeRelationKek = async (
+  relationId: string,
+  cipheredKek: string,
+): Promise<void> => {
+  const form = new URLSearchParams();
+  form.append('relation_id', relationId);
+  form.append('ciphered_kek', cipheredKek);
+  await api.post('/relation/store_kek', form, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
 };
 
 /** Patient → supprime un médecin de ses relations. */
