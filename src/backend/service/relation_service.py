@@ -77,12 +77,49 @@ class RelationService:
     
     def get_unverified_relations(self, user_id: str):
         """
-        Récupère les relations non vérifiées d'un utilisateur.
-        :param user_id: ID de l'utilisateur.
-        :return: Liste des relations non vérifiées de l'utilisateur.
+        Récupère les relations non vérifiées d'un utilisateur, dédoublonnées
+        par contrepartie et enrichies avec username, direction et devices.
+
+        - direction="incoming" : l'utilisateur courant est le patient cible
+          d'une demande médecin → il doit l'approuver/refuser. La liste
+          `devices` contient les clés publiques des devices du médecin pour
+          que le patient puisse wrap sa KEK avec.
+        - direction="outgoing" : l'utilisateur courant est le médecin
+          demandeur → en attente de vérification par le patient.
         """
-        relations = self.db.query(Relation).filter((Relation.patient_id == user_id) | (Relation.doctor_id == user_id), Relation.is_verified.is_(False)).all()
-        return relations
+        relations = self.db.query(Relation).filter(
+            (Relation.patient_id == user_id) | (Relation.doctor_id == user_id),
+            Relation.is_verified.is_(False),
+        ).all()
+
+        aggregated: dict[str, dict] = {}
+        for r in relations:
+            is_patient = r.patient_id == user_id
+            counterpart_id = r.doctor_id if is_patient else r.patient_id
+
+            device_info = None
+            if r.doctor_device_id:
+                device = self.db.query(Device).filter(Device.id == r.doctor_device_id).first()
+                if device:
+                    device_info = {
+                        "device_id": str(device.id),
+                        "public_key": device.public_key,
+                    }
+
+            if counterpart_id in aggregated:
+                if device_info:
+                    aggregated[counterpart_id]["devices"].append(device_info)
+                continue
+
+            counterpart = self.db.query(User).filter(User.id == counterpart_id).first()
+            aggregated[counterpart_id] = {
+                "counterpart_id": counterpart_id,
+                "username": counterpart.username if counterpart else counterpart_id,
+                "role": counterpart.roles if counterpart else None,
+                "direction": "incoming" if is_patient else "outgoing",
+                "devices": [device_info] if device_info else [],
+            }
+        return list(aggregated.values())
     
     def store_kek_for_relation(self, user_id: str, relation_id: str, ciphered_kek: str):
         """
@@ -100,12 +137,77 @@ class RelationService:
     
     def get_relations(self, user_id: str):
         """
-        Récupère les relations d'un utilisateur.
-        :param user_id: ID de l'utilisateur.
-        :return: Liste des relations de l'utilisateur.
+        Récupère les relations d'un utilisateur, dédoublonnées par contrepartie
+        (patient ou médecin) et enrichies avec le username.
+
+        Une relation existe par device du médecin ; côté UI on ne veut qu'une
+        ligne par contrepartie. On agrège donc par counterpart_id et on
+        considère la relation "vérifiée" dès qu'au moins un device l'est.
         """
-        relations = self.db.query(Relation).filter((Relation.patient_id == user_id) | (Relation.doctor_id == user_id)).all()
-        return relations
+        relations = self.db.query(Relation).filter(
+            (Relation.patient_id == user_id) | (Relation.doctor_id == user_id)
+        ).all()
+
+        aggregated: dict[str, dict] = {}
+        for r in relations:
+            counterpart_id = r.doctor_id if r.patient_id == user_id else r.patient_id
+            existing = aggregated.get(counterpart_id)
+            if existing:
+                existing["is_verified"] = existing["is_verified"] or r.is_verified
+                continue
+            counterpart = self.db.query(User).filter(User.id == counterpart_id).first()
+            aggregated[counterpart_id] = {
+                "counterpart_id": counterpart_id,
+                "username": counterpart.username if counterpart else counterpart_id,
+                "role": counterpart.roles if counterpart else None,
+                "is_verified": r.is_verified,
+            }
+        return list(aggregated.values())
+
+    def get_patient_kek_for_doctor(self, doctor_id: str, doctor_device_id: str, patient_id: str):
+        """
+        Retourne le `ciphered_kek` patient pour le device courant du médecin.
+
+        Le `ciphered_kek` a été produit par le patient au moment du
+        `patient_verify_doctor` : il a wrappé sa KEK avec la clé publique RSA
+        de ce device → seul le détenteur de la privée RSA correspondante (ce
+        device, en local) peut le déballer. Le serveur ne voit jamais la KEK
+        en clair.
+        """
+        device = self.db.query(Device).filter(
+            Device.id == doctor_device_id,
+            Device.user_id == doctor_id,
+        ).first()
+        if not device:
+            raise ValueError("Device introuvable ou ne vous appartient pas.")
+
+        relation = self.db.query(Relation).filter(
+            Relation.doctor_id == doctor_id,
+            Relation.patient_id == patient_id,
+            Relation.doctor_device_id == doctor_device_id,
+            Relation.is_verified.is_(True),
+        ).first()
+        if not relation or not relation.ciphered_kek:
+            raise ValueError("Aucune relation vérifiée trouvée pour ce patient sur ce device.")
+        return {"ciphered_kek": relation.ciphered_kek}
+
+    def find_patient_by_username(self, username: str):
+        """
+        Recherche un patient par username exact.
+
+        Restreint aux comptes de rôle "patient" pour éviter de divulguer
+        l'existence de médecins via cet endpoint, et pour empêcher un
+        médecin d'ajouter un autre médecin comme "patient".
+        """
+        if not username or not username.strip():
+            raise ValueError("Le username est requis.")
+        patient = self.db.query(User).filter(
+            User.username == username.strip(),
+            User.roles == "patient",
+        ).first()
+        if not patient:
+            raise ValueError(f"Aucun patient trouvé avec le username '{username}'.")
+        return {"id": patient.id, "username": patient.username}
     
     def delete_relation(self, patient_id: str, doctor_id: str):
         """

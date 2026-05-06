@@ -7,6 +7,7 @@ import {
   FaUserMd,
   FaBell,
   FaMobileAlt,
+  FaUserInjured,
 } from 'react-icons/fa';
 import { FaFileMedical } from 'react-icons/fa6';
 import { logout } from '@/services/auth.service';
@@ -31,6 +32,12 @@ export const NavItem = ({ label, to }: { label: string; to: string }) => {
       return (
         <div className={style.navItem} onClick={() => navigate(to)}>
           <FaUserMd className={style.icon} />
+        </div>
+      );
+    case 'Patients':
+      return (
+        <div className={style.navItem} onClick={() => navigate(to)}>
+          <FaUserInjured className={style.icon} />
         </div>
       );
     case 'Notifications':

@@ -28,16 +28,24 @@ export interface MedicalFile {
   requiresApproval: boolean;
 }
 
-export type NotificationType = 'file_upload' | 'file_edit' | 'file_delete' | 'doctor_add';
+export type NotificationType = 'doctor_add' | 'patient_add';
 export type NotificationStatus = 'pending' | 'approved' | 'rejected';
+export type NotificationDirection = 'incoming' | 'outgoing';
+
+export interface NotificationDevice {
+  deviceId: string;
+  publicKey: JsonWebKey;
+}
 
 export interface Notification {
   id: string;
   type: NotificationType;
+  direction: NotificationDirection;
   description: string;
-  timestamp: string;
   status: NotificationStatus;
-  targetPatientId: string;
   initiatorName: string;
-  payload: Record<string, unknown>;
+  payload: {
+    counterpartId: string;
+    devices: NotificationDevice[];
+  };
 }

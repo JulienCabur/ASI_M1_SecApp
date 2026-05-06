@@ -16,7 +16,7 @@ const DoctorDashboard: React.FC = () => {
   const userId = user?.id ?? 'mock-doctor';
 
   useEffect(() => {
-    getNotifications(userId).then(setNotifications);
+    getNotifications().then(setNotifications).catch(() => setNotifications([]));
   }, [userId, setNotifications]);
 
   const recentActivity = notifications.slice(0, 3);

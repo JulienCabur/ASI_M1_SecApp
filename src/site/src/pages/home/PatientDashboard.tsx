@@ -26,7 +26,7 @@ const PatientDashboard: React.FC = () => {
     listFiles()
       .then((files) => setRecentFiles(files.slice(-3).reverse()))
       .catch(() => setRecentFiles([]));
-    getNotifications(patientId).then(setNotifications);
+    getNotifications().then(setNotifications).catch(() => setNotifications([]));
   }, [patientId, setNotifications]);
 
   return (
