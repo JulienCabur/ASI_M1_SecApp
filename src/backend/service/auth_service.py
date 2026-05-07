@@ -105,6 +105,15 @@ class AuthService:
         if not os.path.exists(path):
             raise Exception("Certificat non trouvé")
         return path
+    
+    def store_public_mek(self, username: str, public_mek: str) -> None:
+        user = self.db.query(User).filter(User.username == username).first()
+        if not user:
+            raise Exception("Utilisateur non trouvé")
+        if user.roles != "doctor":
+            raise Exception("L'utilisateur n'est pas un médecin")
+        user.public_mek = public_mek
+        self.db.commit()
 
     def _keycloak_admin(self) -> KeycloakAdmin:
         return KeycloakAdmin(

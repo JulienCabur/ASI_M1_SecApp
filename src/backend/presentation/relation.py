@@ -83,16 +83,18 @@ async def get_unverified_relations(
         return {"unverified_relations": relations}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des relations non vérifiées: {str(e)}")
+
+@router.get
     
 @router.post("/patient_verify_doctor")
 async def patient_verify_doctor(
-    doctor_device_id: str = Form(...),
+    doctor_id: str = Form(...),
     ciphered_kek: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
     try:
         relation_service = RelationService(db=db)
-        relation_id = relation_service.verify_relation(patient_id=current_user.id, doctor_device_id=doctor_device_id, ciphered_kek=ciphered_kek)
+        relation_id = relation_service.verify_relation(patient_id=current_user.id, doctor_id=doctor_id, ciphered_kek=ciphered_kek)
 
         return {"status": f"Relation avec l'id {relation_id} vérifiée avec succès"}
     except Exception as e:
