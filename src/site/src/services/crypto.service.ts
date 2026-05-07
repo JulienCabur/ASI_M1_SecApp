@@ -65,6 +65,19 @@ export const generateKeyPair = async (): Promise<CryptoKeyPair> => {
     );
 }
 
+export const generateExtractableKeyPair = async (): Promise<CryptoKeyPair> => {
+    return await crypto.subtle.generateKey(
+        {
+            name: "RSA-OAEP",
+            modulusLength: 4096,
+            publicExponent: new Uint8Array([1, 0, 1]),
+            hash: "SHA-512",
+        },
+        true,
+        ["encrypt", "decrypt", "wrapKey", "unwrapKey"]
+    );
+}
+
 export const savePrivateKey = async (privateKey: CryptoKey): Promise<void> => {
     if (privateKey.extractable) {
         throw new Error('Refus de persister une clé privée extractable.');
@@ -145,6 +158,25 @@ export const generateKEKFromRSAKey = async (publicKey: CryptoKey): Promise<Seale
     );
     return { kek, wrappedKek };
 };
+
+export const wrapPrivateKeyWithRSAKey = async (privateKey: CryptoKey, publicKey: CryptoKey): Promise<ArrayBuffer> => {
+    if (privateKey.type !== 'private') {
+        throw new Error('wrapPrivateKeyWithRSAKey attend une clé privée RSA-OAEP.');
+    }
+    if (publicKey.type !== 'public') {
+        throw new Error('wrapPrivateKeyWithRSAKey attend une clé publique RSA-OAEP.');
+    }
+    
+    // Exporter la clé privée en PKCS8
+    const pkcs8 = await crypto.subtle.exportKey('pkcs8', privateKey);
+    
+    // Chiffrer le PKCS8 avec la clé publique du device
+    return crypto.subtle.encrypt(
+        { name: 'RSA-OAEP' },
+        publicKey,
+        pkcs8
+    );
+}
 
 export const unwrapKEKWithRSAKey = async (
     wrappedKek: ArrayBuffer,

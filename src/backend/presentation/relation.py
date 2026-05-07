@@ -83,8 +83,6 @@ async def get_unverified_relations(
         return {"unverified_relations": relations}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des relations non vérifiées: {str(e)}")
-
-@router.get
     
 @router.post("/patient_verify_doctor")
 async def patient_verify_doctor(

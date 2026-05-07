@@ -24,6 +24,7 @@ from schema.auth_schema import (
 from service.auth_service import AuthService, DoctorConflictError
 from service.log_service import LogsService
 from service.file_service import FileService
+from schema.device_schema import JWKSchema
 
 
 router = APIRouter()
@@ -154,3 +155,16 @@ async def register_doctor_route(
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du médecin: {str(e)}")
+
+@router.post("/store_public_mek")
+async def store_public_mek_route(
+    public_mek_jwk: JWKSchema,
+    doctor_id: str = Form(...),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    auth_service = AuthService(db=db)
+    try:
+        auth_service.store_public_mek(doctor_id, public_mek_jwk)
+        return {"status": "Public MEK stored successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error storing public MEK: {str(e)}")

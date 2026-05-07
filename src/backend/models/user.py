@@ -3,7 +3,8 @@ Ce module définit le modèle d'utilisateur pour la base de données.
 Il utilise SQLAlchemy pour mapper les attributs de l'utilisateur aux colonnes de la table.
 """
 
-from sqlalchemy import Column, String, ForeignKey, UUID
+from sqlalchemy import Column, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from core.database import Base
 
@@ -15,7 +16,7 @@ class User(Base):
     id = Column(String, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     roles = Column(String, nullable=False)
-    public_mek = Column(String, nullable=True) # MEK_PUB pour doctor
+    public_mek = Column(JSONB, nullable=True) # MEK_PUB pour doctor
     challenge_nonce = Column(String, nullable=True)
     challenge_timestamp = Column(String, nullable=True)
     devices = relationship("Device", back_populates="user")

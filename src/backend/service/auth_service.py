@@ -106,8 +106,8 @@ class AuthService:
             raise Exception("Certificat non trouvé")
         return path
     
-    def store_public_mek(self, username: str, public_mek: str) -> None:
-        user = self.db.query(User).filter(User.username == username).first()
+    def store_public_mek(self, doctor_id: str, public_mek: str) -> None:
+        user = self.db.query(User).filter(User.id == doctor_id).first()
         if not user:
             raise Exception("Utilisateur non trouvé")
         if user.roles != "doctor":
