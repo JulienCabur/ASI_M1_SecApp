@@ -194,12 +194,6 @@ class AuthService:
             new_user_id = keycloak_admin.create_user(user_payload, exist_ok=False)
             group_patient = keycloak_admin.get_group_by_path("/Patients")
             keycloak_admin.group_user_remove(new_user_id, group_patient['id'])
-            keycloak_admin.update_user(
-                user_id=new_user_id,
-                payload={
-                    "requiredActions": ["VERIFY_EMAIL", "CONFIGURE_TOTP"]
-                }
-            )
             user = User(
                 id=new_user_id,
                 username=user_info.username,
@@ -303,10 +297,10 @@ class AuthService:
     # Les deux étapes que comporte un "reset complet" sur ce realm passwordless :
     # le 2FA (TOTP) et la clé d'accès WebAuthn. Le mot de passe n'existe pas dans
     # le flow `Password-less`, donc on l'exclut volontairement.
-    _RESET_ACTIONS = ["CONFIGURE_TOTP", "webauthn-register-passwordless"]
+    _RESET_ACTIONS = ["webauthn-register-passwordless"]
 
     # Types de credentials Keycloak considérés comme "reset-ables".
-    _RESET_CREDENTIAL_TYPES = ("otp", "webauthn-passwordless")
+    _RESET_CREDENTIAL_TYPES = ("webauthn-passwordless")
 
     _ACTION_TOKEN_LIFESPAN_SECONDS = 3600
 

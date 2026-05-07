@@ -65,10 +65,10 @@ const EmailResetModal: React.FC<EmailResetModalProps> = ({ open, onClose }) => {
         <>
           <Alert
             type="info"
-            showIcon
+            showIcon  
             style={{ marginBottom: 16 }}
             message="Authentification sans mot de passe"
-            description="Cette application utilise une clé d'accès (passkey / WebAuthn). Si vous l'avez perdue, on vous envoie un lien pour en enregistrer une nouvelle."
+            description="Cette application utilise une clé d'accès (passkey / WebAuthn). Si vous l'avez perdue, on vous envoie un lien pour en enregistrer une nouvelle. ATTENTION QUE CETTE ACTION CAUSERA LA PERTE L'ACCES A TOUS VOS FICHIERS"
           />
           <Form form={form} layout="vertical" onFinish={handleSubmit} requiredMark={false} preserve={false}>
             <Form.Item
