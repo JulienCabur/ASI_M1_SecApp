@@ -98,17 +98,30 @@ const decodeEnvelope = (
   };
 };
 
-const requireKek = (): CryptoKey => {
-  const kek = useCryptoStore.getState().kek;
+/** Contexte optionnel pour les opérations fichiers. Par défaut on lit la KEK
+ *  du store (dossier de l'user courant) ; en mode médecin-visualise-patient,
+ *  on fournit la KEK patient déballée localement + le `patientId`. */
+export interface FileContext {
+  kek?: CryptoKey;
+  patientId?: string;
+}
+
+const resolveKek = (ctx?: FileContext): CryptoKey => {
+  const kek = ctx?.kek ?? useCryptoStore.getState().kek;
   if (!kek) {
     throw new Error('Session crypto non initialisée — clé KEK absente.');
   }
   return kek;
 };
 
-export const listFiles = async (): Promise<RemoteFile[]> => {
-  const kek = requireKek();
-  const { data } = await api.get<ListFilesResponse>('/files/list_files');
+const patientParams = (ctx?: FileContext): Record<string, string> =>
+  ctx?.patientId ? { patient_id: ctx.patientId } : {};
+
+export const listFiles = async (ctx?: FileContext): Promise<RemoteFile[]> => {
+  const kek = resolveKek(ctx);
+  const { data } = await api.get<ListFilesResponse>('/files/list_files', {
+    params: patientParams(ctx),
+  });
   const decrypted = await Promise.all(
     data.files.map(async (f) => {
       const env = decodeEnvelope(f.ciphered_dek);
@@ -131,8 +144,8 @@ export const listFiles = async (): Promise<RemoteFile[]> => {
   return decrypted;
 };
 
-export const uploadFile = async (file: File): Promise<void> => {
-  const kek = requireKek();
+export const uploadFile = async (file: File, ctx?: FileContext): Promise<void> => {
+  const kek = resolveKek(ctx);
   const plain = await file.arrayBuffer();
   const enc = await encryptFileWithKEK(
     plain,
@@ -146,7 +159,7 @@ export const uploadFile = async (file: File): Promise<void> => {
   const form = new FormData();
   form.append('file', new Blob([enc.ciphertext]), cipheredName);
   await api.post('/files/upload_file', form, {
-    params: { dek: envelope, date: cipheredDate },
+    params: { dek: envelope, date: cipheredDate, ...patientParams(ctx) },
   });
 };
 
@@ -171,10 +184,10 @@ const guessMimeType = (filename: string): string => {
   }
 };
 
-export const downloadFile = async (file: RemoteFile): Promise<DecryptedFile> => {
-  const kek = requireKek();
+export const downloadFile = async (file: RemoteFile, ctx?: FileContext): Promise<DecryptedFile> => {
+  const kek = resolveKek(ctx);
   const { data } = await api.get<DownloadResponse>('/files/download_file', {
-    params: { file: file.id },
+    params: { file: file.id, ...patientParams(ctx) },
   });
   const env = decodeEnvelope(data.key);
   const plain = await decryptFileWithKEK(
@@ -192,6 +205,8 @@ export const downloadFile = async (file: RemoteFile): Promise<DecryptedFile> => 
   };
 };
 
-export const deleteFile = async (id: string): Promise<void> => {
-  await api.post('/files/delete_file', null, { params: { file: id } });
+export const deleteFile = async (id: string, ctx?: FileContext): Promise<void> => {
+  await api.post('/files/delete_file', null, {
+    params: { file: id, ...patientParams(ctx) },
+  });
 };

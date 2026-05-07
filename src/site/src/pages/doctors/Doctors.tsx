@@ -1,114 +1,147 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
+  App,
   Button,
   Input,
   List,
   Modal,
-  Space,
   Table,
   Typography,
-  App,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useAuth } from '@/hooks/useAuth';
-import { useNotificationsStore } from '@/store/notifications.store';
 import {
-  getDoctors,
-  searchDoctors,
-  addDoctor,
-  removeDoctor,
-} from '@/services/doctors.service';
-import { resolveNotification } from '@/services/notifications.service';
-import type { Doctor, Notification } from '@/types';
+  getRelations,
+  listDoctors,
+  patientAddDoctor,
+  patientRemoveDoctor,
+  storeRelationKek,
+  type RelationSummary,
+  type RelationUser,
+} from '@/services/relation.service';
+import {
+  importPublicKeyJwk,
+  wrapKEKWithRecipientPublicKey,
+} from '@/services/crypto.service';
+import { useCryptoStore } from '@/store/crypto.store';
 import style from './doctors.module.scss';
 
 const { Title } = Typography;
 const { Search } = Input;
 
 const Doctors: React.FC = () => {
-  const { user } = useAuth();
-  const { modal } = App.useApp();
-  const { notifications, resolve } = useNotificationsStore();
-  const patientId = user?.id ?? 'mock-patient';
+  const { message, modal } = App.useApp();
 
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [doctorsCatalog, setDoctorsCatalog] = useState<RelationUser[]>([]);
+  const [myDoctors, setMyDoctors] = useState<RelationSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
-  const [searchResults, setSearchResults] = useState<Doctor[]>([]);
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDoctor, setSelectedDoctor] = useState<RelationUser | null>(null);
   const [addLoading, setAddLoading] = useState(false);
 
-  // Pending doctor_add notifications directed at this patient
-  const pendingDoctorAdds = notifications.filter(
-    (n) => n.type === 'doctor_add' && n.status === 'pending' && n.targetPatientId === patientId
-  );
-
-  const loadDoctors = () => {
+  const loadAll = async () => {
     setLoading(true);
-    getDoctors(patientId)
-      .then(setDoctors)
-      .finally(() => setLoading(false));
+    try {
+      const [docs, rels] = await Promise.all([listDoctors(), getRelations()]);
+      setDoctorsCatalog(docs);
+      setMyDoctors(rels);
+    } catch (err) {
+      console.error('[Doctors] load error:', err);
+      void message.error('Impossible de charger les médecins.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    loadDoctors();
-  }, [patientId]);
+    void loadAll();
+  }, []);
 
-  const handleSearch = (value: string) => {
-    if (!value.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    searchDoctors(value).then(setSearchResults);
-  };
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const myDoctorIds = new Set(myDoctors.map((d) => d.counterpart_id));
+    const available = doctorsCatalog.filter((d) => !myDoctorIds.has(d.id));
+    if (!q) return available;
+    return available.filter((d) => d.username.toLowerCase().includes(q));
+  }, [searchQuery, doctorsCatalog, myDoctors]);
 
   const handleAddDoctor = async () => {
     if (!selectedDoctor) return;
     setAddLoading(true);
-    await addDoctor(patientId, selectedDoctor.id);
-    setAddLoading(false);
-    setSearchVisible(false);
-    setSelectedDoctor(null);
-    setSearchResults([]);
-    loadDoctors();
+    try {
+      const kek = useCryptoStore.getState().kek;
+      if (!kek) {
+        throw new Error('Session cryptographique non initialisée. Reconnectez-vous.');
+      }
+
+      const createdRelations = await patientAddDoctor(selectedDoctor.id);
+
+      // Wrap la KEK locale avec la public_key de chaque device du médecin et
+      // pousse le résultat sur la relation correspondante. Sans ça, le médecin
+      // ne pourrait pas déchiffrer le dossier (ciphered_kek=null côté back).
+      try {
+        await Promise.all(
+          createdRelations.map(async (rel) => {
+            const recipientKey = await importPublicKeyJwk(rel.public_key);
+            const cipheredKek = await wrapKEKWithRecipientPublicKey(kek, recipientKey);
+            await storeRelationKek(rel.relation_id, cipheredKek);
+          }),
+        );
+      } catch (wrapErr) {
+        // Rollback : la relation existe côté back mais sans KEK exploitable.
+        await patientRemoveDoctor(selectedDoctor.id).catch(() => {});
+        throw wrapErr;
+      }
+
+      void message.success(`Médecin "${selectedDoctor.username}" ajouté.`);
+      setSearchVisible(false);
+      setSelectedDoctor(null);
+      setSearchQuery('');
+      await loadAll();
+    } catch (err) {
+      console.error('[Doctors] add error:', err);
+      void message.error("Erreur lors de l'ajout du médecin.");
+    } finally {
+      setAddLoading(false);
+    }
   };
 
-  const handleRemove = (doctor: Doctor) => {
+  const handleRemove = (row: RelationSummary) => {
     modal.confirm({
       title: 'Supprimer ce médecin ?',
-      content: `Êtes-vous sûr de vouloir retirer Dr. ${doctor.firstName} ${doctor.lastName} de vos médecins ?`,
+      content: `Êtes-vous sûr de vouloir retirer ${row.username} de vos médecins ?`,
       okText: 'Supprimer',
       okType: 'danger',
       cancelText: 'Annuler',
       onOk: async () => {
-        await removeDoctor(patientId, doctor.id);
-        loadDoctors();
+        try {
+          await patientRemoveDoctor(row.counterpart_id);
+          void message.success('Médecin retiré.');
+          await loadAll();
+        } catch (err) {
+          console.error('[Doctors] remove error:', err);
+          void message.error('Erreur lors de la suppression.');
+        }
       },
     });
   };
 
-  const handleResolveNotification = async (notif: Notification, decision: 'approved' | 'rejected') => {
-    await resolveNotification(notif.id, decision);
-    resolve(notif.id, decision);
-  };
-
-  const columns: ColumnsType<Doctor> = [
+  const columns: ColumnsType<RelationSummary> = [
     {
-      title: 'Nom',
-      key: 'name',
-      render: (_, doc) => `Dr. ${doc.firstName} ${doc.lastName}`,
+      title: 'Médecin',
+      dataIndex: 'username',
+      key: 'username',
     },
     {
-      title: 'Spécialité',
-      dataIndex: 'specialty',
-      key: 'specialty',
+      title: 'Statut',
+      key: 'verified',
+      render: (_, row) => (row.is_verified ? 'Vérifié' : 'En attente'),
     },
     {
       title: 'Actions',
       key: 'actions',
-      render: (_, doc) => (
-        <Button danger size="small" onClick={() => handleRemove(doc)}>
+      render: (_, row) => (
+        <Button danger size="small" onClick={() => handleRemove(row)}>
           Supprimer
         </Button>
       ),
@@ -124,51 +157,21 @@ const Doctors: React.FC = () => {
         </Button>
       </div>
 
-      {/* Pending doctor_add approval requests */}
-      {pendingDoctorAdds.map((notif) => (
-        <Alert
-          key={notif.id}
-          type="info"
-          showIcon
-          message={notif.description}
-          style={{ marginBottom: 12 }}
-          action={
-            <Space>
-              <Button
-                size="small"
-                type="primary"
-                onClick={() => handleResolveNotification(notif, 'approved')}
-              >
-                Approuver
-              </Button>
-              <Button
-                size="small"
-                danger
-                onClick={() => handleResolveNotification(notif, 'rejected')}
-              >
-                Refuser
-              </Button>
-            </Space>
-          }
-        />
-      ))}
-
       <Table
         columns={columns}
-        dataSource={doctors}
-        rowKey="id"
+        dataSource={myDoctors}
+        rowKey="counterpart_id"
         loading={loading}
         locale={{ emptyText: 'Aucun médecin assigné' }}
       />
 
-      {/* Add doctor search modal */}
       <Modal
         title="Ajouter un médecin"
         open={searchVisible}
         onCancel={() => {
           setSearchVisible(false);
           setSelectedDoctor(null);
-          setSearchResults([]);
+          setSearchQuery('');
         }}
         footer={[
           <Button key="cancel" onClick={() => setSearchVisible(false)}>
@@ -186,10 +189,10 @@ const Doctors: React.FC = () => {
         ]}
       >
         <Search
-          placeholder="Rechercher par nom ou spécialité..."
-          onSearch={handleSearch}
-          onChange={(e) => handleSearch(e.target.value)}
+          placeholder="Rechercher par username..."
+          onChange={(e) => setSearchQuery(e.target.value)}
           style={{ marginBottom: 16 }}
+          allowClear
         />
         <List
           dataSource={searchResults}
@@ -200,10 +203,7 @@ const Doctors: React.FC = () => {
               onClick={() => setSelectedDoctor(doc)}
               style={{ cursor: 'pointer' }}
             >
-              <List.Item.Meta
-                title={`Dr. ${doc.firstName} ${doc.lastName}`}
-                description={doc.specialty}
-              />
+              <List.Item.Meta title={doc.username} />
             </List.Item>
           )}
         />

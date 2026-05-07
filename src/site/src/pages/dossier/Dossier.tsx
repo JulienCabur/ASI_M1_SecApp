@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, App, Button, Modal, Space, Table, Typography, Upload } from 'antd';
+import { Alert, App, Button, Modal, Space, Spin, Table, Typography, Upload } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
+import { useNavigate, useSearchParams } from 'react-router';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload';
 import { useAuth } from '@/hooks/useAuth';
-import { deleteFile, downloadFile, listFiles, uploadFile, type DecryptedFile, type RemoteFile } from '@/services/files.service';
+import {
+  deleteFile,
+  downloadFile,
+  listFiles,
+  uploadFile,
+  type DecryptedFile,
+  type FileContext,
+  type RemoteFile,
+} from '@/services/files.service';
+import { getPatientKek } from '@/services/relation.service';
+import { loadPrivateKey, unwrapKEKWithRSAKey } from '@/services/crypto.service';
 import { useCryptoStore } from '@/store/crypto.store';
 import style from './dossier.module.scss';
 
@@ -17,10 +28,30 @@ interface PreviewState {
   mime: string;
 }
 
+const fromBase64 = (b64: string): ArrayBuffer => {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+};
+
 const Dossier: React.FC = () => {
   const { user } = useAuth();
   const { message, modal } = App.useApp();
-  const kek = useCryptoStore((s) => s.kek);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const ownKek = useCryptoStore((s) => s.kek);
+  const deviceId = useCryptoStore((s) => s.deviceId);
+
+  // Mode "médecin visualise dossier patient" via query string ?patient=<id>&name=<username>.
+  const patientId = searchParams.get('patient');
+  const patientName = searchParams.get('name') ?? patientId ?? '';
+  const isViewingPatient = Boolean(patientId);
+
+  // En mode patient-view, on déballe une KEK dédiée à la session de visu :
+  // jamais persistée, jetée au démontage de la page.
+  const [patientKek, setPatientKek] = useState<CryptoKey | null>(null);
+  const [unwrapping, setUnwrapping] = useState(false);
 
   const [files, setFiles] = useState<RemoteFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,26 +60,68 @@ const Dossier: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
 
-  const cryptoReady = useMemo(() => Boolean(kek), [kek]);
+  const activeKek = isViewingPatient ? patientKek : ownKek;
+  const cryptoReady = useMemo(() => Boolean(activeKek), [activeKek]);
+
+  const ctx = useMemo<FileContext | undefined>(() => {
+    if (!isViewingPatient) return undefined;
+    return patientKek ? { kek: patientKek, patientId: patientId ?? undefined } : undefined;
+  }, [isViewingPatient, patientKek, patientId]);
+
+  // Bootstrap : récupère le ciphered_kek patient et l'unwrap localement avec
+  // la privée RSA du device courant (jamais exposée au JS).
+  useEffect(() => {
+    if (!isViewingPatient || !patientId) return;
+    if (!deviceId) {
+      void message.error('Device courant inconnu — reconnectez-vous.');
+      return;
+    }
+    let cancelled = false;
+    setUnwrapping(true);
+    (async () => {
+      try {
+        const cipheredKekB64 = await getPatientKek(patientId, deviceId);
+        const privateKey = await loadPrivateKey();
+        if (!privateKey) throw new Error('Clé privée introuvable dans IndexedDB.');
+        const wrapped = fromBase64(cipheredKekB64);
+        const kek = await unwrapKEKWithRSAKey(wrapped, privateKey);
+        if (!cancelled) setPatientKek(kek);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[Dossier] patient kek unwrap error:', err);
+          void message.error(`Impossible de déballer la clé patient : ${(err as Error).message}`);
+        }
+      } finally {
+        if (!cancelled) setUnwrapping(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isViewingPatient, patientId, deviceId, message]);
+
+  // Au démontage / changement de patient : purger la KEK patient de la mémoire.
+  useEffect(() => {
+    return () => setPatientKek(null);
+  }, [patientId]);
 
   const loadFiles = useCallback(async () => {
+    if (!activeKek) return;
     setLoading(true);
     try {
-      setFiles(await listFiles());
+      setFiles(await listFiles(ctx));
     } catch (err) {
       message.error(`Impossible de charger les fichiers : ${(err as Error).message}`);
     } finally {
       setLoading(false);
     }
-  }, [message]);
+  }, [message, ctx, activeKek]);
 
   useEffect(() => {
     if (!user) return;
-    loadFiles();
+    void loadFiles();
   }, [user, loadFiles]);
 
-  // Libération des Object URLs pour éviter de garder le buffer déchiffré
-  // accroché à un Blob URL au-delà de l'usage.
   useEffect(() => {
     return () => {
       if (preview) URL.revokeObjectURL(preview.url);
@@ -60,7 +133,7 @@ const Dossier: React.FC = () => {
     if (!raw) return;
     setUploading(true);
     try {
-      await uploadFile(raw as File);
+      await uploadFile(raw as File, ctx);
       message.success(`"${raw.name}" téléversé et chiffré.`);
       setUploadVisible(false);
       setFileList([]);
@@ -74,7 +147,7 @@ const Dossier: React.FC = () => {
 
   const decryptAndOpen = async (file: RemoteFile, asDownload: boolean) => {
     try {
-      const decrypted = await downloadFile(file);
+      const decrypted = await downloadFile(file, ctx);
       if (asDownload) {
         triggerBrowserDownload(decrypted);
       } else {
@@ -96,7 +169,7 @@ const Dossier: React.FC = () => {
       cancelText: 'Annuler',
       onOk: async () => {
         try {
-          await deleteFile(file.id);
+          await deleteFile(file.id, ctx);
           message.success('Fichier supprimé.');
           await loadFiles();
         } catch (err) {
@@ -144,9 +217,11 @@ const Dossier: React.FC = () => {
           <Button size="small" disabled={!cryptoReady} onClick={() => decryptAndOpen(file, true)}>
             Télécharger
           </Button>
-          <Button size="small" danger onClick={() => handleDelete(file)}>
-            Supprimer
-          </Button>
+          {!isViewingPatient && (
+            <Button size="small" danger onClick={() => handleDelete(file)}>
+              Supprimer
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -159,25 +234,48 @@ const Dossier: React.FC = () => {
     maxCount: 1,
   };
 
+  if (isViewingPatient && unwrapping) {
+    return (
+      <div className={style.container} style={{ textAlign: 'center', paddingTop: 64 }}>
+        <Spin size="large" tip="Déballage de la clé patient..." />
+      </div>
+    );
+  }
+
   return (
     <div className={style.container}>
       <div className={style.header}>
-        <Title level={2} style={{ margin: 0 }}>Mon dossier médical</Title>
-        <Button
-          type="primary"
-          disabled={!cryptoReady}
-          onClick={() => { setUploadVisible(true); setFileList([]); }}
-        >
-          Téléverser un fichier
-        </Button>
+        <Space direction="vertical" size={4}>
+          {isViewingPatient && (
+            <Button size="small" onClick={() => navigate('/patients')} style={{ paddingLeft: 0 }} type="link">
+              ← Retour aux patients
+            </Button>
+          )}
+          <Title level={2} style={{ margin: 0 }}>
+            {isViewingPatient ? `Dossier de ${patientName}` : 'Mon dossier médical'}
+          </Title>
+        </Space>
+        {!isViewingPatient && (
+          <Button
+            type="primary"
+            disabled={!cryptoReady}
+            onClick={() => { setUploadVisible(true); setFileList([]); }}
+          >
+            Téléverser un fichier
+          </Button>
+        )}
       </div>
 
-      {!cryptoReady && (
+      {!cryptoReady && !unwrapping && (
         <Alert
           type="warning"
           showIcon
           message="Session crypto indisponible"
-          description="La KEK n'a pas pu être restaurée pour cet appareil. Le chiffrement et le déchiffrement local sont désactivés. Reconnecte-toi ou réinitialise l'appareil depuis Crypto Lab."
+          description={
+            isViewingPatient
+              ? "La KEK patient n'a pas pu être déballée. Vérifiez que la relation est validée par ce device."
+              : "La KEK n'a pas pu être restaurée pour cet appareil. Le chiffrement et le déchiffrement local sont désactivés."
+          }
           style={{ marginBottom: 16 }}
         />
       )}

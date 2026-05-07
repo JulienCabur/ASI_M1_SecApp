@@ -125,6 +125,45 @@ async def list_doctors(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des médecins: {str(e)}")
 
+@router.get("/get_patient_kek")
+async def get_patient_kek(
+    patient_id: str = Query(...),
+    device_id: str = Query(...),
+    db = Depends(get_db),
+    current_user = Depends(get_current_user)):
+    """
+    Renvoie le `ciphered_kek` que le médecin courant peut déballer avec la
+    privée RSA de son device, pour ensuite déchiffrer les fichiers du patient.
+    """
+    try:
+        relation_service = RelationService(db=db)
+        result = relation_service.get_patient_kek_for_doctor(
+            doctor_id=current_user.id,
+            doctor_device_id=device_id,
+            patient_id=patient_id,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération de la KEK patient: {str(e)}")
+
+@router.get("/find_patient")
+async def find_patient(
+    username: str = Query(...),
+    db = Depends(get_db),
+    current_user = Depends(get_current_user)):
+    """
+    Recherche un patient par username exact (utilisé côté médecin pour ajouter
+    un patient sans avoir à connaître son UUID). Match strict — pas de
+    listing global pour éviter l'énumération.
+    """
+    try:
+        relation_service = RelationService(db=db)
+        patient = relation_service.find_patient_by_username(username=username)
+
+        return {"patient": patient}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"{str(e)}")
+
 # temporary route
 @router.get("/create_doctors")
 async def create_doctors(

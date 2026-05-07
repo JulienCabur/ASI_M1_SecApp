@@ -64,8 +64,24 @@ def generate_pkce_pair() -> Tuple[str, str]:
     return verifier, challenge
 
 
-def build_authorize_url(state: str, code_challenge: str, scope: str = "openid profile email") -> str:
-    params = {
+def build_authorize_url(
+    state: str,
+    code_challenge: str,
+    scope: str = "openid profile email",
+    force_reauth: bool = False,
+    login_hint: Optional[str] = None,
+) -> str:
+    """Construit l'URL d'autorisation Keycloak.
+
+    `force_reauth=True` ajoute `prompt=login` (OIDC §3.1.2.1) pour forcer
+    Keycloak à afficher la page de login même si un cookie SSO existe déjà.
+    Utilisé par le flow certificat : chaque preuve cert vise une identité
+    précise, donc on ne veut pas que Keycloak auto-login avec le compte
+    précédemment ouvert dans le navigateur.
+
+    `login_hint` pré-remplit le champ username de la page Keycloak.
+    """
+    params: dict = {
         "client_id": _client_id(),
         "response_type": "code",
         "scope": scope,
@@ -74,6 +90,10 @@ def build_authorize_url(state: str, code_challenge: str, scope: str = "openid pr
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
     }
+    if force_reauth:
+        params["prompt"] = "login"
+    if login_hint:
+        params["login_hint"] = login_hint
     return f"{_public_url()}/realms/{_realm()}/protocol/openid-connect/auth?{urlencode(params)}"
 
 

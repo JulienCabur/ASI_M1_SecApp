@@ -6,6 +6,7 @@ import { Home } from '@/pages/home/Home';
 import Login from '@/pages/login/Login';
 import AuthCallback from '@/pages/auth/AuthCallback';
 import Doctors from '@/pages/doctors/Doctors';
+import Patients from '@/pages/patients/Patients';
 import Dossier from '@/pages/dossier/Dossier';
 import Notifications from '@/pages/notifications/Notifications';
 import Devices from '@/pages/devices/Devices';
@@ -35,6 +36,7 @@ const Router = () => {
             <Route path="/" element={<Home />} />
             <Route path="/dossier" element={<Dossier />} />
             <Route path="/doctors" element={<Doctors />} />
+            <Route path="/patients" element={<Patients />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/devices" element={<Devices />} />
           </Route>
