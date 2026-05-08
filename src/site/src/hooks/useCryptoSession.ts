@@ -34,6 +34,7 @@ import {
   savePrivateKey,
   savePublicKey,
   unwrapKEKWithRSAKey,
+  unwrapPrivateMEKWithDeviceKey,
   wrapPrivateKeyWithRSAKey,} from '@/services/crypto.service';
 import { getDeviceKeys, registerDevice, storeKek, storePublicMEK } from '@/services/device.service';
 import { useCryptoStore } from '@/store/crypto.store';
@@ -94,26 +95,26 @@ const bootstrapDevice = async (userId: string, role: Role | null): Promise<void>
     return;
   }
 
-  // Device A (premier device) : auto-générer et auto-emballer la KEK.
-  const sealed = await generateKEKFromRSAKey(pair.publicKey);
-  
   if (role === 'role_docteurs') {
-    // Pour un docteur : générer une deuxième paire de clés asymétriques extractable
+    // Médecin Device A : on génère la paire MEK (RSA-OAEP extractable),
+    // on wrappe la privée PKCS8 avec la pubkey du device pour persistance
+    // côté serveur, et on garde la privée MEK en mémoire pour la session.
+    // Pas de KEK AES-GCM perso : un médecin ne chiffre pas ses propres
+    // fichiers, il déballe seulement les KEK des patients.
     const doctorPair = await generateExtractableKeyPair();
-    
-    // Wrapper la clé privée du docteur avec la clé publique du device
     const wrappedDoctorPrivateKey = await wrapPrivateKeyWithRSAKey(doctorPair.privateKey, pair.publicKey);
-    const wrappedDoctorPrivateKeyBase64 = toBase64(wrappedDoctorPrivateKey);
     const doctorPublicKeyJwk = await exportPublicKeyJwk(doctorPair.publicKey);
-    
-    // Envoyer la clé privée du docteur chiffrée en base64
-    await storeKek(device_id, wrappedDoctorPrivateKeyBase64);
+
+    await storeKek(device_id, toBase64(wrappedDoctorPrivateKey));
     await storePublicMEK(userId, doctorPublicKeyJwk);
-  } else {
-    // Pour un patient : garder le code existant
-    await storeKek(device_id, toBase64(sealed.wrappedKek));
+
+    store.setDoctorSession(device_id, doctorPair.privateKey);
+    return;
   }
-  
+
+  // Patient Device A : auto-générer et auto-emballer la KEK AES-GCM.
+  const sealed = await generateKEKFromRSAKey(pair.publicKey);
+  await storeKek(device_id, toBase64(sealed.wrappedKek));
   store.setSession(device_id, sealed.kek);
 };
 
@@ -127,7 +128,7 @@ type RecoveryResult = 'ok' | 'pending' | 'failed';
  *   'pending' → device existe mais pas encore approuvé (ciphered_kek null)
  *   'failed'  → device introuvable (404) ou clé privée absente → re-bootstrap nécessaire
  */
-const recoverDevice = async (deviceId: string, userId: string): Promise<RecoveryResult> => {
+const recoverDevice = async (deviceId: string, userId: string, role: Role | null): Promise<RecoveryResult> => {
   const privateKey = await loadPrivateKey();
   if (!privateKey) return 'failed';
 
@@ -150,9 +151,18 @@ const recoverDevice = async (deviceId: string, userId: string): Promise<Recovery
     return 'pending';
   }
 
-  const wrappedKek = fromBase64(remote.ciphered_kek);
-  const kek = await unwrapKEKWithRSAKey(wrappedKek, privateKey);
-  useCryptoStore.getState().setSession(deviceId, kek);
+  const wrappedPayload = fromBase64(remote.ciphered_kek);
+
+  if (role === 'role_docteurs') {
+    // Pour un médecin, ciphered_kek = privée MEK PKCS8 chiffrée RSA-OAEP
+    // par la pubkey de ce device. On la déballe et la garde en mémoire.
+    const privateMEK = await unwrapPrivateMEKWithDeviceKey(wrappedPayload, privateKey);
+    useCryptoStore.getState().setDoctorSession(deviceId, privateMEK);
+  } else {
+    // Pour un patient, ciphered_kek = KEK AES-GCM wrappée par la pubkey du device.
+    const kek = await unwrapKEKWithRSAKey(wrappedPayload, privateKey);
+    useCryptoStore.getState().setSession(deviceId, kek);
+  }
   return 'ok';
 };
 
@@ -167,7 +177,7 @@ export const initCryptoSession = async (userId: string): Promise<void> => {
   const stored = localStorage.getItem(deviceIdKey(userId));
 
   if (stored) {
-    const result = await recoverDevice(stored, userId);
+    const result = await recoverDevice(stored, userId, role);
     if (result === 'ok' || result === 'pending') {
       // 'pending' : isPending est déjà positionné dans recoverDevice.
       return;

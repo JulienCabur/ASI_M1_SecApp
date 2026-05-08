@@ -106,7 +106,11 @@ class AuthService:
             raise Exception("Certificat non trouvé")
         return path
     
-    def store_public_mek(self, doctor_id: str, public_mek: str) -> None:
+    def store_public_mek(self, doctor_id: str, public_mek: Dict[str, Any]) -> None:
+        """Stocke la JWK publique MEK d'un médecin (colonne JSONB).
+
+        `public_mek` est le dict issu de la JWK validée (clé publique RSA-OAEP).
+        """
         user = self.db.query(User).filter(User.id == doctor_id).first()
         if not user:
             raise Exception("Utilisateur non trouvé")

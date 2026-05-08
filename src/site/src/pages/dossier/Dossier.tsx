@@ -15,8 +15,13 @@ import {
   type RemoteFile,
 } from '@/services/files.service';
 import { getPatientKek } from '@/services/relation.service';
-import { loadPrivateKey, unwrapKEKWithRSAKey } from '@/services/crypto.service';
+import {
+  loadPrivateKey,
+  unwrapKEKWithRSAKey,
+  unwrapPatientKEKWithPrivateMEK,
+} from '@/services/crypto.service';
 import { useCryptoStore } from '@/store/crypto.store';
+import { useAuthStore } from '@/store/auth.store';
 import style from './dossier.module.scss';
 
 const { Title } = Typography;
@@ -41,7 +46,6 @@ const Dossier: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const ownKek = useCryptoStore((s) => s.kek);
-  const deviceId = useCryptoStore((s) => s.deviceId);
 
   // Mode "médecin visualise dossier patient" via query string ?patient=<id>&name=<username>.
   const patientId = searchParams.get('patient');
@@ -68,23 +72,35 @@ const Dossier: React.FC = () => {
     return patientKek ? { kek: patientKek, patientId: patientId ?? undefined } : undefined;
   }, [isViewingPatient, patientKek, patientId]);
 
-  // Bootstrap : récupère le ciphered_kek patient et l'unwrap localement avec
-  // la privée RSA du device courant (jamais exposée au JS).
+  // Bootstrap : récupère le ciphered_kek patient et l'unwrap localement.
+  // Pour un médecin : avec la privée MEK en mémoire de session.
+  // Pour un patient (cas legacy) : avec la privée RSA du device.
   useEffect(() => {
     if (!isViewingPatient || !patientId) return;
-    if (!deviceId) {
-      void message.error('Device courant inconnu — reconnectez-vous.');
-      return;
-    }
     let cancelled = false;
     setUnwrapping(true);
     (async () => {
       try {
-        const cipheredKekB64 = await getPatientKek(patientId, deviceId);
-        const privateKey = await loadPrivateKey();
-        if (!privateKey) throw new Error('Clé privée introuvable dans IndexedDB.');
+        const cipheredKekB64 = await getPatientKek(patientId);
         const wrapped = fromBase64(cipheredKekB64);
-        const kek = await unwrapKEKWithRSAKey(wrapped, privateKey);
+        const role = useAuthStore.getState().role;
+
+        let kek: CryptoKey;
+        if (role === 'role_docteurs') {
+          // La KEK patient a été wrappée par le patient avec la public MEK
+          // du médecin. Seule la privée MEK (en mémoire de session) déballe.
+          const privateMEK = useCryptoStore.getState().privateMEK;
+          if (!privateMEK) {
+            throw new Error('Privée MEK absente — reconnectez-vous.');
+          }
+          kek = await unwrapPatientKEKWithPrivateMEK(wrapped, privateMEK);
+        } else {
+          // Cas legacy : non-médecin qui consulte un dossier patient (ne devrait
+          // pas arriver via l'UI mais on garde le path par sécurité).
+          const privateKey = await loadPrivateKey();
+          if (!privateKey) throw new Error('Clé privée introuvable dans IndexedDB.');
+          kek = await unwrapKEKWithRSAKey(wrapped, privateKey);
+        }
         if (!cancelled) setPatientKek(kek);
       } catch (err) {
         if (!cancelled) {
@@ -98,7 +114,7 @@ const Dossier: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isViewingPatient, patientId, deviceId, message]);
+  }, [isViewingPatient, patientId, message]);
 
   // Au démontage / changement de patient : purger la KEK patient de la mémoire.
   useEffect(() => {

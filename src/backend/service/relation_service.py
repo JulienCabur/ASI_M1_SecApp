@@ -68,14 +68,15 @@ class RelationService:
     def get_unverified_relations(self, user_id: str):
         """
         Récupère les relations non vérifiées d'un utilisateur, dédoublonnées
-        par contrepartie et enrichies avec username, direction et devices.
+        par contrepartie et enrichies avec username, direction et public_mek.
 
         - direction="incoming" : l'utilisateur courant est le patient cible
-          d'une demande médecin → il doit l'approuver/refuser. La liste
-          `devices` contient les clés publiques des devices du médecin pour
-          que le patient puisse wrap sa KEK avec.
+          d'une demande médecin → il doit l'approuver/refuser. `public_mek`
+          contient la JWK publique MEK du médecin pour que le patient puisse
+          y wrapper sa KEK une seule fois (au niveau user, plus par device).
         - direction="outgoing" : l'utilisateur courant est le médecin
-          demandeur → en attente de vérification par le patient.
+          demandeur → en attente de vérification par le patient. `public_mek`
+          est null (pas pertinent côté médecin demandeur).
         """
         relations = self.db.query(Relation).filter(
             (Relation.patient_id == user_id) | (Relation.doctor_id == user_id),
@@ -86,19 +87,7 @@ class RelationService:
         for r in relations:
             is_patient = r.patient_id == user_id
             counterpart_id = r.doctor_id if is_patient else r.patient_id
-
-            device_info = None
-            if r.doctor_device_id:
-                device = self.db.query(Device).filter(Device.id == r.doctor_device_id).first()
-                if device:
-                    device_info = {
-                        "device_id": str(device.id),
-                        "public_key": device.public_key,
-                    }
-
             if counterpart_id in aggregated:
-                if device_info:
-                    aggregated[counterpart_id]["devices"].append(device_info)
                 continue
 
             counterpart = self.db.query(User).filter(User.id == counterpart_id).first()
@@ -107,7 +96,9 @@ class RelationService:
                 "username": counterpart.username if counterpart else counterpart_id,
                 "role": counterpart.roles if counterpart else None,
                 "direction": "incoming" if is_patient else "outgoing",
-                "devices": [device_info] if device_info else [],
+                # Pour une demande "incoming", la contrepartie est un médecin
+                # → on remonte sa public MEK pour permettre au patient de wrap.
+                "public_mek": counterpart.public_mek if (counterpart and is_patient) else None,
             }
         return list(aggregated.values())
     
@@ -167,30 +158,23 @@ class RelationService:
             }
         return list(aggregated.values())
 
-    def get_patient_kek_for_doctor(self, doctor_id: str, doctor_device_id: str, patient_id: str):
+    def get_patient_kek_for_doctor(self, doctor_id: str, patient_id: str):
         """
-        Retourne le `ciphered_kek` patient pour le device courant du médecin.
+        Retourne le `ciphered_kek` patient pour le médecin courant.
 
-        Le `ciphered_kek` a été produit par le patient au moment du
-        `patient_verify_doctor` : il a wrappé sa KEK avec la clé publique RSA
-        de ce device → seul le détenteur de la privée RSA correspondante (ce
-        device, en local) peut le déballer. Le serveur ne voit jamais la KEK
-        en clair.
+        Le `ciphered_kek` a été produit par le patient au moment de
+        `patient_verify_doctor` : il a wrappé sa KEK avec la public MEK du
+        médecin (au niveau user, partagée entre tous ses devices). Seul le
+        détenteur de la privée MEK correspondante (en mémoire de session côté
+        médecin) peut la déballer. Le serveur ne voit jamais la KEK en clair.
         """
-        device = self.db.query(Device).filter(
-            Device.id == doctor_device_id,
-            Device.user_id == doctor_id,
-        ).first()
-        if not device:
-            raise ValueError("Device introuvable ou ne vous appartient pas.")
-
         relation = self.db.query(Relation).filter(
             Relation.doctor_id == doctor_id,
             Relation.patient_id == patient_id,
             Relation.is_verified.is_(True),
         ).first()
         if not relation or not relation.ciphered_kek:
-            raise ValueError("Aucune relation vérifiée trouvée pour ce patient sur ce device.")
+            raise ValueError("Aucune relation vérifiée trouvée pour ce patient.")
         return {"ciphered_kek": relation.ciphered_kek}
 
     def find_patient_by_username(self, username: str):

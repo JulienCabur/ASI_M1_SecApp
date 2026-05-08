@@ -7,8 +7,8 @@
  * formate ici en `Notification` pour réutiliser l'UI existante.
  *
  *  - Côté patient : la relation entrante = un médecin demande accès au
- *    dossier ; le patient peut Approuver (wrap KEK pour chaque device du
- *    médecin) ou Refuser.
+ *    dossier ; le patient peut Approuver (wrap sa KEK avec la public MEK du
+ *    médecin, une seule fois au niveau user) ou Refuser.
  *  - Côté médecin : la relation sortante = il attend la confirmation du
  *    patient ; il peut Annuler la demande.
  */
@@ -41,7 +41,7 @@ export const getNotifications = async (): Promise<Notification[]> => {
       initiatorName: r.username,
       payload: {
         counterpartId: r.counterpart_id,
-        devices: r.devices.map((d) => ({ deviceId: d.device_id, publicKey: d.public_key })),
+        publicMek: r.public_mek,
       },
     };
   });
@@ -49,8 +49,8 @@ export const getNotifications = async (): Promise<Notification[]> => {
 
 /**
  * Résout une notification.
- *  - "approved" (incoming uniquement) : pour chaque device du médecin, on
- *    wrap la KEK locale avec sa clé publique et on appelle `patient_verify_doctor`.
+ *  - "approved" (incoming uniquement) : on wrap la KEK locale avec la public
+ *    MEK du médecin et on appelle `patient_verify_doctor` une seule fois.
  *  - "rejected" : supprime la relation côté back (doctor ou patient selon
  *    la direction de la notif).
  */
@@ -62,19 +62,17 @@ export const resolveNotification = async (
     if (notification.direction !== 'incoming') {
       throw new Error('Seul le destinataire (patient) peut approuver une demande.');
     }
-    const devices = notification.payload.devices;
-    if (devices.length === 0) {
-      throw new Error('Aucun device médecin à vérifier pour cette demande.');
+    const publicMek = notification.payload.publicMek;
+    if (!publicMek) {
+      throw new Error('Public MEK du médecin absente — impossible d\'approuver.');
     }
     const kek = useCryptoStore.getState().kek;
     if (!kek) {
       throw new Error('Session cryptographique non initialisée. Reconnectez-vous.');
     }
-    for (const dev of devices) {
-      const recipientKey = await importPublicKeyJwk(dev.publicKey);
-      const cipheredKek = await wrapKEKWithRecipientPublicKey(kek, recipientKey);
-      await patientVerifyDoctor(dev.deviceId, cipheredKek);
-    }
+    const recipientKey = await importPublicKeyJwk(publicMek);
+    const cipheredKek = await wrapKEKWithRecipientPublicKey(kek, recipientKey);
+    await patientVerifyDoctor(notification.payload.counterpartId, cipheredKek);
     return;
   }
 
