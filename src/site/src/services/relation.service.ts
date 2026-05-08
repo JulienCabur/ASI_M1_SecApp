@@ -10,7 +10,6 @@ export interface Relation {
   id: string;
   patient_id: string;
   doctor_id: string;
-  doctor_device_id: string | null;
   is_verified: boolean;
 }
 
@@ -23,22 +22,18 @@ export interface RelationSummary {
   is_verified: boolean;
 }
 
-/** Device d'un médecin : clé publique RSA-OAEP exportée en JWK, utilisée
- *  côté patient pour wrap sa KEK avant `patient_verify_doctor`. */
-export interface RelationDevice {
-  device_id: string;
-  public_key: JsonWebKey;
-}
-
 /** Format renvoyé par `get_unverified_relations` :
- *  - direction="incoming" : l'user courant est le patient à approuver.
- *  - direction="outgoing" : l'user courant est le médecin en attente. */
+ *  - direction="incoming" : l'user courant est le patient à approuver. La
+ *    `public_mek` est la JWK publique MEK du médecin demandeur, utilisée par
+ *    le patient pour wrap sa KEK une seule fois (au niveau user médecin).
+ *  - direction="outgoing" : l'user courant est le médecin en attente —
+ *    `public_mek` n'est pas pertinent ici (null). */
 export interface UnverifiedRelation {
   counterpart_id: string;
   username: string;
   role: string | null;
   direction: 'incoming' | 'outgoing';
-  devices: RelationDevice[];
+  public_mek: JsonWebKey | null;
 }
 
 interface ListDoctorsResponse {
@@ -153,29 +148,27 @@ export const doctorRemovePatient = async (patientId: string): Promise<void> => {
   });
 };
 
-/** Patient → vérifie une relation pour un device médecin précis. La KEK
- *  doit avoir été wrappée localement avec la public_key du device. */
+/** Patient → vérifie la relation avec un médecin (au niveau user, plus par
+ *  device). La KEK doit avoir été wrappée localement avec la public MEK du
+ *  médecin remontée par `get_unverified_relations`. */
 export const patientVerifyDoctor = async (
-  doctorDeviceId: string,
+  doctorId: string,
   cipheredKek: string,
 ): Promise<void> => {
   const form = new URLSearchParams();
-  form.append('doctor_device_id', doctorDeviceId);
+  form.append('doctor_id', doctorId);
   form.append('ciphered_kek', cipheredKek);
   await api.post('/relation/patient_verify_doctor', form, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   });
 };
 
-/** Médecin → récupère la KEK patient (chiffrée) pour son device courant.
- *  À déballer localement avec la privée RSA d'IndexedDB pour pouvoir
- *  déchiffrer les fichiers du patient. */
-export const getPatientKek = async (
-  patientId: string,
-  deviceId: string,
-): Promise<string> => {
+/** Médecin → récupère la KEK patient (chiffrée par le patient avec la public
+ *  MEK du médecin). À déballer localement avec la privée MEK en mémoire de
+ *  session (cf. `unwrapPatientKEKWithPrivateMEK`). */
+export const getPatientKek = async (patientId: string): Promise<string> => {
   const { data } = await api.get<{ ciphered_kek: string }>('/relation/get_patient_kek', {
-    params: { patient_id: patientId, device_id: deviceId },
+    params: { patient_id: patientId },
   });
   return data.ciphered_kek;
 };

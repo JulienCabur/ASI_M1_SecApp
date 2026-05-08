@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { App, Button, Empty, Space, Tag, Typography } from 'antd';
 import { useCryptoStore } from '@/store/crypto.store';
+import { useAuthStore } from '@/store/auth.store';
 import {
   importPublicKeyJwk,
   wrapKEKWithRecipientPublicKey,
+  wrapPrivateKeyWithRSAKey,
 } from '@/services/crypto.service';
 import {
   type DeviceInfo,
@@ -47,20 +49,40 @@ const Devices: React.FC = () => {
   }, []);
 
   const handleAccept = async (device: DeviceInfo) => {
-    // Lire la KEK directement depuis le store (escape hatch Zustand) pour éviter
+    // Lire l'état directement depuis les stores (escape hatch Zustand) pour éviter
     // qu'une closure stale après re-render retourne une référence périmée.
-    const kek = useCryptoStore.getState().kek;
-
-    if (!kek) {
-      void message.error('Session cryptographique non disponible. Reconnectez-vous.');
-      return;
-    }
+    const role = useAuthStore.getState().role;
+    const { kek, privateMEK } = useCryptoStore.getState();
 
     setAccepting(device.id);
     try {
       const recipientPublicKey = await importPublicKeyJwk(device.public_key);
-      const cipheredKek = await wrapKEKWithRecipientPublicKey(kek, recipientPublicKey);
-      await verifyDeviceWithKek(device.id, cipheredKek);
+      let cipheredPayload: string;
+
+      if (role === 'role_docteurs') {
+        // Médecin : on partage la privée MEK (PKCS8) avec le nouveau device,
+        // chiffrée RSA-OAEP par sa pubkey. Le serveur ne voit jamais la privée.
+        if (!privateMEK) {
+          void message.error('Session cryptographique non disponible. Reconnectez-vous.');
+          setAccepting(null);
+          return;
+        }
+        const wrapped = await wrapPrivateKeyWithRSAKey(privateMEK, recipientPublicKey);
+        const bytes = new Uint8Array(wrapped);
+        let bin = '';
+        for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+        cipheredPayload = btoa(bin);
+      } else {
+        // Patient : on partage la KEK AES-GCM avec le nouveau device.
+        if (!kek) {
+          void message.error('Session cryptographique non disponible. Reconnectez-vous.');
+          setAccepting(null);
+          return;
+        }
+        cipheredPayload = await wrapKEKWithRecipientPublicKey(kek, recipientPublicKey);
+      }
+
+      await verifyDeviceWithKek(device.id, cipheredPayload);
       // Libérer le verrou AVANT fetchDevices pour que les autres boutons
       // soient réactivés sans attendre le rechargement de la liste.
       setAccepting(null);

@@ -4,6 +4,7 @@ Distinct de `/auth/challenge` (utilisé par le reset) pour éviter qu'une preuve
 produite pour un reset puisse être rejouée pour ouvrir une session, et inversement.
 """
 
+import json
 import secrets
 import time
 from typing import Any, Dict
@@ -24,6 +25,7 @@ from schema.auth_schema import (
 from service.auth_service import AuthService, DoctorConflictError
 from service.log_service import LogsService
 from service.file_service import FileService
+from schema.device_schema import JWKSchema
 
 
 router = APIRouter()
@@ -154,3 +156,31 @@ async def register_doctor_route(
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du médecin: {str(e)}")
+
+@router.post("/store_public_mek")
+async def store_public_mek_route(
+    public_mek_jwk: str = Form(..., description="JWK sérialisée en JSON"),
+    doctor_id: str = Form(...),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Stocke la public MEK d'un médecin (JWK RSA-OAEP).
+
+    Le front envoie tout en `application/x-www-form-urlencoded` ; FastAPI ne
+    permet pas de mélanger Form(...) et un body Pydantic, donc on reçoit la
+    JWK en chaîne JSON et on la valide ici via `JWKSchema`.
+    """
+    try:
+        jwk_dict = json.loads(public_mek_jwk)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=422, detail="public_mek_jwk doit être un JSON valide")
+    try:
+        validated = JWKSchema.model_validate(jwk_dict)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"JWK invalide : {e}")
+
+    auth_service = AuthService(db=db)
+    try:
+        auth_service.store_public_mek(doctor_id, validated.model_dump(exclude_none=True))
+        return {"status": "Public MEK stored successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error storing public MEK: {str(e)}")

@@ -8,7 +8,7 @@ class RelationBase(BaseModel):
     public_key: JWKSchema
 
 class RelationResponse(BaseModel):
-    relation: List[RelationBase]
+    relation: RelationBase
 
 class RelationDoctorResponse(BaseModel):
-    relation: List[UUID]
+    relation: UUID

@@ -4,7 +4,13 @@ import { MobileOutlined } from '@ant-design/icons';
 import { useCryptoStore } from '@/store/crypto.store';
 import { useAuthStore } from '@/store/auth.store';
 import { getDeviceKeys } from '@/services/device.service';
-import { clearPrivateKey, clearPublicKey, loadPrivateKey, unwrapKEKWithRSAKey } from '@/services/crypto.service';
+import {
+  clearPrivateKey,
+  clearPublicKey,
+  loadPrivateKey,
+  unwrapKEKWithRSAKey,
+  unwrapPrivateMEKWithDeviceKey,
+} from '@/services/crypto.service';
 import { logout } from '@/services/auth.service';
 import { ApiError } from '@/services/api';
 import styles from './PendingApproval.module.scss';
@@ -29,8 +35,8 @@ const fromBase64 = (b64: string): ArrayBuffer => {
  * Porte de sortie manuelle : "Se déconnecter" → purge + logout → /login immédiat.
  */
 export const PendingApproval = () => {
-  const { deviceId, deviceName, setSession, setPending, clear: clearCrypto } = useCryptoStore();
-  const { clear: clearAuth } = useAuthStore();
+  const { deviceId, deviceName, setSession, setDoctorSession, setPending, clear: clearCrypto } = useCryptoStore();
+  const { role, clear: clearAuth } = useAuthStore();
 
   const [checking, setChecking] = useState(false);
   const [stillPending, setStillPending] = useState(false);
@@ -60,9 +66,17 @@ export const PendingApproval = () => {
         if (!privateKey) {
           throw new ApiError('Clé privée introuvable en IndexedDB', 404, null);
         }
-        const wrappedKek = fromBase64(remote.ciphered_kek);
-        const kek = await unwrapKEKWithRSAKey(wrappedKek, privateKey);
-        setSession(deviceId, kek);
+        const wrapped = fromBase64(remote.ciphered_kek);
+
+        if (role === 'role_docteurs') {
+          // Médecin : Device A a wrappé la privée MEK PKCS8 pour ce device.
+          const privateMEK = await unwrapPrivateMEKWithDeviceKey(wrapped, privateKey);
+          setDoctorSession(deviceId, privateMEK);
+        } else {
+          // Patient : Device A a wrappé la KEK AES-GCM pour ce device.
+          const kek = await unwrapKEKWithRSAKey(wrapped, privateKey);
+          setSession(deviceId, kek);
+        }
         setPending(false);
         return;
       }
