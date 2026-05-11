@@ -105,6 +105,19 @@ class AuthService:
         if not os.path.exists(path):
             raise Exception("Certificat non trouvé")
         return path
+    
+    def store_public_mek(self, doctor_id: str, public_mek: Dict[str, Any]) -> None:
+        """Stocke la JWK publique MEK d'un médecin (colonne JSONB).
+
+        `public_mek` est le dict issu de la JWK validée (clé publique RSA-OAEP).
+        """
+        user = self.db.query(User).filter(User.id == doctor_id).first()
+        if not user:
+            raise Exception("Utilisateur non trouvé")
+        if user.roles != "doctor":
+            raise Exception("L'utilisateur n'est pas un médecin")
+        user.public_mek = public_mek
+        self.db.commit()
 
     def _keycloak_admin(self) -> KeycloakAdmin:
         return KeycloakAdmin(
@@ -185,12 +198,6 @@ class AuthService:
             new_user_id = keycloak_admin.create_user(user_payload, exist_ok=False)
             group_patient = keycloak_admin.get_group_by_path("/Patients")
             keycloak_admin.group_user_remove(new_user_id, group_patient['id'])
-            keycloak_admin.update_user(
-                user_id=new_user_id,
-                payload={
-                    "requiredActions": ["VERIFY_EMAIL", "CONFIGURE_TOTP"]
-                }
-            )
             user = User(
                 id=new_user_id,
                 username=user_info.username,
@@ -294,10 +301,10 @@ class AuthService:
     # Les deux étapes que comporte un "reset complet" sur ce realm passwordless :
     # le 2FA (TOTP) et la clé d'accès WebAuthn. Le mot de passe n'existe pas dans
     # le flow `Password-less`, donc on l'exclut volontairement.
-    _RESET_ACTIONS = ["CONFIGURE_TOTP", "webauthn-register-passwordless"]
+    _RESET_ACTIONS = ["webauthn-register-passwordless"]
 
     # Types de credentials Keycloak considérés comme "reset-ables".
-    _RESET_CREDENTIAL_TYPES = ("otp", "webauthn-passwordless")
+    _RESET_CREDENTIAL_TYPES = ("webauthn-passwordless")
 
     _ACTION_TOKEN_LIFESPAN_SECONDS = 3600
 

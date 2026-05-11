@@ -86,13 +86,13 @@ async def get_unverified_relations(
     
 @router.post("/patient_verify_doctor")
 async def patient_verify_doctor(
-    doctor_device_id: str = Form(...),
+    doctor_id: str = Form(...),
     ciphered_kek: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
     try:
         relation_service = RelationService(db=db)
-        relation_id = relation_service.verify_relation(patient_id=current_user.id, doctor_device_id=doctor_device_id, ciphered_kek=ciphered_kek)
+        relation_id = relation_service.verify_relation(patient_id=current_user.id, doctor_id=doctor_id, ciphered_kek=ciphered_kek)
 
         return {"status": f"Relation avec l'id {relation_id} vérifiée avec succès"}
     except Exception as e:
@@ -128,18 +128,17 @@ async def list_doctors(
 @router.get("/get_patient_kek")
 async def get_patient_kek(
     patient_id: str = Query(...),
-    device_id: str = Query(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
     """
-    Renvoie le `ciphered_kek` que le médecin courant peut déballer avec la
-    privée RSA de son device, pour ensuite déchiffrer les fichiers du patient.
+    Renvoie le `ciphered_kek` patient que le médecin courant peut déballer
+    avec sa privée MEK (en mémoire de session), pour ensuite déchiffrer les
+    fichiers du patient.
     """
     try:
         relation_service = RelationService(db=db)
         result = relation_service.get_patient_kek_for_doctor(
             doctor_id=current_user.id,
-            doctor_device_id=device_id,
             patient_id=patient_id,
         )
         return result

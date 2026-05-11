@@ -32,11 +32,6 @@ export type NotificationType = 'doctor_add' | 'patient_add';
 export type NotificationStatus = 'pending' | 'approved' | 'rejected';
 export type NotificationDirection = 'incoming' | 'outgoing';
 
-export interface NotificationDevice {
-  deviceId: string;
-  publicKey: JsonWebKey;
-}
-
 export interface Notification {
   id: string;
   type: NotificationType;
@@ -46,6 +41,8 @@ export interface Notification {
   initiatorName: string;
   payload: {
     counterpartId: string;
-    devices: NotificationDevice[];
+    /** JWK publique MEK du médecin demandeur (uniquement pour les notifs
+     *  "incoming" côté patient). null pour les notifs sortantes. */
+    publicMek: JsonWebKey | null;
   };
 }

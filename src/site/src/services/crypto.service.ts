@@ -65,6 +65,19 @@ export const generateKeyPair = async (): Promise<CryptoKeyPair> => {
     );
 }
 
+export const generateExtractableKeyPair = async (): Promise<CryptoKeyPair> => {
+    return await crypto.subtle.generateKey(
+        {
+            name: "RSA-OAEP",
+            modulusLength: 4096,
+            publicExponent: new Uint8Array([1, 0, 1]),
+            hash: "SHA-512",
+        },
+        true,
+        ["encrypt", "decrypt", "wrapKey", "unwrapKey"]
+    );
+}
+
 export const savePrivateKey = async (privateKey: CryptoKey): Promise<void> => {
     if (privateKey.extractable) {
         throw new Error('Refus de persister une clé privée extractable.');
@@ -146,6 +159,51 @@ export const generateKEKFromRSAKey = async (publicKey: CryptoKey): Promise<Seale
     return { kek, wrappedKek };
 };
 
+/**
+ * Wrap d'une privée RSA-OAEP (PKCS8) avec une autre clé publique RSA-OAEP.
+ *
+ * RSA-OAEP est limité à ~382 octets utiles pour 4096-bit / SHA-512, alors
+ * qu'un PKCS8 RSA-4096 fait ~2350 octets : `crypto.subtle.encrypt` directement
+ * lèverait `OperationError`. On fait donc du chiffrement hybride :
+ *
+ *   1) AES-GCM 256 éphémère chiffre le PKCS8 (taille libre)
+ *   2) RSA-OAEP wrap la clé AES (32 octets bruts, sous la limite OK)
+ *   3) On concatène : [2 octets length wrappedAes][wrappedAes][12 octets iv][ciphertext+tag]
+ */
+export const wrapPrivateKeyWithRSAKey = async (privateKey: CryptoKey, publicKey: CryptoKey): Promise<ArrayBuffer> => {
+    if (privateKey.type !== 'private') {
+        throw new Error('wrapPrivateKeyWithRSAKey attend une clé privée RSA-OAEP.');
+    }
+    if (publicKey.type !== 'public') {
+        throw new Error('wrapPrivateKeyWithRSAKey attend une clé publique RSA-OAEP.');
+    }
+
+    const pkcs8 = await crypto.subtle.exportKey('pkcs8', privateKey);
+
+    const aesKey = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt'],
+    );
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        aesKey,
+        pkcs8,
+    );
+    const wrappedAes = await crypto.subtle.wrapKey('raw', aesKey, publicKey, { name: 'RSA-OAEP' });
+
+    const wrappedAesBytes = new Uint8Array(wrappedAes);
+    const ciphertextBytes = new Uint8Array(ciphertext);
+    const out = new Uint8Array(2 + wrappedAesBytes.length + 12 + ciphertextBytes.length);
+    out[0] = (wrappedAesBytes.length >> 8) & 0xff;
+    out[1] = wrappedAesBytes.length & 0xff;
+    out.set(wrappedAesBytes, 2);
+    out.set(iv, 2 + wrappedAesBytes.length);
+    out.set(ciphertextBytes, 2 + wrappedAesBytes.length + 12);
+    return out.buffer;
+}
+
 export const unwrapKEKWithRSAKey = async (
     wrappedKek: ArrayBuffer,
     privateKey: CryptoKey,
@@ -172,8 +230,84 @@ export const importPublicKeyJwk = async (jwk: JsonWebKey): Promise<CryptoKey> =>
         jwk,
         { name: 'RSA-OAEP', hash: 'SHA-512' },
         false,
-        ['wrapKey'],
+        // 'encrypt' est requis pour wrapPrivateKeyWithRSAKey (qui appelle subtle.encrypt
+        // sur le PKCS8 exporté). 'wrapKey' reste utile pour wrapKEKWithRecipientPublicKey.
+        ['wrapKey', 'encrypt'],
     );
+
+/**
+ * Déballe la privée MEK d'un médecin reçue du serveur.
+ *
+ * Le payload est l'enveloppe hybride produite par `wrapPrivateKeyWithRSAKey` :
+ *   [2 octets length wrappedAes][wrappedAes RSA-OAEP][12 octets iv][ciphertext AES-GCM].
+ *
+ * On déballe la clé AES éphémère, on déchiffre le PKCS8, puis on l'importe en
+ * CryptoKey extractable car elle devra elle-même être re-wrappée pour de
+ * futurs devices du même médecin.
+ */
+export const unwrapPrivateMEKWithDeviceKey = async (
+    wrappedPayload: ArrayBuffer,
+    devicePrivateKey: CryptoKey,
+): Promise<CryptoKey> => {
+    if (devicePrivateKey.type !== 'private') {
+        throw new Error('unwrapPrivateMEKWithDeviceKey attend une clé privée RSA-OAEP de device.');
+    }
+    const bytes = new Uint8Array(wrappedPayload);
+    if (bytes.length < 14) {
+        throw new Error('Payload MEK invalide : trop court.');
+    }
+    const wrappedAesLen = (bytes[0] << 8) | bytes[1];
+    const wrappedAes = bytes.slice(2, 2 + wrappedAesLen);
+    const iv = bytes.slice(2 + wrappedAesLen, 2 + wrappedAesLen + 12);
+    const ciphertext = bytes.slice(2 + wrappedAesLen + 12);
+
+    const aesKey = await crypto.subtle.unwrapKey(
+        'raw',
+        wrappedAes,
+        devicePrivateKey,
+        { name: 'RSA-OAEP' },
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['decrypt'],
+    );
+    const pkcs8 = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        aesKey,
+        ciphertext,
+    );
+    return crypto.subtle.importKey(
+        'pkcs8',
+        pkcs8,
+        { name: 'RSA-OAEP', hash: 'SHA-512' },
+        // extractable=true : nécessaire pour pouvoir la re-wrapper PKCS8 à
+        // destination d'un futur Device B du même médecin.
+        true,
+        ['decrypt', 'unwrapKey'],
+    );
+};
+
+/**
+ * Déballe une KEK patient wrappée avec la public MEK du médecin.
+ * La public MEK est connue de tous les patients, mais seule la privée MEK,
+ * détenue (en mémoire) par les devices du médecin, peut la déballer.
+ */
+export const unwrapPatientKEKWithPrivateMEK = async (
+    wrappedKek: ArrayBuffer,
+    privateMEK: CryptoKey,
+): Promise<CryptoKey> => {
+    if (privateMEK.type !== 'private') {
+        throw new Error('unwrapPatientKEKWithPrivateMEK attend une privée MEK RSA-OAEP.');
+    }
+    return crypto.subtle.unwrapKey(
+        'raw',
+        wrappedKek,
+        privateMEK,
+        { name: 'RSA-OAEP' },
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['wrapKey', 'unwrapKey'],
+    );
+};
 
 export const wrapKEKWithRecipientPublicKey = async (
     kek: CryptoKey,

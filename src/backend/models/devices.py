@@ -11,7 +11,7 @@ class Device(Base):
     user_id = Column(String, ForeignKey("users.id"))
     device_name = Column(String)
     public_key = Column(JSONB, nullable=False)
-    ciphered_kek = Column(String, nullable=True)
+    ciphered_kek = Column(String, nullable=True) # KEK pour patient | MEK_PRK pour doctor
     is_verified = Column(Boolean, default=False)
     user = relationship("User", back_populates="devices")
 

@@ -26,16 +26,32 @@ export const registerDevice = async (
   return data;
 };
 
-export const storeKek = async (deviceId: string, cipheredKek: string): Promise<void> => {
+export const storeKek = async (
+  deviceId: string,
+  cipheredKek: string,
+  publicKeyJwk?: JsonWebKey,
+): Promise<void> => {
   // Le backend déclare KeyBase = Form(...), donc on envoie en
   // application/x-www-form-urlencoded plutôt qu'en JSON.
   const form = new URLSearchParams();
   form.append('device_id', deviceId);
   form.append('ciphered_kek', cipheredKek);
+  if (publicKeyJwk) {
+    form.append('public_key', JSON.stringify(publicKeyJwk));
+  }
   await api.post('/keys/store_kek', form, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   });
 };
+
+export const storePublicMEK = async (userId: string, publicKeyJwk: JsonWebKey): Promise<void> => {
+  const form = new URLSearchParams();
+  form.append('public_mek_jwk', JSON.stringify(publicKeyJwk));
+  form.append('doctor_id', userId);
+  await api.post('/auth/store_public_mek', form, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
+}
 
 export interface DeviceKeysResponse {
   public_key: JsonWebKey;
