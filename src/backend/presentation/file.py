@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, Form
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from core.database import get_db
@@ -57,33 +57,62 @@ async def upload_file(
     file: UploadFile,
     dek: str,
     date: str,
-    patient_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
-
+    if current_user.roles[0] != "role_patients":
+        raise HTTPException(status_code=403, detail="Only patients can upload files to their own directory.")
     file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    if patient_id:
-        message = file_service.upload_file(file=file, username=patient_id, dek=dek, date=date, doctor_id=str(current_user.id))
-    else:
-        message = file_service.upload_file(file=file, username=str(current_user.id), dek=dek, date=date)
+    message = file_service.upload_file(file=file, username=str(current_user.id), dek=dek, date=date)
     log_service.add_logs(action="UPLOAD_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
     return {"message": message}
 
+@router.post("/upload_file_for_doctor", response_model=Dict[str, Any])
+async def upload_file_for_doctor(
+    file: UploadFile,
+    dek: str,
+    date: str,
+    patient_id: str,
+    db: Session = Depends(get_db),
+    current_user: UserInDB = Depends(get_current_user)
+) -> Dict[str, Any]:
+    try:
+        if current_user.roles[0] != "role_docteurs":
+            raise HTTPException(status_code=403, detail="Only doctors can upload files to a patient's directory.")
+        file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
+        message = file_service.upload_file_for_doctor(file=file, patient_id=patient_id, doctor_id=str(current_user.id), dek=dek, date=date)
+        log_service.add_logs(action="UPLOAD_FILE_FOR_DOCTOR", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
+        return {"message": message}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de l'upload du fichier: {str(e)}")
+
 @router.post("/delete_file", response_model=Dict[str, Any])
 async def delete_file(
-    file: str,
-    patient_id: Optional[str] = None,
+    file: str = Form(...),
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
     file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    if patient_id:
-        message = file_service.delete_file(file=file, username=patient_id, doctor_id=str(current_user.id))
-    else:
-        message = file_service.delete_file(file=file, username=str(current_user.id))
+    message = file_service.delete_file(file=file, username=str(current_user.id))
     log_service.add_logs(action="DELETE_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
     return {"message": message}
+
+@router.post("/delete_file_for_doctor", response_model=Dict[str, Any])
+async def delete_file_for_doctor(
+    file: str = Form(...),
+    patient_id: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: UserInDB = Depends(get_current_user)
+) -> Dict[str, Any]:
+    try:
+        if current_user.roles[0] != "role_docteurs":
+            raise HTTPException(status_code=403, detail="Only doctors can delete files from a patient's directory.")
+        file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
+        message = file_service.delete_file_for_doctor(file_name=file, patient_id=patient_id, doctor_id=str(current_user.id))
+        log_service.add_logs(action="DELETE_FILE_FOR_DOCTOR", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
+        return {"message": message}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la suppression du fichier: {str(e)}")
 
 @router.get("/list_files", response_model=Dict[str, Any])
 async def list_files(
@@ -102,14 +131,10 @@ async def list_files(
 @router.post("/edit_file", response_model=Dict[str, Any])
 async def edit_file(
     file: UploadFile,
-    patient_id: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
     file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    if patient_id:
-        message = file_service.edit_file(file=file.filename, new_content=file.file.read(), username=patient_id, doctor_id=str(current_user.id))
-    else:
-        message = file_service.edit_file(file=file.filename, new_content=file.file.read(), username=str(current_user.id))
+    message = file_service.edit_file(file=file.filename, new_content=file.file.read(), username=str(current_user.id))
     log_service.add_logs(action="EDIT_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
     return {"message": message}

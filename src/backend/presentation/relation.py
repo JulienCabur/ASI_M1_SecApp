@@ -83,7 +83,32 @@ async def get_unverified_relations(
         return {"unverified_relations": relations}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des relations non vérifiées: {str(e)}")
-    
+
+@router.get("/patient_pending_requests")
+async def patient_pending_requests(
+    db = Depends(get_db),
+    current_user = Depends(get_current_user)):
+    try:
+        relation_service = RelationService(db=db)
+        pending_requests = relation_service.get_patient_pending_requests(patient_id=current_user.id)
+
+        return {"pending_requests": pending_requests}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des demandes en attente du patient: {str(e)}")
+
+@router.post("/patient_validate_request")
+async def patient_validate_request(
+    request_id: str = Form(...),
+    db = Depends(get_db),
+    current_user = Depends(get_current_user)):
+    try:
+        relation_service = RelationService(db=db)
+        relation_service.validate_patient_request(patient_id=current_user.id, request_id=request_id)
+
+        return {"status": "Demande validée avec succès"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la validation de la demande: {str(e)}")
+
 @router.post("/patient_verify_doctor")
 async def patient_verify_doctor(
     doctor_id: str = Form(...),

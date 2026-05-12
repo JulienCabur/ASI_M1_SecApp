@@ -1,6 +1,14 @@
+import os
+import shutil
+
+from service.file_service import FileService
+from models.file import File
+
 from models.relation import Relation
 from models.user import User
 from models.devices import Device
+from models.file_requests import FileOperationRequest
+from schema.file_requests_schema import OperationType, RequestStatus
 from schema.relation_schema import RelationBase, RelationResponse, RelationDoctorResponse
 class RelationService:
     """
@@ -41,6 +49,77 @@ class RelationService:
 
         return RelationResponse(relation=final_relation)
 
+    def get_patient_pending_requests(self, patient_id: str):
+        """
+        Récupère les demandes de relation en attente pour un patient donné.
+        :param patient_id: ID du patient.
+        :return: Liste des demandes de relation en attente.
+        """
+        relations = self.db.query(Relation).filter(Relation.patient_id == patient_id, Relation.is_verified.is_(True)).all()
+        pending_requests = []
+        for relation in relations:
+            file_requests = self.db.query(FileOperationRequest).filter(FileOperationRequest.relation_id == relation.id, FileOperationRequest.status == RequestStatus.PENDING).all()
+            for file_request in file_requests:
+                pending_requests.append({
+                    "relation_id": relation.id,
+                    "doctor_id": relation.doctor_id,
+                    "file_request_id": file_request.id,
+                    "operation_type": file_request.operation_type,
+                    "file_name": file_request.file_name,
+                    "date": file_request.date,
+                    "ciphered_dek": file_request.ciphered_dek
+                })
+        return pending_requests
+
+    def validate_patient_request(self, patient_id: str, request_id: str):
+        """
+        Valide une demande de relation pour un patient donné.
+        :param patient_id: ID du patient.
+        :param request_id: ID de la demande de relation à valider.
+        """
+        file_request = self.db.query(FileOperationRequest).filter(FileOperationRequest.id == request_id).first()
+        if not file_request:
+            raise ValueError(f"Aucune demande de relation trouvée avec l'ID '{request_id}'.")
+
+        relation = self.db.query(Relation).filter(Relation.id == file_request.relation_id, Relation.patient_id == patient_id).first()
+        if not relation:
+            raise ValueError(f"Aucune relation trouvée pour le patient '{patient_id}' avec la demande '{request_id}'.")
+        
+        file_service = FileService(db=self.db, storage_path=os.getenv("STORAGE_PATH"))
+
+        match file_request.operation_type:
+            case OperationType.CREATE:
+                try:
+                    shutil.move(os.path.join(file_service.temp_storage_path, patient_id, file_request.file_name), os.path.join(file_service.storage_path, patient_id, file_request.file_name))
+                    file_record = File(name=file_request.file_name, date=file_request.date, user_id=patient_id, ciphered_dek=file_request.ciphered_dek)
+                    self.db.add(file_record)
+                    self.db.commit()
+                except Exception as e:
+                    raise ValueError(f"Erreur lors du déplacement du fichier: {str(e)}")
+            case OperationType.UPDATE:
+                try:
+                    file_record = self.db.query(File).filter(File.name == file_request.file_name, File.user_id == patient_id).first()
+                    if not file_record:
+                        raise ValueError(f"Aucun enregistrement de fichier trouvé pour '{file_request.file_name}'.")
+                    shutil.move(os.path.join(file_service.temp_storage_path, patient_id, file_request.file_name), os.path.join(file_service.storage_path, patient_id, file_request.file_name))
+                    file_record.ciphered_dek = file_request.ciphered_dek
+                    self.db.commit()
+                except Exception as e:
+                    raise ValueError(f"Erreur lors de la mise à jour du fichier: {str(e)}")
+            case OperationType.DELETE:
+                try:
+                    file_record = self.db.query(File).filter(File.name == file_request.file_name, File.user_id == patient_id).first()
+                    if not file_record:
+                        raise ValueError(f"Aucun enregistrement de fichier trouvé pour '{file_request.file_name}'.")
+                    os.remove(os.path.join(file_service.storage_path, patient_id, file_request.file_name))
+                    self.db.delete(file_record)
+                    self.db.commit()
+                except Exception as e:
+                    raise ValueError(f"Erreur lors de la suppression du fichier: {str(e)}")
+            case _:
+                raise ValueError(f"Type d'opération inconnu pour la demande '{request_id}'.")
+        file_request.status = RequestStatus.APPROVED
+        self.db.commit()
 
     def doctor_add_patient(self, doctor_id: str, patient_id: str) -> RelationDoctorResponse:
         """

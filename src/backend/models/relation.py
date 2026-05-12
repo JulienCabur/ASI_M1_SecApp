@@ -15,3 +15,4 @@ class Relation(Base):
     ciphered_kek = Column(String, nullable=True)
     patient = relationship("User", foreign_keys=[patient_id])
     doctor = relationship("User", foreign_keys=[doctor_id])
+    file_requests = relationship("FileOperationRequest", back_populates="relation")
