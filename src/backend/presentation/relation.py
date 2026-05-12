@@ -87,8 +87,8 @@ async def get_unverified_relations(
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
     try:
-        if current_user.roles[0] != "role_patients":
-            raise HTTPException(status_code=403, detail="Only patients can view their unverified relations.")
+        if current_user.roles[0] != "role_patients" and current_user.roles[0] != "role_docteurs":
+            raise HTTPException(status_code=403, detail="Only patients and doctors can view their unverified relations.")
         relation_service = RelationService(db=db)
         relations = relation_service.get_unverified_relations(user_id=current_user.id)
 

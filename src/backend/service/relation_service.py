@@ -36,18 +36,20 @@ class RelationService:
         if not doctor:
             raise ValueError(f"Le médecin avec l'ID '{doctor_id}' n'existe pas ou n'est pas un médecin.")
 
+        if not doctor.public_mek:
+            raise ValueError(f"Le médecin avec l'ID '{doctor_id}' n'a pas de dispositif vérifié.")
+
         relation = Relation(patient_id=patient_id, doctor_id=doctor_id, is_verified=True)
         self.db.add(relation)
         self.db.commit()
         self.db.refresh(relation)
+        
         final_relation = RelationBase(
             relation_id=relation.id,
             public_key=doctor.public_mek,
         )
-        if not doctor.public_mek:
-            raise ValueError(f"Le médecin avec l'ID '{doctor_id}' n'a pas de dispositif vérifié.")
 
-        return RelationResponse(relation=final_relation)
+        return RelationResponse(relation=[final_relation])
 
     def get_patient_pending_requests(self, patient_id: str):
         """
