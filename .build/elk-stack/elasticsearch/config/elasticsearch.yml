@@ -20,7 +20,7 @@ xpack.security.transport.ssl.certificate: /usr/share/elasticsearch/config/certs/
 xpack.security.transport.ssl.key: /usr/share/elasticsearch/config/certs/server.key
 xpack.security.transport.ssl.certificate_authorities: /usr/share/elasticsearch/config/certs/ca-chain.pem
 
-## Audit Logging — détection de tampering des logs applicatifs
+## Audit Logging - détection de tampering des logs applicatifs
 ## access_granted capture toutes les opérations qui réussissent (y compris les suppressions)
 ## Le filtrage fin (action, index, user) est géré côté Logstash (20-filter.conf)
 xpack.security.audit.enabled: true
