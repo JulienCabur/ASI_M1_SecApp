@@ -1,0 +1,10 @@
+{
+  "cluster": [],
+  "indices": [
+    {
+      "names": ["security-alerts*"],
+      "privileges": ["read", "view_index_metadata"],
+      "allow_restricted_indices": false
+    }
+  ]
+}

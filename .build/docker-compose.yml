@@ -11,6 +11,7 @@ services:
     environment:
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
       LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      LOGSTASH_ALERTS_PASSWORD: ${LOGSTASH_ALERTS_PASSWORD:-}
       KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
       METRICBEAT_INTERNAL_PASSWORD: ${METRICBEAT_INTERNAL_PASSWORD:-}
       FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
@@ -32,8 +33,10 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
     volumes:
       - ./elk-stack/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+      - ./elk-stack/elasticsearch/config/log4j2.properties:/usr/share/elasticsearch/config/log4j2.properties:ro,Z
       - elasticsearch:/usr/share/elasticsearch/data:Z
       - ./secrets/elasticsearch:/usr/share/elasticsearch/config/certs:ro
+      - elasticsearch_audit_logs:/usr/share/elasticsearch/logs
     ports:
       - 9200:9200
       - 9300:9300
@@ -53,8 +56,10 @@ services:
     image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION}
     volumes:
       - ./elk-stack/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
+      - ./elk-stack/logstash/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro,Z
       - ./elk-stack/logstash/pipeline/:/usr/share/logstash/pipeline/:ro,Z
       - ./secrets/logstash:/usr/share/logstash/config/certs:ro
+      - elasticsearch_audit_logs:/usr/share/logstash/audit-logs:ro
     ports:
       - 5044:5044
       - 50000:50000/tcp
@@ -63,6 +68,7 @@ services:
     environment:
       LS_JAVA_OPTS: -Xms256m -Xmx256m
       LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      LOGSTASH_ALERTS_PASSWORD: ${LOGSTASH_ALERTS_PASSWORD:-}
     networks:
       - elk
     depends_on:
@@ -283,3 +289,4 @@ volumes:
   pki_doctors_crt:
   pki_secrets:
   elasticsearch:
+  elasticsearch_audit_logs:
