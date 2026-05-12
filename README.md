@@ -21,6 +21,16 @@ docker exec -it keycloak /opt/keycloak/bin/kc.sh export --file /opt/keycloak/con
 docker cp keycloak:/opt/keycloak/conf/realm-export.json .\keycloak\import\realm-export.json
 ```
 
+En cas de modification de la configuration de Kibana (Data Views, Règles d'alerte), à la fin :
+
+```bash
+cd .build/elk-stack/setup
+ELASTIC_PASSWORD="<mot_de_passe_elastic>" bash export-kibana.sh
+```
+
+Cela met à jour le fichier `.build/elk-stack/setup/kibana_export.ndjson`
+Au prochain `docker-compose up`, la configuration est automatiquement réimportée dans Kibana.
+
 Pour supprimer le volume
 
 ```bash

@@ -80,14 +80,19 @@ services:
 
   kibana:
     image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
+    entrypoint: ["/bin/bash", "/kibana-bootstrap.sh"]
     volumes:
       - ./elk-stack/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+      - ./elk-stack/kibana/kibana-bootstrap.sh:/kibana-bootstrap.sh:ro,Z
+      - ./elk-stack/setup/kibana_export.ndjson:/kibana_export.ndjson:ro,Z
       - ./secrets/kibana:/usr/share/kibana/config/certs:ro
     ports:
       - 5601:5601
     environment:
       KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
       XPACK_ENCRYPTION_KEY: ${XPACK_ENCRYPTION_KEY:-}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      IMPORT_FILE: /kibana_export.ndjson
     networks:
       - elk
     depends_on:
