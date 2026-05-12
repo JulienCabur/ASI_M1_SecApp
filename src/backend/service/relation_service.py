@@ -121,6 +121,23 @@ class RelationService:
         file_request.status = RequestStatus.APPROVED
         self.db.commit()
 
+    def patient_reject_request(self, patient_id: str, request_id: str):
+        """
+        Rejette une demande de relation pour un patient donné.
+        :param patient_id: ID du patient.
+        :param request_id: ID de la demande de relation à rejeter.
+        """
+        file_request = self.db.query(FileOperationRequest).filter(FileOperationRequest.id == request_id).first()
+        if not file_request:
+            raise ValueError(f"Aucune demande de relation trouvée avec l'ID '{request_id}'.")
+
+        relation = self.db.query(Relation).filter(Relation.id == file_request.relation_id, Relation.patient_id == patient_id).first()
+        if not relation:
+            raise ValueError(f"Aucune relation trouvée pour le patient '{patient_id}' avec la demande '{request_id}'.")
+        
+        file_request.status = RequestStatus.REJECTED
+        self.db.commit()
+
     def doctor_add_patient(self, doctor_id: str, patient_id: str) -> RelationDoctorResponse:
         """
         Crée une relation entre un médecin et un patient.

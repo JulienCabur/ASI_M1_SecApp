@@ -12,5 +12,5 @@ class FileOperationRequest(Base):
     status = Column(Enum(RequestStatus), default=RequestStatus.PENDING, index=True)
     file_name = Column(String, nullable=False)
     date = Column(String, nullable=False)
-    ciphered_dek = Column(String, nullable=True) # Clé du fichier chiffrée
+    ciphered_dek = Column(String, nullable=True)
     relation = relationship("Relation", back_populates="file_requests")

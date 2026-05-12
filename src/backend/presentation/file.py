@@ -22,14 +22,18 @@ async def create_directory(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
-
-    file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    directory_path = file_service.create_directory_service(username=str(current_user.id))
-    log_service.add_logs(action="CREATE_DIRECTORY", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
-    return {
-        "message": f"Répertoire créé pour {str(current_user.id)}",
-        "path": directory_path
-    }
+    try:
+        if current_user.roles[0] != "role_patients":
+            raise HTTPException(status_code=403, detail="Only patients can create their own directory.")
+        file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
+        directory_path = file_service.create_directory_service(username=str(current_user.id))
+        log_service.add_logs(action="CREATE_DIRECTORY", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+        return {
+            "message": f"Répertoire créé pour {str(current_user.id)}",
+            "path": directory_path
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la création du répertoire: {str(e)}")
 
 @router.get("/download_file", response_model=Dict[str, Any])
 async def download_file(
@@ -38,11 +42,19 @@ async def download_file(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ):
-    file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    if patient_id:
-        file_data = file_service.save_file(file=file, username=patient_id, doctor_id=str(current_user.id))
-    else:
-        file_data = file_service.save_file(file=file, username=str(current_user.id))
+    try:
+        if patient_id and current_user.roles[0] != "role_docteurs":
+            raise HTTPException(status_code=403, detail="Only doctors can download files from a patient's directory.")
+        elif not patient_id and current_user.roles[0] != "role_patients":
+            raise HTTPException(status_code=403, detail="Only patients can download files from their own directory.")
+
+        file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
+        if patient_id:
+            file_data = file_service.save_file(file=file, username=patient_id, doctor_id=str(current_user.id))
+        else:
+            file_data = file_service.save_file(file=file, username=str(current_user.id))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors du téléchargement du fichier: {str(e)}")
     file_content = file_service.get_base64_file_content(cert_path=file_data.path)
     log_service.add_logs(action="DOWNLOAD_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
 
@@ -60,12 +72,15 @@ async def upload_file(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
-    if current_user.roles[0] != "role_patients":
-        raise HTTPException(status_code=403, detail="Only patients can upload files to their own directory.")
-    file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    message = file_service.upload_file(file=file, username=str(current_user.id), dek=dek, date=date)
-    log_service.add_logs(action="UPLOAD_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
-    return {"message": message}
+    try:
+        if current_user.roles[0] != "role_patients":
+            raise HTTPException(status_code=403, detail="Only patients can upload files to their own directory.")
+        file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
+        message = file_service.upload_file(file=file, username=str(current_user.id), dek=dek, date=date)
+        log_service.add_logs(action="UPLOAD_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+        return {"message": message}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de l'upload du fichier: {str(e)}")
 
 @router.post("/upload_file_for_doctor", response_model=Dict[str, Any])
 async def upload_file_for_doctor(
@@ -92,10 +107,15 @@ async def delete_file(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
-    file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    message = file_service.delete_file(file=file, username=str(current_user.id))
-    log_service.add_logs(action="DELETE_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
-    return {"message": message}
+    try:
+        if current_user.roles[0] != "role_patients":
+            raise HTTPException(status_code=403, detail="Only patients can delete files from their own directory.")
+        file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
+        message = file_service.delete_file(file=file, username=str(current_user.id))
+        log_service.add_logs(action="DELETE_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+        return {"message": message}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la suppression du fichier: {str(e)}")
 
 @router.post("/delete_file_for_doctor", response_model=Dict[str, Any])
 async def delete_file_for_doctor(
@@ -120,12 +140,19 @@ async def list_files(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
-    file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    if patient_id:
-        files = file_service.list_files(username=patient_id, doctor_id=str(current_user.id))
-    else:
-        files = file_service.list_files(username=str(current_user.id))
-    log_service.add_logs(action="LIST_FILES", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+    try:
+        if patient_id and current_user.roles[0] != "role_docteurs":
+            raise HTTPException(status_code=403, detail="Only doctors can list files from a patient's directory.")
+        elif not patient_id and current_user.roles[0] != "role_patients":
+            raise HTTPException(status_code=403, detail="Only patients can list files from their own directory.")
+        file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
+        if patient_id:
+            files = file_service.list_files(username=patient_id, doctor_id=str(current_user.id))
+        else:
+            files = file_service.list_files(username=str(current_user.id))
+        log_service.add_logs(action="LIST_FILES", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la liste des fichiers: {str(e)}")
     return {"files": files}
 
 @router.post("/edit_file", response_model=Dict[str, Any])
@@ -134,7 +161,12 @@ async def edit_file(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
-    file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
-    message = file_service.edit_file(file=file.filename, new_content=file.file.read(), username=str(current_user.id))
-    log_service.add_logs(action="EDIT_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
-    return {"message": message}
+    try:
+        if current_user.roles[0] != "role_patients":
+            raise HTTPException(status_code=403, detail="Only patients can edit their own files.")
+        file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
+        message = file_service.edit_file(file=file.filename, new_content=file.file.read(), username=str(current_user.id))
+        log_service.add_logs(action="EDIT_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+        return {"message": message}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la modification du fichier: {str(e)}")
