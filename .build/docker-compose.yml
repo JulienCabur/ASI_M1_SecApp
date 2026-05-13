@@ -135,6 +135,7 @@ services:
       SESSION_SECRET: ${SESSION_SECRET}
       COOKIE_SECURE: "true"
       COOKIE_DOMAIN: localhost
+      LOGSTASH_URL: https://logstash:5044
     depends_on:
       pki:
         condition: service_healthy
