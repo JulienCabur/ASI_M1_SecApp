@@ -8,12 +8,10 @@ IMPORT_FILE="${IMPORT_FILE:-/kibana_export.ndjson}"
 CACERT="${CACERT:-/certs/ca-chain.pem}"
 
 log()    { echo "[+] $1"; }
-sublog() { echo "   ⠿ $1"; }
-suberr() { echo "   ⠍ $1" >&2; }
+sublog() { echo "    > $1"; }
+suberr() { echo "    ! $1" >&2; }
 
-# Wait for Kibana API to be ready (up to 5 minutes)
-
-log "Waiting for Kibana to be available at ${KIBANA_URL} ..."
+log "Waiting for Kibana at ${KIBANA_URL}..."
 
 declare -i kibana_ready=0
 for _ in $(seq 1 60); do
@@ -35,9 +33,7 @@ fi
 
 sublog "Kibana is ready."
 
-# Import saved objects (idempotent: overwrite=true)
-
-log "Importing Kibana saved objects from ${IMPORT_FILE} ..."
+log "Importing saved objects from ${IMPORT_FILE}..."
 
 declare -i http_code
 http_code=$(curl -sf --cacert "${CACERT}" \
@@ -50,7 +46,7 @@ http_code=$(curl -sf --cacert "${CACERT}" \
 
 if (( http_code == 200 )); then
     sublog "Import successful."
-    # Log any per-object errors (partial failures still return 200)
+    # partial failures still return 200, so check the body
     if grep -q '"errors":true' /tmp/kibana_import_result.json 2>/dev/null; then
         suberr "Some objects failed to import:"
         cat /tmp/kibana_import_result.json >&2

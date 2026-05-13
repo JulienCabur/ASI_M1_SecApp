@@ -1,7 +1,7 @@
 #!/bin/bash
-# Kibana bootstrap entrypoint — mirrors the Keycloak --import-realm pattern.
-# Starts Kibana in background, waits for the API, imports saved objects, then
-# keeps Kibana running in the foreground.
+# Kibana bootstrap — starts Kibana in the background, waits for the API,
+# imports saved objects if an export file is present, then keeps the
+# process in the foreground (same idea as Keycloak --import-realm).
 
 set -eo pipefail
 
@@ -11,24 +11,23 @@ CACERT="/usr/share/kibana/config/certs/ca-chain.pem"
 
 log() { echo "[kibana-bootstrap] $1"; }
 
-# Start Kibana with its original entrypoint in background
 /usr/local/bin/kibana-docker &
 KIBANA_PID=$!
 
 if [[ ! -f "$IMPORT_FILE" ]]; then
-    log "No import file at ${IMPORT_FILE} — skipping import."
+    log "No import file at ${IMPORT_FILE}, skipping."
     wait $KIBANA_PID
     exit $?
 fi
 
-# Wait for Kibana API to be ready (up to 5 minutes)
-log "Waiting for Kibana API..."
+log "Waiting for Kibana API to come up..."
 kibana_ready=0
 for _ in $(seq 1 60); do
     level=$(curl -sf --cacert "${CACERT}" \
         -u "elastic:${ELASTIC_PASSWORD}" \
         "${KIBANA_URL}/api/status" 2>/dev/null \
         | grep -o '"level":"[^"]*"' | head -1 || true)
+
     if [[ "$level" == '"level":"available"' ]]; then
         kibana_ready=1
         break
@@ -37,7 +36,7 @@ for _ in $(seq 1 60); do
 done
 
 if (( kibana_ready )); then
-    log "Kibana ready. Importing saved objects from ${IMPORT_FILE}..."
+    log "Kibana is ready. Importing objects from ${IMPORT_FILE}..."
     result=$(curl -sf --cacert "${CACERT}" \
         -u "elastic:${ELASTIC_PASSWORD}" \
         -X POST "${KIBANA_URL}/api/saved_objects/_import?overwrite=true" \
@@ -46,11 +45,10 @@ if (( kibana_ready )); then
     if echo "$result" | grep -q '"errors":true'; then
         log "WARNING: some objects failed to import: $result"
     else
-        log "Import successful."
+        log "Import done."
     fi
 else
-    log "WARNING: Kibana did not become ready in time — import skipped."
+    log "WARNING: Kibana didn't come up in time, skipping import."
 fi
 
-# Bring Kibana back to the foreground
 wait $KIBANA_PID

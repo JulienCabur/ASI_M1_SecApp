@@ -6,8 +6,7 @@ set -o pipefail
 source "${BASH_SOURCE[0]%/*}"/lib.sh
 
 
-# --------------------------------------------------------
-# Users declarations
+# pour les Users
 
 declare -A users_passwords
 users_passwords=(
@@ -31,8 +30,7 @@ users_roles=(
 	[monitoring_internal]='remote_monitoring_collector'
 )
 
-# --------------------------------------------------------
-# Roles declarations
+# ici les Roles
 
 declare -A roles_files
 roles_files=(
@@ -43,8 +41,6 @@ roles_files=(
 	[filebeat_writer]='filebeat_writer.json'
 	[heartbeat_writer]='heartbeat_writer.json'
 )
-
-# --------------------------------------------------------
 
 
 log 'Waiting for availability of Elasticsearch. This can take several minutes.'
