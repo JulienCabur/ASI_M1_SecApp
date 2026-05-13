@@ -1,4 +1,12 @@
 # SécuApp
+## Contributors
+RUELLE Thomas - etu51177
+DEMIR Erdem - etu51195
+CLAUS Gatien - etu51716
+MOMBAERTS Ciaran - etu51729
+
+## Deployment
+
 
 Dans le dossier .build
     Créer un fichier .env suivant le modèle env.example

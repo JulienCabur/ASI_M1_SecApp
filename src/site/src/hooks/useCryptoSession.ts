@@ -29,13 +29,17 @@ import {
   exportPublicKeyJwk,
   generateKEKFromRSAKey,
   generateKeyPair,
+  generateExtractableKeyPair,
   loadPrivateKey,
   savePrivateKey,
   savePublicKey,
   unwrapKEKWithRSAKey,
-} from '@/services/crypto.service';
-import { getDeviceKeys, registerDevice, storeKek } from '@/services/device.service';
+  unwrapPrivateMEKWithDeviceKey,
+  wrapPrivateKeyWithRSAKey,} from '@/services/crypto.service';
+import { getDeviceKeys, registerDevice, storeKek, storePublicMEK } from '@/services/device.service';
 import { useCryptoStore } from '@/store/crypto.store';
+import { useAuthStore } from '@/store/auth.store';
+import type { Role } from '@/types';
 
 const deviceIdKey   = (userId: string) => `secuapp.device_id.${userId}`;
 const deviceNameKey = (userId: string) => `secuapp.device_name.${userId}`;
@@ -67,7 +71,7 @@ const generateDeviceName = (): string => {
  * - Si is_verified: false → Device B : stocke uniquement le deviceId, lève isPending.
  *   La KEK arrivera de Device A via /keys/verify_device.
  */
-const bootstrapDevice = async (userId: string): Promise<void> => {
+const bootstrapDevice = async (userId: string, role: Role | null): Promise<void> => {
   const store = useCryptoStore.getState();
 
   const pair = await generateKeyPair();
@@ -91,7 +95,24 @@ const bootstrapDevice = async (userId: string): Promise<void> => {
     return;
   }
 
-  // Device A (premier device) : auto-générer et auto-emballer la KEK.
+  if (role === 'role_docteurs') {
+    // Médecin Device A : on génère la paire MEK (RSA-OAEP extractable),
+    // on wrappe la privée PKCS8 avec la pubkey du device pour persistance
+    // côté serveur, et on garde la privée MEK en mémoire pour la session.
+    // Pas de KEK AES-GCM perso : un médecin ne chiffre pas ses propres
+    // fichiers, il déballe seulement les KEK des patients.
+    const doctorPair = await generateExtractableKeyPair();
+    const wrappedDoctorPrivateKey = await wrapPrivateKeyWithRSAKey(doctorPair.privateKey, pair.publicKey);
+    const doctorPublicKeyJwk = await exportPublicKeyJwk(doctorPair.publicKey);
+
+    await storeKek(device_id, toBase64(wrappedDoctorPrivateKey));
+    await storePublicMEK(userId, doctorPublicKeyJwk);
+
+    store.setDoctorSession(device_id, doctorPair.privateKey);
+    return;
+  }
+
+  // Patient Device A : auto-générer et auto-emballer la KEK AES-GCM.
   const sealed = await generateKEKFromRSAKey(pair.publicKey);
   await storeKek(device_id, toBase64(sealed.wrappedKek));
   store.setSession(device_id, sealed.kek);
@@ -107,7 +128,7 @@ type RecoveryResult = 'ok' | 'pending' | 'failed';
  *   'pending' → device existe mais pas encore approuvé (ciphered_kek null)
  *   'failed'  → device introuvable (404) ou clé privée absente → re-bootstrap nécessaire
  */
-const recoverDevice = async (deviceId: string, userId: string): Promise<RecoveryResult> => {
+const recoverDevice = async (deviceId: string, userId: string, role: Role | null): Promise<RecoveryResult> => {
   const privateKey = await loadPrivateKey();
   if (!privateKey) return 'failed';
 
@@ -130,9 +151,18 @@ const recoverDevice = async (deviceId: string, userId: string): Promise<Recovery
     return 'pending';
   }
 
-  const wrappedKek = fromBase64(remote.ciphered_kek);
-  const kek = await unwrapKEKWithRSAKey(wrappedKek, privateKey);
-  useCryptoStore.getState().setSession(deviceId, kek);
+  const wrappedPayload = fromBase64(remote.ciphered_kek);
+
+  if (role === 'role_docteurs') {
+    // Pour un médecin, ciphered_kek = privée MEK PKCS8 chiffrée RSA-OAEP
+    // par la pubkey de ce device. On la déballe et la garde en mémoire.
+    const privateMEK = await unwrapPrivateMEKWithDeviceKey(wrappedPayload, privateKey);
+    useCryptoStore.getState().setDoctorSession(deviceId, privateMEK);
+  } else {
+    // Pour un patient, ciphered_kek = KEK AES-GCM wrappée par la pubkey du device.
+    const kek = await unwrapKEKWithRSAKey(wrappedPayload, privateKey);
+    useCryptoStore.getState().setSession(deviceId, kek);
+  }
   return 'ok';
 };
 
@@ -143,10 +173,11 @@ const recoverDevice = async (deviceId: string, userId: string): Promise<Recovery
  * .finally() afin de garantir que le spinner disparaît dans tous les cas.
  */
 export const initCryptoSession = async (userId: string): Promise<void> => {
+  const { role } = useAuthStore.getState();
   const stored = localStorage.getItem(deviceIdKey(userId));
 
   if (stored) {
-    const result = await recoverDevice(stored, userId);
+    const result = await recoverDevice(stored, userId, role);
     if (result === 'ok' || result === 'pending') {
       // 'pending' : isPending est déjà positionné dans recoverDevice.
       return;
@@ -160,5 +191,5 @@ export const initCryptoSession = async (userId: string): Promise<void> => {
     await clearPublicKey();
   }
 
-  await bootstrapDevice(userId);
+  await bootstrapDevice(userId, role);
 };

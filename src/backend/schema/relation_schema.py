@@ -11,4 +11,4 @@ class RelationResponse(BaseModel):
     relation: List[RelationBase]
 
 class RelationDoctorResponse(BaseModel):
-    relation: List[UUID]
+    relation: UUID
