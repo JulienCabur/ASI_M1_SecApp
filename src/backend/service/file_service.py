@@ -3,6 +3,8 @@ import os
 from sqlalchemy.orm import Session
 from models.relation import Relation
 from schema.file_schema import FileBase
+from models.file_requests import FileOperationRequest
+from schema.file_requests_schema import OperationType, RequestStatus
 from models.file import File
 import base64
 import uuid
@@ -21,17 +23,26 @@ class FileService:
         self.storage_path = storage_path
         if not os.path.exists(self.storage_path):
             os.makedirs(self.storage_path)
+        self.temp_storage_path = "/temp_storage"
+        if not os.path.exists(self.temp_storage_path):
+            os.makedirs(self.temp_storage_path)
 
-    def create_directory_service(self, username: str) -> str:
+    def create_directory_service(self, username: str, temporary: bool = False) -> str:
         """
         Crée un répertoire pour un utilisateur donné.
         :param username: Nom de l'utilisateur pour lequel créer le répertoire.
+        :param temporary: Indique si le répertoire est temporaire.
         :return: Chemin du répertoire créé.
         """
-        user_directory = os.path.join(self.storage_path, username)
+        if temporary:
+            user_directory = os.path.join(self.temp_storage_path, username)
+        else:
+            user_directory = os.path.join(self.storage_path, username)
         if not os.path.exists(user_directory):
             os.makedirs(user_directory)
         return user_directory
+    
+    
 
     def get_base64_file_content(self, cert_path: str) -> bytes:
         with open(cert_path, "rb") as f:
@@ -60,7 +71,7 @@ class FileService:
 
         return FileBase(path=file_path, name=file, ciphered_dek=file_record.ciphered_dek)
     
-    def upload_file(self, file, username: str, dek: str, date: str, doctor_id: str = None) -> str:
+    def upload_file(self, file, username: str, dek: str, date: str) -> str:
         """
         Gère le processus de téléversement d'un fichier pour un utilisateur donné.
         :param file: Fichier à téléverser. `file.filename` est attendu sous forme
@@ -71,10 +82,6 @@ class FileService:
         :return: Chemin du fichier téléchargé.
         """
         try:
-            if doctor_id:
-                relation = self.db.query(Relation).filter(Relation.patient_id == username, Relation.doctor_id == doctor_id).first()
-                if not relation or not relation.is_verified:
-                    raise Exception("Relation non vérifiée entre le médecin et le patient.")
             contents = file.file.read()
             file_record = File(uuid=uuid.uuid4(), name=file.filename, date=date, user_id=username, ciphered_dek=dek)
             self.db.add(file_record)
@@ -88,21 +95,81 @@ class FileService:
             file.file.close()
 
         return f"Fichier '{file.filename}' téléchargé avec succès pour l'utilisateur '{username}'."
+
+    def upload_file_for_doctor(self, file, patient_id: str, doctor_id: str, dek: str, date: str) -> str:
+        """
+        Gère le processus de téléversement d'un fichier pour un patient par un médecin.
+        :param file: Fichier à téléverser. `file.filename` est attendu sous forme
+                     de nom chiffré (b64url) — le serveur ne l'interprète jamais en clair.
+        :param patient_id: ID du patient pour lequel téléverser le fichier.
+        :param doctor_id: ID du médecin qui téléverse le fichier.
+        :param dek: Enveloppe (JSON-base64) contenant le DEK wrappé et les IVs.
+        :param date: Date d'upload chiffrée côté client (b64), opaque pour le serveur.
+        :return: Chemin du fichier téléchargé.
+        """
+        try:
+            relation = self.db.query(Relation).filter(Relation.patient_id == patient_id, Relation.doctor_id == doctor_id).first()
+            if not relation or not relation.is_verified:
+                raise Exception("Relation non vérifiée entre le médecin et le patient.")
+            self.create_directory_service(patient_id, temporary=True)
+            file_request = FileOperationRequest(
+                id=uuid.uuid4(),
+                relation_id=relation.id,
+                operation_type=OperationType.CREATE,
+                status=RequestStatus.PENDING,
+                file_name=file.filename,
+                date=date,
+                ciphered_dek=dek
+            )
+            self.db.add(file_request)
+            self.db.commit()
+
+            contents = file.file.read()
+            with open(os.path.join(self.temp_storage_path, patient_id, file.filename), 'wb') as f:
+                f.write(contents)
+
+        except Exception as e:            
+            return f"Erreur de relation: {str(e)}"
     
-    def delete_file(self, file: str, username: str, doctor_id: str = None) -> str:
+    def delete_file_for_doctor(self, file_name: str, patient_id: str, doctor_id: str) -> str:
+        """
+        Gère le processus de suppression d'un fichier pour un patient par un médecin.
+        :param file_name: Nom du fichier à supprimer.
+        :param patient_id: ID du patient pour lequel supprimer le fichier.
+        :param doctor_id: ID du médecin qui supprime le fichier.
+        :return: Message de confirmation de la suppression du fichier.
+        """
+        try:
+            relation = self.db.query(Relation).filter(Relation.patient_id == patient_id, Relation.doctor_id == doctor_id).first()
+            if not relation or not relation.is_verified:
+                raise Exception("Relation non vérifiée entre le médecin et le patient.")
+            file_record = self.db.query(File).filter(File.name == file_name, File.user_id == patient_id).first()
+            if not file_record:
+                raise Exception(f"Aucun enregistrement de fichier trouvé pour '{file_name}' et le patient '{patient_id}'.")
+            file_request = FileOperationRequest(
+                id=uuid.uuid4(),
+                relation_id=relation.id,
+                operation_type=OperationType.DELETE,
+                status=RequestStatus.PENDING,
+                file_name=file_name,
+                date=file_record.date,
+                ciphered_dek=file_record.ciphered_dek
+            )
+            self.db.add(file_request)
+            self.db.commit()
+
+        except Exception as e:            
+            return f"Erreur de relation: {str(e)}"
+    
+    def delete_file(self, file: str, username: str) -> str:
         """
         Supprime un fichier pour un utilisateur donné.
         :param file: Fichier à supprimer.
         :param username: Nom de l'utilisateur pour lequel supprimer le fichier.
-        :param doctor_id: ID du médecin pour lequel supprimer le fichier.
         :return: Message de confirmation de la suppression du fichier.
         """
         user_directory = self.create_directory_service(username)
         file_path = os.path.join(user_directory, file)
-        if doctor_id:
-            relation = self.db.query(Relation).filter(Relation.patient_id == username, Relation.doctor_id == doctor_id).first()
-            if not relation or not relation.is_verified:
-                raise Exception("Relation non vérifiée entre le médecin et le patient.")
         if not os.path.exists(file_path):
             return f"Le fichier '{file}' n'existe pas dans le répertoire de l'utilisateur '{username}'."
         
@@ -142,7 +209,7 @@ class FileService:
                 })
         return files_list
 
-    def edit_file(self, file: str, new_content: bytes, username: str, doctor_id: str = None) -> str:
+    def edit_file(self, file: str, new_content: bytes, username: str) -> str:
         """
         Modifie le contenu d'un fichier pour un utilisateur donné.
         :param file: Fichier à modifier.
@@ -152,10 +219,6 @@ class FileService:
         :return: Message de confirmation de la modification du fichier.
         """
         user_directory = self.create_directory_service(username)
-        if doctor_id:
-            relation = self.db.query(Relation).filter(Relation.patient_id == username, Relation.doctor_id == doctor_id).first()
-            if not relation or not relation.is_verified:
-                raise Exception("Relation non vérifiée entre le médecin et le patient.")
         file_path = os.path.join(user_directory, file)
         
         if not os.path.exists(file_path):
