@@ -103,7 +103,7 @@ async def upload_file_for_doctor(
 
 @router.post("/delete_file", response_model=Dict[str, Any])
 async def delete_file(
-    file: str = Form(...),
+    file: str,
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
