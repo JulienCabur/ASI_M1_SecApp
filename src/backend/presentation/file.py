@@ -15,7 +15,7 @@ router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion des
     tags=["files"]
 )
 load_dotenv()
-log_service = LogsService()
+log_service = LogsService("backend_files")
 
 @router.post("/create_directory", response_model=Dict[str, Any])
 async def create_directory(

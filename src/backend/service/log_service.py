@@ -17,14 +17,14 @@ class LogsService:
     """
     Classe de service pour la gestion des logs.
     """
-    def __init__(self):
+    def __init__(self, service_name: str = "backend_python"):
         """
         Initialise le service de logs.
         """
         self.category = ["INFO", "WARNING", "ERROR", "DEBUG", "CRITICAL"]
         self.sequence = 0
         self.logstash_url = os.getenv("LOGSTASH_URL", "https://logstash:5044")
-        self.service_name = "backend_python"
+        self.service_name = service_name
         self.previous_hash = "0000000000000000000000000000000000000000000000000000000000000000"
         self.source_ip = "0.0.0.0"
         self.public_cert_path = "/app/certs/logstash.crt"
