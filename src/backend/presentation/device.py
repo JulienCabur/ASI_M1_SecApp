@@ -21,7 +21,7 @@ router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion des
     tags=["keys"]
 )
 load_dotenv()
-logs_service = LogsService()
+logs_service = LogsService("backend_devices")
 
 @router.post("/register_device", response_model=Dict[str, Any])
 def register_device_route(

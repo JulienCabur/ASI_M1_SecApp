@@ -13,7 +13,7 @@ from service.auth_service import AuthService
 from service.log_service import LogsService
 
 router = APIRouter()
-logs_service = LogsService()
+logs_service = LogsService("backend_auth")
 
 # Rate-limit en mémoire (process-local). Pour du multi-worker, déplacer vers Redis.
 _RESET_RATE_LIMIT: Dict[str, list] = {}

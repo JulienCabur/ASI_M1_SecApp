@@ -1,0 +1,10 @@
+{
+  "cluster": ["monitor"],
+  "indices": [
+    {
+      "names": ["security-alerts*"],
+      "privileges": ["create_doc", "create_index", "auto_configure"],
+      "allow_restricted_indices": false
+    }
+  ]
+}

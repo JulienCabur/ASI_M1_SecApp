@@ -1,0 +1,5 @@
+- pipeline.id: secure-audit
+  path.config: "/usr/share/logstash/pipeline/secure-audit/*.conf"
+
+- pipeline.id: alerts-logs-tampering
+  path.config: "/usr/share/logstash/pipeline/alerts-logs-tampering/*.conf"
