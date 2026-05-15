@@ -29,7 +29,7 @@ from schema.device_schema import JWKSchema
 
 
 router = APIRouter()
-logs_service = LogsService()
+logs_service = LogsService("backend_auth")
 
 
 @router.get("/cert/login/challenge", response_model=ChallengeResponse)

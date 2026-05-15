@@ -15,7 +15,7 @@ router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion des
     tags=["files"]
 )
 load_dotenv()
-log_service = LogsService()
+log_service = LogsService("backend_files")
 
 @router.post("/create_directory", response_model=Dict[str, Any])
 async def create_directory(
@@ -103,7 +103,7 @@ async def upload_file_for_doctor(
 
 @router.post("/delete_file", response_model=Dict[str, Any])
 async def delete_file(
-    file: str = Form(...),
+    file: str,
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:

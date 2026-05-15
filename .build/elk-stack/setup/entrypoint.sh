@@ -6,12 +6,12 @@ set -o pipefail
 source "${BASH_SOURCE[0]%/*}"/lib.sh
 
 
-# --------------------------------------------------------
-# Users declarations
+# pour les Users
 
 declare -A users_passwords
 users_passwords=(
 	[logstash_internal]="${LOGSTASH_INTERNAL_PASSWORD:-}"
+	[logstash_alerts_writer]="${LOGSTASH_ALERTS_PASSWORD:-}"
 	[kibana_system]="${KIBANA_SYSTEM_PASSWORD:-}"
 	[metricbeat_internal]="${METRICBEAT_INTERNAL_PASSWORD:-}"
 	[filebeat_internal]="${FILEBEAT_INTERNAL_PASSWORD:-}"
@@ -23,24 +23,24 @@ users_passwords=(
 declare -A users_roles
 users_roles=(
 	[logstash_internal]='logstash_writer'
+	[logstash_alerts_writer]='security_alerts_writer'
 	[metricbeat_internal]='metricbeat_writer'
 	[filebeat_internal]='filebeat_writer'
 	[heartbeat_internal]='heartbeat_writer'
 	[monitoring_internal]='remote_monitoring_collector'
 )
 
-# --------------------------------------------------------
-# Roles declarations
+# ici les Roles
 
 declare -A roles_files
 roles_files=(
 	[logstash_writer]='logstash_writer.json'
+	[security_alerts_writer]='security_alerts_writer.json'
+	[security_alerts_reader]='security_alerts_reader.json'
 	[metricbeat_writer]='metricbeat_writer.json'
 	[filebeat_writer]='filebeat_writer.json'
 	[heartbeat_writer]='heartbeat_writer.json'
 )
-
-# --------------------------------------------------------
 
 
 log 'Waiting for availability of Elasticsearch. This can take several minutes.'

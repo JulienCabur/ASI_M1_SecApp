@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Form
 from service.relation_service import RelationService
+from service.log_service import LogsService
 from core.database import get_db
 from core.auth import get_current_user
 
@@ -7,6 +8,7 @@ router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion des
     prefix="/relation",
     tags=["relation"]
 )
+logs_service = LogsService("backend_relations")
 
 @router.post("/patient_add_doctor")
 async def patient_add_doctor(
@@ -18,7 +20,7 @@ async def patient_add_doctor(
             raise HTTPException(status_code=403, detail="Only patients can add doctors.")
         relation_service = RelationService(db=db)
         relation = relation_service.patient_add_doctor(patient_id=current_user.id, doctor_id=doctor_id)
-
+        logs_service.add_logs(action="ADD_DOCTOR_RELATION", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0])
         return {"relations": relation}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la création de la relation: {str(e)}")
@@ -33,7 +35,7 @@ async def patient_remove_doctor(
             raise HTTPException(status_code=403, detail="Only patients can remove doctors.")
         relation_service = RelationService(db=db)
         relation_service.delete_relation(patient_id=current_user.id, doctor_id=doctor_id)
-
+        logs_service.add_logs(action="REMOVE_DOCTOR_RELATION", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0])
         return {"status": "Relations supprimées avec succès"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la suppression de la relation: {str(e)}")
@@ -48,7 +50,7 @@ async def doctor_remove_patient(
             raise HTTPException(status_code=403, detail="Only doctors can remove patients.")
         relation_service = RelationService(db=db)
         relation_service.delete_relation(patient_id=patient_id, doctor_id=current_user.id)
-
+        logs_service.add_logs(action="DOCTOR_REMOVE_PATIENT", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0])
         return {"status": "Relations supprimées avec succès"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la suppression de la relation: {str(e)}")
@@ -77,7 +79,7 @@ async def doctor_add_patient(
             raise HTTPException(status_code=403, detail="Only doctors can add patients.")
         relation_service = RelationService(db=db)
         relation = relation_service.doctor_add_patient(doctor_id=current_user.id, patient_id=patient_id)
-
+        logs_service.add_logs(action="DOCTOR_ADD_PATIENT", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0])
         return {"relations": relation}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la création de la relation: {str(e)}")
@@ -120,7 +122,7 @@ async def patient_validate_request(
             raise HTTPException(status_code=403, detail="Only patients can validate requests.")
         relation_service = RelationService(db=db)
         relation_service.validate_patient_request(patient_id=current_user.id, request_id=request_id)
-
+        logs_service.add_logs(action="VALIDATE_RELATION_REQUEST", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0])
         return {"status": "Demande validée avec succès"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la validation de la demande: {str(e)}")
@@ -135,7 +137,7 @@ async def patient_reject_request(
             raise HTTPException(status_code=403, detail="Only patients can reject requests.")
         relation_service = RelationService(db=db)
         relation_service.reject_patient_request(patient_id=current_user.id, request_id=request_id)
-
+        logs_service.add_logs(action="REJECT_RELATION_REQUEST", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0])
         return {"status": "Demande rejetée avec succès"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors du rejet de la demande: {str(e)}")
@@ -151,7 +153,7 @@ async def patient_verify_doctor(
             raise HTTPException(status_code=403, detail="Only patients can verify doctors.")
         relation_service = RelationService(db=db)
         relation_id = relation_service.verify_relation(patient_id=current_user.id, doctor_id=doctor_id, ciphered_kek=ciphered_kek)
-
+        logs_service.add_logs(action="VERIFY_DOCTOR_RELATION", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0])
         return {"status": f"Relation avec l'id {relation_id} vérifiée avec succès"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la vérification de la relation: {str(e)}")

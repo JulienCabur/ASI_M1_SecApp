@@ -40,7 +40,7 @@ from service.log_service import LogsService
 from ._helpers import decode_token_unverified, frontend_url
 
 router = APIRouter()
-logs_service = LogsService()
+logs_service = LogsService("backend_auth")
 
 
 @router.get("/login")
