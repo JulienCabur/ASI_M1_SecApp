@@ -1,9 +1,9 @@
 # SécuApp
 ## Contributors
-RUELLE Thomas - etu51177
-DEMIR Erdem - etu51195
-CLAUS Gatien - etu51716
-MOMBAERTS Ciaran - etu51729
+RUELLE Thomas - etu51177  
+DEMIR Erdem - etu51195  
+CLAUS Gatien - etu51716  
+MOMBAERTS Ciaran - etu51729  
 
 ## Deployment
 

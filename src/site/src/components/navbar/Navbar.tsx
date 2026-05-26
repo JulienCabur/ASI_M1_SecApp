@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 const Navbar = () => {
   const navigate = useNavigate();
-  const pendingCount = useNotificationsStore((s) => s.pendingCount);
+  const pendingCount = useNotificationsStore((s) => s.pendingCount + s.pendingFileCount);
   const { role } = useAuth();
   const isDoctor = role === 'role_docteurs';
 

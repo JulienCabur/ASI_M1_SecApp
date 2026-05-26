@@ -23,6 +23,7 @@ import {
   type EncryptedFile,
 } from '@/services/crypto.service';
 import { useCryptoStore } from '@/store/crypto.store';
+import type { PendingFileRequest } from '@/types';
 
 export interface RemoteFile {
   id: string;
@@ -209,4 +210,106 @@ export const deleteFile = async (id: string, ctx?: FileContext): Promise<void> =
   await api.post('/files/delete_file', null, {
     params: { file: id, ...patientParams(ctx) },
   });
+};
+
+// ─── Quarantaine : opérations initiées par le médecin ────────────────────────
+
+export const uploadFileForDoctor = async (file: File, ctx: Required<FileContext>): Promise<void> => {
+  const plain = await file.arrayBuffer();
+  const enc = await encryptFileWithKEK(
+    plain,
+    { name: file.name, date: new Date().toISOString() },
+    ctx.kek,
+  );
+  const envelope = encodeEnvelope(enc);
+  const cipheredName = toBase64Url(enc.nameCiphertext);
+  const cipheredDate = toBase64(enc.dateCiphertext);
+
+  const form = new FormData();
+  form.append('file', new Blob([enc.ciphertext]), cipheredName);
+  await api.post('/files/upload_file_for_doctor', form, {
+    params: { dek: envelope, date: cipheredDate, patient_id: ctx.patientId },
+  });
+};
+
+export const deleteFileForDoctor = async (fileId: string, patientId: string): Promise<void> => {
+  await api.post(
+    '/files/delete_file_for_doctor',
+    new URLSearchParams({ file: fileId, patient_id: patientId }),
+  );
+};
+
+interface PendingRequestsResponse {
+  pending_requests: {
+    file_request_id: string;
+    relation_id: string;
+    doctor_id: string;
+    operation_type: string;
+    file_name: string;
+    date: string;
+    ciphered_dek: string;
+  }[];
+}
+
+const decryptPendingRequests = async (
+  raw: PendingRequestsResponse['pending_requests'],
+  kek: CryptoKey,
+): Promise<PendingFileRequest[]> =>
+  Promise.all(
+    raw.map(async (req) => {
+      const env = decodeEnvelope(req.ciphered_dek);
+      const meta = await decryptMetadataWithKEK(
+        {
+          ...env,
+          nameCiphertext: fromBase64Url(req.file_name),
+          dateCiphertext: fromBase64(req.date),
+        },
+        kek,
+      );
+      return {
+        fileRequestId: String(req.file_request_id),
+        relationId: String(req.relation_id),
+        doctorId: req.doctor_id,
+        operationType: req.operation_type as PendingFileRequest['operationType'],
+        fileName: meta.name,
+        date: meta.date,
+        encryptedFileName: req.file_name,
+      };
+    }),
+  );
+
+export const getPendingRequests = async (kek: CryptoKey): Promise<PendingFileRequest[]> => {
+  const { data } = await api.get<PendingRequestsResponse>('/relation/patient_pending_requests');
+  return decryptPendingRequests(data.pending_requests, kek);
+};
+
+export const getDoctorPendingRequests = async (
+  kek: CryptoKey,
+  patientId: string,
+): Promise<PendingFileRequest[]> => {
+  const { data } = await api.get<PendingRequestsResponse>('/relation/doctor_pending_requests', {
+    params: { patient_id: patientId },
+  });
+  return decryptPendingRequests(data.pending_requests, kek);
+};
+
+export const validateRequest = async (requestId: string): Promise<void> => {
+  await api.post(
+    '/relation/patient_validate_request',
+    new URLSearchParams({ request_id: requestId }),
+  );
+};
+
+export const rejectRequest = async (requestId: string): Promise<void> => {
+  await api.post(
+    '/relation/patient_reject_request',
+    new URLSearchParams({ request_id: requestId }),
+  );
+};
+
+export const cancelDoctorRequest = async (requestId: string): Promise<void> => {
+  await api.post(
+    '/relation/doctor_cancel_request',
+    new URLSearchParams({ request_id: requestId }),
+  );
 };
