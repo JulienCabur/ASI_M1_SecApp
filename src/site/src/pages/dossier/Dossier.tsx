@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, App, Button, List, Modal, Space, Spin, Table, Tag, Typography, Upload } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import { Alert, App, Badge, Button, Drawer, List, Modal, Space, Spin, Table, Tag, Typography, Upload } from 'antd';
+import { ClockCircleOutlined, DeleteOutlined, InboxOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload';
 import { useAuth } from '@/hooks/useAuth';
 import {
+  cancelDoctorRequest,
   deleteFile,
   deleteFileForDoctor,
   downloadFile,
@@ -89,6 +90,7 @@ const Dossier: React.FC = () => {
   const [pendingRequests, setPendingRequests] = useState<PendingFileRequest[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const activeKek = isViewingPatient ? patientKek : ownKek;
   const cryptoReady = useMemo(() => Boolean(activeKek), [activeKek]);
@@ -290,6 +292,21 @@ const Dossier: React.FC = () => {
     }
   };
 
+  const handleCancelRequest = async (req: PendingFileRequest) => {
+    setPendingActionId(req.fileRequestId);
+    try {
+      await cancelDoctorRequest(req.fileRequestId);
+      message.success('Proposition annulée.');
+      const updated = pendingRequests.filter((r) => r.fileRequestId !== req.fileRequestId);
+      setPendingRequests(updated);
+      if (updated.length === 0) setDrawerOpen(false);
+    } catch (err) {
+      message.error(`Annulation impossible : ${(err as Error).message}`);
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
   const closePreview = () => {
     if (preview) URL.revokeObjectURL(preview.url);
     setPreview(null);
@@ -313,62 +330,55 @@ const Dossier: React.FC = () => {
     );
   };
 
-  const renderPendingSection = () => {
-    if (pendingLoading) {
-      return <Spin size="small" style={{ marginBottom: 16 }} />;
-    }
-    if (pendingRequests.length === 0) return null;
-
-    const title = isViewingPatient
-      ? `Mes propositions en attente (${pendingRequests.length})`
-      : `Demandes en attente de votre médecin (${pendingRequests.length})`;
-
+  // Section en attente côté patient (liste inline dans la page)
+  const renderPatientPendingSection = () => {
+    if (!pendingLoading && pendingRequests.length === 0) return null;
     return (
       <div style={{ marginBottom: 24 }}>
         <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-          {title}
+          {`Demandes en attente de votre médecin (${pendingRequests.length})`}
         </Typography.Text>
-        <List
-          bordered
-          size="small"
-          dataSource={pendingRequests}
-          renderItem={(req) => (
-            <List.Item
-              key={req.fileRequestId}
-              actions={
-                isViewingPatient
-                  ? [<Tag key="status" color="processing">En attente</Tag>]
-                  : [
-                      <Button
-                        key="approve"
-                        type="primary"
-                        size="small"
-                        loading={pendingActionId === req.fileRequestId}
-                        disabled={pendingActionId !== null && pendingActionId !== req.fileRequestId}
-                        onClick={() => handleValidate(req)}
-                      >
-                        Approuver
-                      </Button>,
-                      <Button
-                        key="reject"
-                        danger
-                        size="small"
-                        disabled={pendingActionId !== null}
-                        onClick={() => handleReject(req)}
-                      >
-                        Refuser
-                      </Button>,
-                    ]
-              }
-            >
-              <Space>
-                <Tag color={operationColor[req.operationType]}>{operationLabel[req.operationType]}</Tag>
-                <Typography.Text>{req.fileName}</Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>{req.date}</Typography.Text>
-              </Space>
-            </List.Item>
-          )}
-        />
+        {pendingLoading ? (
+          <Spin size="small" />
+        ) : (
+          <List
+            bordered
+            size="small"
+            dataSource={pendingRequests}
+            renderItem={(req) => (
+              <List.Item
+                key={req.fileRequestId}
+                actions={[
+                  <Button
+                    key="approve"
+                    type="primary"
+                    size="small"
+                    loading={pendingActionId === req.fileRequestId}
+                    disabled={pendingActionId !== null && pendingActionId !== req.fileRequestId}
+                    onClick={() => handleValidate(req)}
+                  >
+                    Approuver
+                  </Button>,
+                  <Button
+                    key="reject"
+                    danger
+                    size="small"
+                    disabled={pendingActionId !== null}
+                    onClick={() => handleReject(req)}
+                  >
+                    Refuser
+                  </Button>,
+                ]}
+              >
+                <Space>
+                  <Tag color={operationColor[req.operationType]}>{operationLabel[req.operationType]}</Tag>
+                  <Typography.Text>{req.fileName}</Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>{req.date}</Typography.Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        )}
       </div>
     );
   };
@@ -424,24 +434,27 @@ const Dossier: React.FC = () => {
             {isViewingPatient ? `Dossier de ${patientName}` : 'Mon dossier médical'}
           </Title>
         </Space>
-        <Button
-          type="primary"
-          disabled={!cryptoReady}
-          onClick={() => { setUploadVisible(true); setFileList([]); }}
-        >
-          {isViewingPatient ? 'Proposer un fichier' : 'Téléverser un fichier'}
-        </Button>
+        <Space>
+          {isViewingPatient && (pendingRequests.length > 0 || pendingLoading) && (
+            <Badge count={pendingRequests.length} color="orange">
+              <Button
+                icon={<ClockCircleOutlined />}
+                loading={pendingLoading}
+                onClick={() => setDrawerOpen(true)}
+              >
+                Propositions en attente
+              </Button>
+            </Badge>
+          )}
+          <Button
+            type="primary"
+            disabled={!cryptoReady}
+            onClick={() => { setUploadVisible(true); setFileList([]); }}
+          >
+            {isViewingPatient ? 'Proposer un fichier' : 'Téléverser un fichier'}
+          </Button>
+        </Space>
       </div>
-
-      {isViewingPatient && (
-        <Alert
-          type="info"
-          showIcon
-          message="Mode médecin — modifications soumises à validation"
-          description="Les fichiers que vous proposez et les suppressions que vous demandez seront soumis à la validation du patient avant d'être appliqués."
-          style={{ marginBottom: 16 }}
-        />
-      )}
 
       {!cryptoReady && !unwrapping && (
         <Alert
@@ -457,7 +470,7 @@ const Dossier: React.FC = () => {
         />
       )}
 
-      {renderPendingSection()}
+      {!isViewingPatient && renderPatientPendingSection()}
 
       <Table
         columns={columns}
@@ -466,6 +479,46 @@ const Dossier: React.FC = () => {
         loading={loading}
         locale={{ emptyText: 'Aucun fichier dans le dossier' }}
       />
+
+      {/* Drawer : propositions en attente du médecin */}
+      <Drawer
+        title={`Propositions en attente — ${patientName}`}
+        placement="right"
+        width={420}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        <List
+          dataSource={pendingRequests}
+          locale={{ emptyText: 'Aucune proposition en attente' }}
+          renderItem={(req) => (
+            <List.Item
+              key={req.fileRequestId}
+              actions={[
+                <Button
+                  key="cancel"
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={pendingActionId === req.fileRequestId}
+                  disabled={pendingActionId !== null && pendingActionId !== req.fileRequestId}
+                  onClick={() => handleCancelRequest(req)}
+                />,
+              ]}
+            >
+              <List.Item.Meta
+                title={
+                  <Space>
+                    <Tag color={operationColor[req.operationType]}>{operationLabel[req.operationType]}</Tag>
+                    <Typography.Text>{req.fileName}</Typography.Text>
+                  </Space>
+                }
+                description={<Typography.Text type="secondary">{req.date}</Typography.Text>}
+              />
+            </List.Item>
+          )}
+        />
+      </Drawer>
 
       <Modal
         title={preview?.filename}

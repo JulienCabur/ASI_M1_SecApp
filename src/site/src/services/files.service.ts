@@ -306,3 +306,10 @@ export const rejectRequest = async (requestId: string): Promise<void> => {
     new URLSearchParams({ request_id: requestId }),
   );
 };
+
+export const cancelDoctorRequest = async (requestId: string): Promise<void> => {
+  await api.post(
+    '/relation/doctor_cancel_request',
+    new URLSearchParams({ request_id: requestId }),
+  );
+};
