@@ -1,10 +1,12 @@
 import { create } from 'zustand';
-import type { Notification, NotificationStatus } from '@/types';
+import type { Notification, NotificationStatus, PendingFileRequest } from '@/types';
 
 interface NotificationsStoreState {
   notifications: Notification[];
   pendingCount: number;
+  pendingFileCount: number;
   setNotifications: (list: Notification[]) => void;
+  setFileRequests: (list: PendingFileRequest[]) => void;
   resolve: (id: string, decision: NotificationStatus) => void;
 }
 
@@ -14,12 +16,16 @@ const countPending = (list: Notification[]) =>
 export const useNotificationsStore = create<NotificationsStoreState>((set) => ({
   notifications: [],
   pendingCount: 0,
+  pendingFileCount: 0,
 
   setNotifications: (list) =>
     set({
       notifications: list,
       pendingCount: countPending(list),
     }),
+
+  setFileRequests: (list) =>
+    set({ pendingFileCount: list.length }),
 
   resolve: (id, decision) =>
     set((state) => {

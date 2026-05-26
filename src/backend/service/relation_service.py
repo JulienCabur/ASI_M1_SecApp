@@ -51,6 +51,33 @@ class RelationService:
 
         return RelationResponse(relation=[final_relation])
 
+    def get_doctor_pending_requests(self, doctor_id: str, patient_id: str):
+        """
+        Récupère les demandes de fichiers en attente initiées par un médecin pour un patient donné.
+        """
+        relation = self.db.query(Relation).filter(
+            Relation.doctor_id == doctor_id,
+            Relation.patient_id == patient_id,
+            Relation.is_verified.is_(True)
+        ).first()
+        if not relation:
+            return []
+        return [
+            {
+                "relation_id": req.relation_id,
+                "doctor_id": doctor_id,
+                "file_request_id": req.id,
+                "operation_type": req.operation_type,
+                "file_name": req.file_name,
+                "date": req.date,
+                "ciphered_dek": req.ciphered_dek,
+            }
+            for req in self.db.query(FileOperationRequest).filter(
+                FileOperationRequest.relation_id == relation.id,
+                FileOperationRequest.status == RequestStatus.PENDING,
+            ).all()
+        ]
+
     def get_patient_pending_requests(self, patient_id: str):
         """
         Récupère les demandes de relation en attente pour un patient donné.
