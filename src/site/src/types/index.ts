@@ -28,6 +28,18 @@ export interface MedicalFile {
   requiresApproval: boolean;
 }
 
+export type FileOperationType = 'create' | 'update' | 'delete';
+
+export interface PendingFileRequest {
+  fileRequestId: string;
+  relationId: string;
+  doctorId: string;
+  operationType: FileOperationType;
+  fileName: string;
+  date: string;
+  encryptedFileName: string;
+}
+
 export type NotificationType = 'doctor_add' | 'patient_add';
 export type NotificationStatus = 'pending' | 'approved' | 'rejected';
 export type NotificationDirection = 'incoming' | 'outgoing';

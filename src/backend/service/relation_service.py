@@ -51,6 +51,60 @@ class RelationService:
 
         return RelationResponse(relation=[final_relation])
 
+    def get_doctor_pending_requests(self, doctor_id: str, patient_id: str):
+        """
+        Récupère les demandes de fichiers en attente initiées par un médecin pour un patient donné.
+        """
+        relation = self.db.query(Relation).filter(
+            Relation.doctor_id == doctor_id,
+            Relation.patient_id == patient_id,
+            Relation.is_verified.is_(True)
+        ).first()
+        if not relation:
+            return []
+        return [
+            {
+                "relation_id": req.relation_id,
+                "doctor_id": doctor_id,
+                "file_request_id": req.id,
+                "operation_type": req.operation_type,
+                "file_name": req.file_name,
+                "date": req.date,
+                "ciphered_dek": req.ciphered_dek,
+            }
+            for req in self.db.query(FileOperationRequest).filter(
+                FileOperationRequest.relation_id == relation.id,
+                FileOperationRequest.status == RequestStatus.PENDING,
+            ).all()
+        ]
+
+    def cancel_doctor_request(self, doctor_id: str, request_id: str):
+        """
+        Annule une demande de fichier initiée par un médecin.
+        Pour les opérations CREATE, supprime aussi le fichier temporaire.
+        """
+        file_request = self.db.query(FileOperationRequest).filter(
+            FileOperationRequest.id == request_id
+        ).first()
+        if not file_request:
+            raise ValueError(f"Demande introuvable : {request_id}")
+        relation = self.db.query(Relation).filter(
+            Relation.id == file_request.relation_id,
+            Relation.doctor_id == doctor_id,
+        ).first()
+        if not relation:
+            raise ValueError("Non autorisé à annuler cette demande.")
+        if file_request.operation_type == OperationType.CREATE:
+            temp_path = os.path.join(
+                "/temp_storage",
+                str(relation.patient_id),
+                file_request.file_name,
+            )
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        self.db.delete(file_request)
+        self.db.commit()
+
     def get_patient_pending_requests(self, patient_id: str):
         """
         Récupère les demandes de relation en attente pour un patient donné.
@@ -123,7 +177,7 @@ class RelationService:
         file_request.status = RequestStatus.APPROVED
         self.db.commit()
 
-    def patient_reject_request(self, patient_id: str, request_id: str):
+    def reject_patient_request(self, patient_id: str, request_id: str):
         """
         Rejette une demande de relation pour un patient donné.
         :param patient_id: ID du patient.

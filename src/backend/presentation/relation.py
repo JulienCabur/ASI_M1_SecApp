@@ -98,6 +98,35 @@ async def get_unverified_relations(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des relations non vérifiées: {str(e)}")
 
+@router.post("/doctor_cancel_request")
+async def doctor_cancel_request(
+    request_id: str = Form(...),
+    db = Depends(get_db),
+    current_user = Depends(get_current_user)):
+    try:
+        if current_user.roles[0] != "role_docteurs":
+            raise HTTPException(status_code=403, detail="Only doctors can cancel their requests.")
+        relation_service = RelationService(db=db)
+        relation_service.cancel_doctor_request(doctor_id=current_user.id, request_id=request_id)
+        logs_service.add_logs(action="DOCTOR_CANCEL_REQUEST", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0])
+        return {"status": "Demande annulée avec succès"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de l'annulation de la demande: {str(e)}")
+
+@router.get("/doctor_pending_requests")
+async def doctor_pending_requests(
+    patient_id: str = Query(...),
+    db = Depends(get_db),
+    current_user = Depends(get_current_user)):
+    try:
+        if current_user.roles[0] != "role_docteurs":
+            raise HTTPException(status_code=403, detail="Only doctors can view their pending requests.")
+        relation_service = RelationService(db=db)
+        pending_requests = relation_service.get_doctor_pending_requests(doctor_id=current_user.id, patient_id=patient_id)
+        return {"pending_requests": pending_requests}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des demandes en attente du médecin: {str(e)}")
+
 @router.get("/patient_pending_requests")
 async def patient_pending_requests(
     db = Depends(get_db),

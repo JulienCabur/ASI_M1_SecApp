@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, App, Button, Modal, Space, Spin, Table, Typography, Upload } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import { Alert, App, Badge, Button, Drawer, List, Modal, Space, Spin, Table, Tag, Typography, Upload } from 'antd';
+import { ClockCircleOutlined, DeleteOutlined, InboxOutlined } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload';
 import { useAuth } from '@/hooks/useAuth';
 import {
+  cancelDoctorRequest,
   deleteFile,
+  deleteFileForDoctor,
   downloadFile,
+  getDoctorPendingRequests,
+  getPendingRequests,
   listFiles,
+  rejectRequest,
   uploadFile,
+  uploadFileForDoctor,
+  validateRequest,
   type DecryptedFile,
   type FileContext,
   type RemoteFile,
@@ -22,6 +29,8 @@ import {
 } from '@/services/crypto.service';
 import { useCryptoStore } from '@/store/crypto.store';
 import { useAuthStore } from '@/store/auth.store';
+import { useNotificationsStore } from '@/store/notifications.store';
+import type { PendingFileRequest } from '@/types';
 import style from './dossier.module.scss';
 
 const { Title } = Typography;
@@ -32,6 +41,18 @@ interface PreviewState {
   url: string;
   mime: string;
 }
+
+const operationLabel: Record<PendingFileRequest['operationType'], string> = {
+  create: 'Ajout',
+  update: 'Modification',
+  delete: 'Suppression',
+};
+
+const operationColor: Record<PendingFileRequest['operationType'], string> = {
+  create: 'green',
+  update: 'blue',
+  delete: 'red',
+};
 
 const fromBase64 = (b64: string): ArrayBuffer => {
   const bin = atob(b64);
@@ -46,6 +67,7 @@ const Dossier: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const ownKek = useCryptoStore((s) => s.kek);
+  const { setFileRequests } = useNotificationsStore();
 
   // Mode "médecin visualise dossier patient" via query string ?patient=<id>&name=<username>.
   const patientId = searchParams.get('patient');
@@ -63,6 +85,12 @@ const Dossier: React.FC = () => {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<PreviewState | null>(null);
+
+  // Demandes en attente
+  const [pendingRequests, setPendingRequests] = useState<PendingFileRequest[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const activeKek = isViewingPatient ? patientKek : ownKek;
   const cryptoReady = useMemo(() => Boolean(activeKek), [activeKek]);
@@ -111,9 +139,7 @@ const Dossier: React.FC = () => {
         if (!cancelled) setUnwrapping(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [isViewingPatient, patientId, message]);
 
   // Au démontage / changement de patient : purger la KEK patient de la mémoire.
@@ -133,10 +159,30 @@ const Dossier: React.FC = () => {
     }
   }, [message, ctx, activeKek]);
 
+  const loadPendingRequests = useCallback(async () => {
+    if (!activeKek) return;
+    setPendingLoading(true);
+    try {
+      if (isViewingPatient && patientId) {
+        const list = await getDoctorPendingRequests(activeKek, patientId);
+        setPendingRequests(list);
+      } else {
+        const list = await getPendingRequests(activeKek);
+        setPendingRequests(list);
+        setFileRequests(list);
+      }
+    } catch (err) {
+      console.error('[Dossier] pending requests error:', err);
+    } finally {
+      setPendingLoading(false);
+    }
+  }, [activeKek, isViewingPatient, patientId, setFileRequests]);
+
   useEffect(() => {
     if (!user) return;
     void loadFiles();
-  }, [user, loadFiles]);
+    void loadPendingRequests();
+  }, [user, loadFiles, loadPendingRequests]);
 
   useEffect(() => {
     return () => {
@@ -149,11 +195,17 @@ const Dossier: React.FC = () => {
     if (!raw) return;
     setUploading(true);
     try {
-      await uploadFile(raw as File, ctx);
-      message.success(`"${raw.name}" téléversé et chiffré.`);
+      if (isViewingPatient && ctx?.kek && ctx.patientId) {
+        await uploadFileForDoctor(raw as File, { kek: ctx.kek, patientId: ctx.patientId });
+        message.success(`Demande d'ajout de "${raw.name}" envoyée au patient pour validation.`);
+        await loadPendingRequests();
+      } else {
+        await uploadFile(raw as File, ctx);
+        message.success(`"${raw.name}" téléversé et chiffré.`);
+        await loadFiles();
+      }
       setUploadVisible(false);
       setFileList([]);
-      await loadFiles();
     } catch (err) {
       message.error(`Échec du téléversement : ${(err as Error).message}`);
     } finally {
@@ -177,22 +229,82 @@ const Dossier: React.FC = () => {
   };
 
   const handleDelete = (file: RemoteFile) => {
-    modal.confirm({
-      title: 'Supprimer ce fichier ?',
-      content: `"${file.name}" sera retiré du serveur. Action irréversible.`,
-      okText: 'Supprimer',
-      okType: 'danger',
-      cancelText: 'Annuler',
-      onOk: async () => {
-        try {
-          await deleteFile(file.id, ctx);
-          message.success('Fichier supprimé.');
-          await loadFiles();
-        } catch (err) {
-          message.error(`Suppression impossible : ${(err as Error).message}`);
-        }
-      },
-    });
+    if (isViewingPatient && patientId) {
+      modal.confirm({
+        title: 'Demander la suppression de ce fichier ?',
+        content: `Une demande de suppression de "${file.name}" sera envoyée au patient pour validation.`,
+        okText: 'Envoyer la demande',
+        okType: 'danger',
+        cancelText: 'Annuler',
+        onOk: async () => {
+          try {
+            await deleteFileForDoctor(file.id, patientId);
+            message.success('Demande de suppression envoyée au patient pour validation.');
+            await loadPendingRequests();
+          } catch (err) {
+            message.error(`Échec de la demande : ${(err as Error).message}`);
+          }
+        },
+      });
+    } else {
+      modal.confirm({
+        title: 'Supprimer ce fichier ?',
+        content: `"${file.name}" sera retiré du serveur. Action irréversible.`,
+        okText: 'Supprimer',
+        okType: 'danger',
+        cancelText: 'Annuler',
+        onOk: async () => {
+          try {
+            await deleteFile(file.id, ctx);
+            message.success('Fichier supprimé.');
+            await loadFiles();
+          } catch (err) {
+            message.error(`Suppression impossible : ${(err as Error).message}`);
+          }
+        },
+      });
+    }
+  };
+
+  const handleValidate = async (req: PendingFileRequest) => {
+    setPendingActionId(req.fileRequestId);
+    try {
+      await validateRequest(req.fileRequestId);
+      message.success('Demande approuvée.');
+      await Promise.all([loadPendingRequests(), loadFiles()]);
+    } catch (err) {
+      message.error(`Approbation impossible : ${(err as Error).message}`);
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleReject = async (req: PendingFileRequest) => {
+    setPendingActionId(req.fileRequestId);
+    try {
+      await rejectRequest(req.fileRequestId);
+      message.success('Demande refusée.');
+      await loadPendingRequests();
+    } catch (err) {
+      message.error(`Refus impossible : ${(err as Error).message}`);
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleCancelRequest = async (req: PendingFileRequest) => {
+    setPendingActionId(req.fileRequestId);
+    try {
+      await cancelDoctorRequest(req.fileRequestId);
+      message.success('Proposition annulée.');
+      const updated = pendingRequests.filter((r) => r.fileRequestId !== req.fileRequestId);
+      setPendingRequests(updated);
+      if (updated.length === 0) setDrawerOpen(false);
+    } catch (err) {
+      message.error(`Annulation impossible : ${(err as Error).message}`);
+    } finally {
+      setPendingActionId(null);
+    }
   };
 
   const closePreview = () => {
@@ -218,13 +330,66 @@ const Dossier: React.FC = () => {
     );
   };
 
+  // Section en attente côté patient (liste inline dans la page)
+  const renderPatientPendingSection = () => {
+    if (!pendingLoading && pendingRequests.length === 0) return null;
+    return (
+      <div style={{ marginBottom: 24 }}>
+        <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+          {`Demandes en attente de votre médecin (${pendingRequests.length})`}
+        </Typography.Text>
+        {pendingLoading ? (
+          <Spin size="small" />
+        ) : (
+          <List
+            bordered
+            size="small"
+            dataSource={pendingRequests}
+            renderItem={(req) => (
+              <List.Item
+                key={req.fileRequestId}
+                actions={[
+                  <Button
+                    key="approve"
+                    type="primary"
+                    size="small"
+                    loading={pendingActionId === req.fileRequestId}
+                    disabled={pendingActionId !== null && pendingActionId !== req.fileRequestId}
+                    onClick={() => handleValidate(req)}
+                  >
+                    Approuver
+                  </Button>,
+                  <Button
+                    key="reject"
+                    danger
+                    size="small"
+                    disabled={pendingActionId !== null}
+                    onClick={() => handleReject(req)}
+                  >
+                    Refuser
+                  </Button>,
+                ]}
+              >
+                <Space>
+                  <Tag color={operationColor[req.operationType]}>{operationLabel[req.operationType]}</Tag>
+                  <Typography.Text>{req.fileName}</Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>{req.date}</Typography.Text>
+                </Space>
+              </List.Item>
+            )}
+          />
+        )}
+      </div>
+    );
+  };
+
   const columns: ColumnsType<RemoteFile> = [
     { title: 'Nom', dataIndex: 'name', key: 'name', ellipsis: true },
     { title: 'Date', dataIndex: 'date', key: 'date', width: 200 },
     {
       title: 'Actions',
       key: 'actions',
-      width: 280,
+      width: 300,
       render: (_, file) => (
         <Space>
           <Button size="small" disabled={!cryptoReady} onClick={() => decryptAndOpen(file, false)}>
@@ -233,11 +398,9 @@ const Dossier: React.FC = () => {
           <Button size="small" disabled={!cryptoReady} onClick={() => decryptAndOpen(file, true)}>
             Télécharger
           </Button>
-          {!isViewingPatient && (
-            <Button size="small" danger onClick={() => handleDelete(file)}>
-              Supprimer
-            </Button>
-          )}
+          <Button size="small" danger onClick={() => handleDelete(file)}>
+            {isViewingPatient ? 'Demander suppression' : 'Supprimer'}
+          </Button>
         </Space>
       ),
     },
@@ -271,15 +434,26 @@ const Dossier: React.FC = () => {
             {isViewingPatient ? `Dossier de ${patientName}` : 'Mon dossier médical'}
           </Title>
         </Space>
-        {!isViewingPatient && (
+        <Space>
+          {isViewingPatient && (pendingRequests.length > 0 || pendingLoading) && (
+            <Badge count={pendingRequests.length} color="orange">
+              <Button
+                icon={<ClockCircleOutlined />}
+                loading={pendingLoading}
+                onClick={() => setDrawerOpen(true)}
+              >
+                Propositions en attente
+              </Button>
+            </Badge>
+          )}
           <Button
             type="primary"
             disabled={!cryptoReady}
             onClick={() => { setUploadVisible(true); setFileList([]); }}
           >
-            Téléverser un fichier
+            {isViewingPatient ? 'Proposer un fichier' : 'Téléverser un fichier'}
           </Button>
-        )}
+        </Space>
       </div>
 
       {!cryptoReady && !unwrapping && (
@@ -296,6 +470,8 @@ const Dossier: React.FC = () => {
         />
       )}
 
+      {!isViewingPatient && renderPatientPendingSection()}
+
       <Table
         columns={columns}
         dataSource={files}
@@ -303,6 +479,46 @@ const Dossier: React.FC = () => {
         loading={loading}
         locale={{ emptyText: 'Aucun fichier dans le dossier' }}
       />
+
+      {/* Drawer : propositions en attente du médecin */}
+      <Drawer
+        title={`Propositions en attente — ${patientName}`}
+        placement="right"
+        width={420}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        <List
+          dataSource={pendingRequests}
+          locale={{ emptyText: 'Aucune proposition en attente' }}
+          renderItem={(req) => (
+            <List.Item
+              key={req.fileRequestId}
+              actions={[
+                <Button
+                  key="cancel"
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={pendingActionId === req.fileRequestId}
+                  disabled={pendingActionId !== null && pendingActionId !== req.fileRequestId}
+                  onClick={() => handleCancelRequest(req)}
+                />,
+              ]}
+            >
+              <List.Item.Meta
+                title={
+                  <Space>
+                    <Tag color={operationColor[req.operationType]}>{operationLabel[req.operationType]}</Tag>
+                    <Typography.Text>{req.fileName}</Typography.Text>
+                  </Space>
+                }
+                description={<Typography.Text type="secondary">{req.date}</Typography.Text>}
+              />
+            </List.Item>
+          )}
+        />
+      </Drawer>
 
       <Modal
         title={preview?.filename}
@@ -315,7 +531,7 @@ const Dossier: React.FC = () => {
       </Modal>
 
       <Modal
-        title="Téléverser un fichier"
+        title={isViewingPatient ? 'Proposer un fichier au patient' : 'Téléverser un fichier'}
         open={uploadVisible}
         onCancel={() => setUploadVisible(false)}
         footer={[
@@ -327,14 +543,18 @@ const Dossier: React.FC = () => {
             disabled={fileList.length === 0 || !cryptoReady}
             onClick={handleUpload}
           >
-            Téléverser
+            {isViewingPatient ? 'Envoyer la proposition' : 'Téléverser'}
           </Button>,
         ]}
       >
         <Alert
           type="info"
           showIcon
-          message="Le fichier est chiffré localement avant envoi. Le serveur ne voit jamais son contenu en clair."
+          message={
+            isViewingPatient
+              ? "Le fichier sera chiffré avec la clé du patient et soumis à sa validation avant d'être ajouté à son dossier."
+              : "Le fichier est chiffré localement avant envoi. Le serveur ne voit jamais son contenu en clair."
+          }
           style={{ marginBottom: 16 }}
         />
         <Dragger {...uploadProps}>

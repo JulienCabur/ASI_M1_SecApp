@@ -23,8 +23,9 @@ import {
   importPublicKeyJwk,
   wrapKEKWithRecipientPublicKey,
 } from '@/services/crypto.service';
+import { getPendingRequests } from '@/services/files.service';
 import { useCryptoStore } from '@/store/crypto.store';
-import type { Notification, NotificationStatus } from '@/types';
+import type { Notification, NotificationStatus, PendingFileRequest } from '@/types';
 
 export const getNotifications = async (): Promise<Notification[]> => {
   const unverified = await getUnverifiedRelations();
@@ -45,6 +46,13 @@ export const getNotifications = async (): Promise<Notification[]> => {
       },
     };
   });
+};
+
+/** Récupère les demandes de fichiers en quarantaine pour le patient courant. */
+export const getFilePendingRequests = async (): Promise<PendingFileRequest[]> => {
+  const kek = useCryptoStore.getState().kek;
+  if (!kek) return [];
+  return getPendingRequests(kek);
 };
 
 /**
