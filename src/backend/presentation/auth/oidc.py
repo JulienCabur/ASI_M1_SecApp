@@ -86,7 +86,7 @@ async def callback_route(
     try:
         token_response = await exchange_code_for_tokens(code, expected["code_verifier"])
     except httpx.HTTPError:
-        logs_service.add_logs(
+        await logs_service.add_logs(
             action="OIDC_CALLBACK_FAIL",
             log_level="WARNING",
             user_id="anonymous",
@@ -108,7 +108,7 @@ async def callback_route(
     if expected_cert_username:
         actual_username = claims.get("preferred_username")
         if not actual_username or actual_username != expected_cert_username:
-            logs_service.add_logs(
+            await logs_service.add_logs(
                 action="CERT_BINDING_MISMATCH",
                 log_level="WARNING",
                 user_id=actual_username or "unknown",
@@ -127,7 +127,7 @@ async def callback_route(
         try:
             AuthService(db=db).cleanup_stale_credentials(user_sub)
         except Exception:
-            logs_service.add_logs(
+            await logs_service.add_logs(
                 action="CRED_CLEANUP_FAIL",
                 log_level="WARNING",
                 user_id=user_sub,
@@ -143,7 +143,7 @@ async def callback_route(
                     roles=[user_role] if user_role != "unknown" else []
                 )
                 auth_service.store_user(user_data)
-                logs_service.add_logs(
+                await logs_service.add_logs(
                     action="USER_CREATED_IN_DB",
                     log_level="INFO",
                     user_id=user_sub,
@@ -151,7 +151,7 @@ async def callback_route(
                     patient_id="null",
                 )
         except Exception as e:
-            logs_service.add_logs(
+            await logs_service.add_logs(
                 action="USER_CREATION_FAIL",
                 log_level="WARNING",
                 user_id=user_sub,
@@ -163,7 +163,7 @@ async def callback_route(
     set_session_cookie(response, payload)
     set_csrf_cookie(response, secrets.token_urlsafe(32))
 
-    logs_service.add_logs(
+    await logs_service.add_logs(
         action="LOGIN",
         log_level="INFO",
         user_id=user_sub or "unknown",
@@ -212,7 +212,7 @@ async def logout_route(request: Request) -> JSONResponse:
     if refresh_token:
         await end_session(refresh_token)
         claims = decode_token_unverified(payload.get("access_token", ""))
-        logs_service.add_logs(
+        await logs_service.add_logs(
             action="LOGOUT",
             log_level="INFO",
             user_id=claims.get("sub", "unknown"),

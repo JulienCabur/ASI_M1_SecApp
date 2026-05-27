@@ -43,7 +43,7 @@ async def reset_request_route(
     client_ip = request.client.host if request.client else "unknown"
     rate_key = f"reset:{client_ip}"
     if not _check_reset_rate_limit(rate_key):
-        logs_service.add_logs(
+        await logs_service.add_logs(
             action="RESET_REQUEST_RATE_LIMITED",
             log_level="WARNING",
             user_id="système",
@@ -56,7 +56,7 @@ async def reset_request_route(
     auth_service = AuthService(db=db)
     try:
         auth_service.send_credentials_reset_email(payload.email)
-        logs_service.add_logs(
+        await logs_service.add_logs(
             action="RESET_REQUEST_SENT",
             log_level="INFO",
             user_id=payload.email,
@@ -66,7 +66,7 @@ async def reset_request_route(
     except Exception as exc:
         # Trace serveur pour debug ; le client reste à 200 pour anti-énumération.
         traceback.print_exc()
-        logs_service.add_logs(
+        await logs_service.add_logs(
             action=f"RESET_REQUEST_FAIL:{type(exc).__name__}:{str(exc)[:200]}",
             log_level="WARNING",
             user_id=payload.email,
@@ -93,7 +93,7 @@ async def reset_with_certificate_route(
             certificate=body.certificate,
         )
         auth_service.force_credentials_reset(body.username)
-        logs_service.add_logs(
+        await logs_service.add_logs(
             action="RESET_WITH_CERTIFICATE",
             log_level="INFO",
             user_id=body.username,
@@ -103,7 +103,7 @@ async def reset_with_certificate_route(
         return {"status": "ok"}
     except Exception as e:
         auth_service.clear_challenge(username=body.username)
-        logs_service.add_logs(
+        await logs_service.add_logs(
             action="RESET_WITH_CERTIFICATE_FAIL",
             log_level="WARNING",
             user_id=body.username,

@@ -7,6 +7,7 @@ from starlette.responses import JSONResponse
 
 from core.database import engine, Base
 from core.session import CSRF_COOKIE_NAME
+from service.log_service import LogsService
 from presentation.file import router as file_router
 from presentation.auth import router as auth_router
 from presentation.check_authenticity import router as check_authenticity_router
@@ -14,6 +15,9 @@ from presentation.device import router as key_router
 from presentation.relation import router as relation_router
 
 Base.metadata.create_all(bind=engine)
+
+# Instance globale du service de logs avec worker en arrière-plan
+logs_service = LogsService()
 
 app = FastAPI(
     title="UNamur Medical Institute",
