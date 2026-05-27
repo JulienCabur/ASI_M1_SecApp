@@ -17,6 +17,10 @@ class CertificateRequest(AuthBase):
     last_name: str
     organization: str
     date_of_birth: str
+    # CSR PEM généré côté navigateur. La clé privée correspondante reste dans
+    # le navigateur ; le back se contente de la faire signer par la PKI puis
+    # renvoie le certificat signé pour que le navigateur assemble le .p12.
+    csr: str
 
 class ChallengeResponse(BaseModel):
     nonce: str

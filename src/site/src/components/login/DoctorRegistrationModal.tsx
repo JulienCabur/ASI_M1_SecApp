@@ -4,6 +4,11 @@ import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { registerDoctor } from '@/services/auth.service';
 import { ApiError } from '@/services/api';
+import {
+  buildP12,
+  generateBrowserKeypairAndCsr,
+  generateP12Password,
+} from '@/services/certificate.service';
 
 export interface CertificateIssued {
   filename: string;
@@ -49,16 +54,37 @@ const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open,
   const handleSubmit = async (values: CertificateFormValues) => {
     setSubmitting(true);
     try {
+      const organization = values.organization.trim();
+      // 1. Génère la paire RSA + le CSR localement. La clé privée reste
+      //    dans cette closure ; elle n'est jamais envoyée au back.
+      const { csrPem, privateKey } = generateBrowserKeypairAndCsr(
+        values.username,
+        organization,
+      );
+      // 2. POST du CSR + métadonnées. Le back valide, fait signer par la PKI,
+      //    crée le compte Keycloak et nous renvoie le cert PEM + la chaîne CA.
       const result = await registerDoctor({
         username: values.username,
         email: values.email,
         first_name: values.first_name,
         last_name: values.last_name,
         date_of_birth: values.date_of_birth.format('YYYY-MM-DD'),
-        organization: values.organization.trim(),
+        organization,
+        csr: csrPem,
       });
-      triggerP12Download(result.certificate_b64, result.filename);
-      onIssued({ filename: result.filename, password: result.password });
+      // 3. Assemble le .p12 localement et déclenche le download. Le mot de
+      //    passe n'est connu que du navigateur.
+      const password = generateP12Password();
+      const filename = `${result.username}.p12`;
+      const p12Base64 = buildP12({
+        privateKey,
+        certificatePem: result.certificate_pem,
+        caChainPem: result.ca_chain_pem,
+        password,
+        friendlyName: `Certificat Docteur ${result.username}`,
+      });
+      triggerP12Download(p12Base64, filename);
+      onIssued({ filename, password });
       form.resetFields();
       onClose();
     } catch (err) {
@@ -99,7 +125,7 @@ const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open,
         showIcon
         style={{ marginBottom: 16 }}
         message="Émission par la PKI"
-        description="La génération peut prendre une dizaine de secondes (CSR, signature, création du compte). Ne fermez pas la fenêtre."
+        description="La paire de clés est générée dans votre navigateur — la clé privée ne quitte jamais votre poste. Le certificat est ensuite signé par la PKI puis assemblé localement en .p12. Ne fermez pas la fenêtre."
       />
       <Form
         form={form}

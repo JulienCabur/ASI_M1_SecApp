@@ -165,9 +165,15 @@ export const submitCertificateLoginProof = async (
   return data.authorize_url;
 };
 
-/** Enregistrement d'un nouveau médecin : génère côté back un CSR signé par la PKI,
- *  crée le compte Keycloak et renvoie le .p12 (base64) + son mot de passe.
- *  Le back attend du multipart/form-data (FastAPI `Form(...)`), pas du JSON. */
+/** Enregistrement d'un nouveau médecin.
+ *
+ *  La paire de clés RSA et le CSR sont produits dans le navigateur ; on
+ *  envoie le CSR (PEM) au back, qui le fait signer par la PKI puis crée le
+ *  compte Keycloak et nous renvoie le certificat signé + la chaîne CA. Le
+ *  .p12 final est assemblé localement (la clé privée ne quitte jamais le
+ *  navigateur).
+ *
+ *  Le back attend du multipart/form-data (FastAPI `Form(...)`). */
 export interface RegisterDoctorInput {
   username: string;
   email: string;
@@ -175,14 +181,14 @@ export interface RegisterDoctorInput {
   last_name: string;
   date_of_birth: string;
   organization: string;
+  csr: string;
 }
 
 export interface RegisterDoctorResult {
   status: string;
   username: string;
-  certificate_b64: string;
-  password: string;
-  filename: string;
+  certificate_pem: string;
+  ca_chain_pem: string;
 }
 
 export const registerDoctor = async (input: RegisterDoctorInput): Promise<RegisterDoctorResult> => {
@@ -193,6 +199,7 @@ export const registerDoctor = async (input: RegisterDoctorInput): Promise<Regist
   form.append('last_name', input.last_name);
   form.append('date_of_birth', input.date_of_birth);
   form.append('organization', input.organization);
+  form.append('csr', input.csr);
   const { data } = await api.post<RegisterDoctorResult>('/auth/register_doctor', form);
   return data;
 };
