@@ -28,7 +28,9 @@ def post_logs(
     try:
         web_logs = log_service.add_logs(action=action, log_level=log_level, user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
         if not web_logs:
+            log_service.add_logs(action="ADD_LOG_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
             raise HTTPException(status_code=404, detail="Cannot write web logs")
         return {"message": "Log added successfully"}
     except Exception as e:
+        log_service.add_logs(action="ADD_LOG_EXCEPTION", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
         raise HTTPException(status_code=500, detail="Internal Server Error")

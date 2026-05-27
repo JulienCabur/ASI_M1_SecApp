@@ -41,8 +41,6 @@ class FileService:
         if not os.path.exists(user_directory):
             os.makedirs(user_directory)
         return user_directory
-    
-    
 
     def get_base64_file_content(self, cert_path: str) -> bytes:
         with open(cert_path, "rb") as f:

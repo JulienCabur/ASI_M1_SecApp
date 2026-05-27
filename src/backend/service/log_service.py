@@ -89,54 +89,7 @@ class LogsService:
             "tag": base64.b64encode(encryptor.tag).decode('utf-8'),
             "payload": base64.b64encode(encrypted_payload).decode('utf-8')
         }
-    
-    def verify_log_integrity(self, log_data: dict) -> bool:
-        """
-        Vérifie l'intégrité d'un log en recalculant le hash et en le comparant à celui stocké.
-        """
-        try:
-            timestamp = log_data.get("@timestamp")
-            log_level = log_data.get("log", {}).get("level")
-            service_name = log_data.get("service", {}).get("name")
-            action = log_data.get("event", {}).get("action")
-            user_id = log_data.get("user", {}).get("id")
-            user_role = log_data.get("user", {}).get("roles", [])[0] if log_data.get("user", {}).get("roles") else "null"
-            source_ip = log_data.get("source", {}).get("ip")
-            patient_id = log_data.get("patient", {}).get("id")
-            sequence = log_data.get("audit_chain", {}).get("sequence")
-            previous_hash = log_data.get("audit_chain", {}).get("previous_hash")
 
-            raw_string = f"{timestamp}{log_level}{service_name}{action}{user_id}{user_role}{user_role}{source_ip}{patient_id}{sequence}{previous_hash}"
-            recalculated_hash = hashlib.sha256(raw_string.encode('utf-8')).hexdigest()
-
-            return recalculated_hash == log_data.get("audit_chain", {}).get("hash")
-        except Exception as e:
-            print(f"Erreur lors de la vérification de l'intégrité du log: {e}")
-            return False
-        
-    def verify_log_integrity_by_hash(self, log_data: dict) -> bool:
-        """
-        Vérifie l'intégrité d'un log en recalculant le hash et en le comparant à celui stocké.
-        """
-        try:
-            timestamp = log_data.get("@timestamp")
-            log_level = log_data.get("log", {}).get("level")
-            service_name = log_data.get("service", {}).get("name")
-            action = log_data.get("event", {}).get("action")
-            user_id = log_data.get("user", {}).get("id")
-            user_role = log_data.get("user", {}).get("roles", [])[0] if log_data.get("user", {}).get("roles") else "null"
-            source_ip = log_data.get("source", {}).get("ip")
-            patient_id = log_data.get("patient", {}).get("id")
-            sequence = log_data.get("audit_chain", {}).get("sequence")
-            previous_hash = log_data.get("audit_chain", {}).get("previous_hash")
-
-            raw_string = f"{timestamp}{log_level}{service_name}{action}{user_id}{user_role}{user_role}{source_ip}{patient_id}{sequence}{previous_hash}"
-            recalculated_hash = hashlib.sha256(raw_string.encode('utf-8')).hexdigest()
-
-            return recalculated_hash == log_data.get("audit_chain", {}).get("hash")
-        except Exception as e:
-            print(f"Erreur lors de la vérification de l'intégrité du log: {e}")
-            return False
 
     def add_logs(self, action: str, log_level: str, user_id: str, user_role: str, patient_id: str = "null"):
         """
@@ -187,14 +140,10 @@ class LogsService:
             response.raise_for_status()
             print(f"Log ECS chiffré envoyé (Séquence: {self.sequence-1})")
 
-            tag = "OK"
-
             with open("/app/logs/local_logs.log", "a+") as log_file:
-                if not self.verify_log_integrity(log_data):
-                    tag = "INTEGRITY_FAILURE"
                 if not os.path.exists("/app/logs/"):
                     os.makedirs("/app/logs/")
-                log_file.write(f"{timestamp} - {log_level} - {action} - User: {user_id} - Patient: {patient_id} - Sequence: {self.sequence-1} - Hash: {valid_hash} - Tag: {tag}\n")
+                log_file.write(f"{timestamp} - {log_level} - {action} - User: {user_id} - Patient: {patient_id} - Sequence: {self.sequence-1} - Hash: {valid_hash}\n")
         except Exception as e:
             print(f"Erreur lors de l'envoi du log à Logstash: {e}")
         

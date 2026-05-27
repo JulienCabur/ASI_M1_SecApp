@@ -1,26 +1,34 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from service.check_authenticity_service import AuthenticityService
+from service.log_service import LogsService
 import os
 
 router = APIRouter( # Créer un routeur APIRouter pour les routes de gestion des fichiers
     prefix="/check-authenticity",
     tags=["check-authenticity"]
 )
-
+logs_service = LogsService("backend_authenticity")
 @router.get("/download_ca", response_class=FileResponse)
 async def download_file():
+    try:
+        authenticity_service = AuthenticityService()
+        file_content = authenticity_service.download_ca()
+        file = os.path.basename(file_content)
+        logs_service.add_logs(action="DOWNLOAD_CA", log_level="INFO", user_id="null", user_role="null", patient_id="null")
 
-    authenticity_service = AuthenticityService()
-    file_content = authenticity_service.download_ca()
-    file = os.path.basename(file_content)
-
-    return FileResponse(path=file_content, filename=file)
-
+        return FileResponse(path=file_content, filename=file)
+    except Exception as e:
+        logs_service.add_logs(action="DOWNLOAD_CA_ERROR", log_level="ERROR", user_id="null", user_role="null", patient_id="null")
+        raise HTTPException(status_code=400, detail=f"Erreur lors du téléchargement du fichier: {str(e)}")
 @router.get("/hash_ca")
 async def get_hash():
+    try:
+        authenticity_service = AuthenticityService()
+        hash = authenticity_service.get_hash()
+        logs_service.add_logs(action="GET_HASH", log_level="INFO", user_id="null", user_role="null", patient_id="null")
 
-    authenticity_service = AuthenticityService()
-    hash = authenticity_service.get_hash()
-
-    return {"hash": hash}
+        return {"hash": hash}
+    except Exception as e:
+        logs_service.add_logs(action="GET_HASH_ERROR", log_level="ERROR", user_id="null", user_role="null", patient_id="null")
+        raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération du hash: {str(e)}")
