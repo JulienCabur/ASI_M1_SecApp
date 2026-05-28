@@ -5,6 +5,7 @@ produite pour un reset puisse être rejouée pour ouvrir une session, et inverse
 """
 
 import json
+import os
 import secrets
 import time
 from typing import Any, Dict
@@ -24,7 +25,6 @@ from schema.auth_schema import (
 )
 from service.auth_service import AuthService, DoctorConflictError
 from service.log_service import LogsService
-from service.file_service import FileService
 from schema.device_schema import JWKSchema
 
 
@@ -67,26 +67,19 @@ async def cert_login_proof_route(
             signature=body.signature,
             certificate=body.certificate,
         )
-    except Exception:
+    except Exception as e:
         auth_service.clear_challenge(username=body.username)
         logs_service.add_logs(
-            action=f"CERT_LOGIN_PROOF_FAIL:{client_ip}",
+            action=f"CERT_LOGIN_PROOF_FAIL:{client_ip}:{type(e).__name__}:{str(e)}",
             log_level="WARNING",
             user_id=body.username,
             user_role="doctor",
             patient_id="null",
         )
-        # Message générique côté client : on ne précise pas si c'est nonce, timestamp,
-        # CN ou signature qui a échoué (anti oracle).
         raise HTTPException(status_code=400, detail="Vérification du certificat échouée")
 
     state = secrets.token_urlsafe(32)
     verifier, challenge = generate_pkce_pair()
-    # `prompt=login` : empêche Keycloak d'auto-login avec un compte précédent
-    # (cookie KEYCLOAK_IDENTITY toujours vivant). Indispensable quand on change
-    # de médecin dans la même session navigateur via .p12.
-    # `login_hint` : pré-remplit le champ username Keycloak avec le CN du cert
-    # qu'on vient de prouver, pour éviter une saisie en double.
     authorize_url = build_authorize_url(
         state=state,
         code_challenge=challenge,
@@ -115,35 +108,64 @@ async def cert_login_proof_route(
     )
     return response
 
+_PKI_SIGN_POLL_INTERVAL = float(os.getenv("PKI_SIGN_POLL_INTERVAL", "0.5"))
+_PKI_SIGN_TIMEOUT = float(os.getenv("PKI_SIGN_TIMEOUT", "30"))
+
+
 @router.post("/register_doctor", response_model=Dict[str, Any])
 async def register_doctor_route(
     user_info: CertificateRequest = Form(...),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
+    """Émet un certificat médecin à partir d'un CSR généré dans le navigateur.
+
+    Le navigateur produit la paire de clés RSA et le CSR ; le serveur valide
+    strictement le subject, fait signer par la PKI, crée le compte Keycloak
+    (en stockant le serial), puis renvoie le certificat PEM signé + la chaîne
+    CA. Le .p12 est assemblé côté navigateur (la clé privée n'a jamais quitté
+    le client).
+    """
     auth_service = AuthService(db=db)
-    file_service = FileService(db=db, storage_path="./cert_storage")
     try:
         # Pré-vérification d'unicité avant d'émettre un certificat PKI : un doublon
         # détecté ici évite une révocation derrière. La création Keycloak revérifie
         # de toute façon (course possible entre deux requêtes simultanées).
         auth_service.check_doctor_uniqueness(user_info.username, user_info.email)
-        auth_service.generate_csr(user_info.username, user_info.organization)
-        logs_service.add_logs(action="GENERATE_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
-        time.sleep(5)
-        cert_path = auth_service.check_csr_signed(user_info.username)
+        auth_service.submit_browser_csr(
+            csr_pem=user_info.csr,
+            common_name=user_info.username,
+            organization=user_info.organization,
+        )
+        logs_service.add_logs(action="SUBMIT_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+
+        # Polling : le watcher PKI signe en moins d'une seconde en régime
+        # nominal, mais on garde un timeout court pour ne pas garder une
+        # requête HTTP ouverte si le service PKI est tombé.
+        deadline = time.monotonic() + _PKI_SIGN_TIMEOUT
+        cert_path = None
+        while time.monotonic() < deadline:
+            try:
+                cert_path = auth_service.check_csr_signed(user_info.username)
+                break
+            except Exception:
+                time.sleep(_PKI_SIGN_POLL_INTERVAL)
+        if cert_path is None:
+            auth_service.delete_sensitive_files(user_info.username)
+            raise HTTPException(status_code=504, detail="La PKI n'a pas signé le CSR dans le délai imparti")
         logs_service.add_logs(action="CHECK_CSR_SIGNED", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
-        p12_password = auth_service.create_doctor_in_keycloak(cert_path, user_info)
+
+        cert_pem = auth_service.create_doctor_in_keycloak(cert_path, user_info)
         logs_service.add_logs(action="REGISTER_DOCTOR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
-        p12_content = file_service.get_base64_file_content(cert_path)
-        logs_service.add_logs(action="GET_P12_CONTENT", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+
+        ca_chain_pem = auth_service.read_ca_chain_pem()
+
         auth_service.delete_sensitive_files(user_info.username)
         logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
         return {
             "status": "success",
             "username": user_info.username,
-            "certificate_b64": p12_content,
-            "password": p12_password,
-            "filename": f"{user_info.username}.p12",
+            "certificate_pem": cert_pem,
+            "ca_chain_pem": ca_chain_pem,
         }
     except DoctorConflictError as e:
         # 409 ciblé : la couche présentation préserve `field` pour que le front
@@ -155,6 +177,13 @@ async def register_doctor_route(
     except HTTPException:
         raise
     except Exception as e:
+        # Nettoyage best-effort : si l'erreur survient après le dépôt du CSR
+        # ou la production du .crt, on ne veut pas laisser traîner ces fichiers
+        # côté volume partagé avec la PKI.
+        try:
+            auth_service.delete_sensitive_files(user_info.username)
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du médecin: {str(e)}")
 
 @router.post("/store_public_mek")

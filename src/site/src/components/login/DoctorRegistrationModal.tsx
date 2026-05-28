@@ -1,9 +1,15 @@
-import { useState } from 'react';
-import { Alert, DatePicker, Form, Input, Modal, message } from 'antd';
+import { useEffect, useState } from 'react';
+import { Alert, DatePicker, Form, Input, Modal, Select, message } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { registerDoctor } from '@/services/auth.service';
 import { ApiError } from '@/services/api';
+import {
+  buildP12,
+  generateBrowserKeypairAndCsr,
+  generateP12Password,
+} from '@/services/certificate.service';
+import { listHospitals } from '@/services/hospitals.service';
 
 export interface CertificateIssued {
   filename: string;
@@ -45,20 +51,70 @@ const triggerP12Download = (b64: string, filename: string): void => {
 const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open, onClose, onIssued }) => {
   const [form] = Form.useForm<CertificateFormValues>();
   const [submitting, setSubmitting] = useState(false);
+  const [hospitals, setHospitals] = useState<string[]>([]);
+  const [hospitalsLoading, setHospitalsLoading] = useState(false);
+  const [hospitalsError, setHospitalsError] = useState<string | null>(null);
+
+  // Charge la liste à l'ouverture de la modale (pas au mount global de l'app).
+  // En cas d'échec on bloque le submit : sans la liste, le back rejetterait
+  // toute saisie de toute façon (`_assert_known_hospital`).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setHospitalsLoading(true);
+    setHospitalsError(null);
+    listHospitals()
+      .then((items) => {
+        if (cancelled) return;
+        setHospitals(items);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const detail = err instanceof Error ? err.message : 'Liste des hôpitaux indisponible';
+        setHospitalsError(detail);
+      })
+      .finally(() => {
+        if (!cancelled) setHospitalsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const handleSubmit = async (values: CertificateFormValues) => {
     setSubmitting(true);
     try {
+      const organization = values.organization.trim();
+      // 1. Génère la paire RSA + le CSR localement. La clé privée reste
+      //    dans cette closure ; elle n'est jamais envoyée au back.
+      const { csrPem, privateKey } = generateBrowserKeypairAndCsr(
+        values.username,
+        organization,
+      );
+      // 2. POST du CSR + métadonnées. Le back valide, fait signer par la PKI,
+      //    crée le compte Keycloak et nous renvoie le cert PEM + la chaîne CA.
       const result = await registerDoctor({
         username: values.username,
         email: values.email,
         first_name: values.first_name,
         last_name: values.last_name,
         date_of_birth: values.date_of_birth.format('YYYY-MM-DD'),
-        organization: values.organization.trim(),
+        organization,
+        csr: csrPem,
       });
-      triggerP12Download(result.certificate_b64, result.filename);
-      onIssued({ filename: result.filename, password: result.password });
+      // 3. Assemble le .p12 localement et déclenche le download. Le mot de
+      //    passe n'est connu que du navigateur.
+      const password = generateP12Password();
+      const filename = `${result.username}.p12`;
+      const p12Base64 = buildP12({
+        privateKey,
+        certificatePem: result.certificate_pem,
+        caChainPem: result.ca_chain_pem,
+        password,
+        friendlyName: `Certificat Docteur ${result.username}`,
+      });
+      triggerP12Download(p12Base64, filename);
+      onIssued({ filename, password });
       form.resetFields();
       onClose();
     } catch (err) {
@@ -99,7 +155,7 @@ const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open,
         showIcon
         style={{ marginBottom: 16 }}
         message="Émission par la PKI"
-        description="La génération peut prendre une dizaine de secondes (CSR, signature, création du compte). Ne fermez pas la fenêtre."
+        description="La paire de clés est générée dans votre navigateur — la clé privée ne quitte jamais votre poste. Le certificat est ensuite signé par la PKI puis assemblé localement en .p12. Ne fermez pas la fenêtre."
       />
       <Form
         form={form}
@@ -168,14 +224,42 @@ const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open,
         </Form.Item>
         <Form.Item
           name="organization"
-          label="Organisation"
+          label="Hôpital de rattachement"
           rules={[
-            { required: true, message: 'Organisation requise' },
-            { max: 120, message: '120 caractères maximum' },
+            { required: true, message: 'Hôpital requis' },
+            {
+              validator: (_, value: string | undefined) => {
+                // Garde-fou : seules les valeurs présentes dans le référentiel
+                // chargé peuvent être soumises. Le back revérifie de toute
+                // façon, c'est un signal UX précoce pour l'utilisateur.
+                if (!value) return Promise.resolve();
+                if (!hospitals.includes(value)) {
+                  return Promise.reject(new Error('Hôpital hors référentiel'));
+                }
+                return Promise.resolve();
+              },
+            },
           ]}
         >
-          <Input placeholder="Hôpital Saint-Pierre" />
+          <Select
+            placeholder={hospitalsLoading ? 'Chargement…' : 'Sélectionner un hôpital'}
+            loading={hospitalsLoading}
+            disabled={hospitalsLoading || hospitalsError !== null}
+            showSearch
+            optionFilterProp="label"
+            options={hospitals.map((h) => ({ label: h, value: h }))}
+            notFoundContent={hospitalsError ? 'Référentiel indisponible' : 'Aucun hôpital'}
+          />
         </Form.Item>
+        {hospitalsError && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 8 }}
+            message="Impossible de charger la liste des hôpitaux"
+            description={hospitalsError}
+          />
+        )}
       </Form>
     </Modal>
   );
