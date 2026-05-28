@@ -21,6 +21,7 @@ const DB_VERSION = 1;
 const STORE_NAME = 'keys';
 const PRIVATE_KEY_ID = 'user-private-key';
 const PUBLIC_KEY_ID = 'user-public-key';
+const WRAPPED_PRIVATE_KEY_ID = 'user-private-key-wrapped';
 
 const openDb = (): Promise<IDBDatabase> =>
     new Promise((resolve, reject) => {
@@ -52,19 +53,6 @@ const withStore = async <T>(
     }
 };
 
-export const generateKeyPair = async (): Promise<CryptoKeyPair> => {
-    return await crypto.subtle.generateKey(
-        {
-            name: "RSA-OAEP",
-            modulusLength: 4096,
-            publicExponent: new Uint8Array([1, 0, 1]),
-            hash: "SHA-512",
-        },
-        false,
-        ["encrypt", "decrypt", "wrapKey", "unwrapKey"]
-    );
-}
-
 export const generateExtractableKeyPair = async (): Promise<CryptoKeyPair> => {
     return await crypto.subtle.generateKey(
         {
@@ -78,29 +66,8 @@ export const generateExtractableKeyPair = async (): Promise<CryptoKeyPair> => {
     );
 }
 
-export const savePrivateKey = async (privateKey: CryptoKey): Promise<void> => {
-    if (privateKey.extractable) {
-        throw new Error('Refus de persister une clé privée extractable.');
-    }
-    await withStore('readwrite', (store) => store.put(privateKey, PRIVATE_KEY_ID));
-};
-
-export const loadPrivateKey = async (): Promise<CryptoKey | null> => {
-    const result = await withStore<CryptoKey | undefined>(
-        'readonly',
-        (store) => store.get(PRIVATE_KEY_ID) as IDBRequest<CryptoKey | undefined>,
-    );
-    return result ?? null;
-};
-
-export const hasPrivateKey = async (): Promise<boolean> => {
-    const count = await withStore<number>(
-        'readonly',
-        (store) => store.count(PRIVATE_KEY_ID),
-    );
-    return count > 0;
-};
-
+// Suppression d'une éventuelle clé device héritée stockée en clair (migration
+// depuis l'ancien schéma sans WebAuthn).
 export const clearPrivateKey = async (): Promise<void> => {
     await withStore('readwrite', (store) => store.delete(PRIVATE_KEY_ID));
 };
@@ -112,20 +79,102 @@ export const savePublicKey = async (publicKey: CryptoKey): Promise<void> => {
     await withStore('readwrite', (store) => store.put(publicKey, PUBLIC_KEY_ID));
 };
 
-export const loadPublicKey = async (): Promise<CryptoKey | null> => {
-    const result = await withStore<CryptoKey | undefined>(
-        'readonly',
-        (store) => store.get(PUBLIC_KEY_ID) as IDBRequest<CryptoKey | undefined>,
-    );
-    return result ?? null;
-};
-
 export const clearPublicKey = async (): Promise<void> => {
     await withStore('readwrite', (store) => store.delete(PUBLIC_KEY_ID));
 };
 
 export const exportPublicKeyJwk = async (publicKey: CryptoKey): Promise<JsonWebKey> =>
     crypto.subtle.exportKey('jwk', publicKey);
+
+
+/**--------------------------------------------------------------
+ * WEBAUTHN — protection au repos de la clé privée de device
+ *
+ * La clé privée RSA du device n'est plus persistée en clair (handle opaque
+ * non-extractable). À la place, son PKCS8 est chiffré AES-GCM avec une clé
+ * dérivée (HKDF) du secret PRF d'un passkey, et seul ce blob chiffré vit dans
+ * IndexedDB. Sans cérémonie WebAuthn, le blob est inexploitable même pour qui
+ * détient un accès complet à IndexedDB.
+ --------------------------------------------------------------*/
+
+interface WrappedPrivateKeyBlob {
+    iv: ArrayBuffer;
+    ciphertext: ArrayBuffer;
+}
+
+/**
+ * Dérive une clé AES-GCM 256 à partir du secret PRF (32 octets) renvoyé par
+ * l'authenticator. HKDF-SHA256 sépare le secret brut de la clé d'usage.
+ */
+export const deriveAesKeyFromSecret = async (secret: ArrayBuffer): Promise<CryptoKey> => {
+    const baseKey = await crypto.subtle.importKey('raw', secret, 'HKDF', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+        {
+            name: 'HKDF',
+            hash: 'SHA-256',
+            salt: new Uint8Array(0),
+            info: new TextEncoder().encode('secuapp:device-key-aes-gcm:v1'),
+        },
+        baseKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt'],
+    );
+};
+
+/**
+ * Exporte la privée RSA du device en PKCS8, la chiffre AES-GCM avec `wrapKey`,
+ * et persiste le blob chiffré dans IndexedDB. `privateKey` doit être
+ * extractable (sinon exportKey lève InvalidAccessError).
+ */
+export const wrapAndSaveDevicePrivateKey = async (
+    privateKey: CryptoKey,
+    wrapKey: CryptoKey,
+): Promise<void> => {
+    if (privateKey.type !== 'private') {
+        throw new Error('wrapAndSaveDevicePrivateKey attend une clé privée RSA-OAEP.');
+    }
+    const pkcs8 = await crypto.subtle.exportKey('pkcs8', privateKey);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrapKey, pkcs8);
+    const blob: WrappedPrivateKeyBlob = { iv: iv.buffer, ciphertext };
+    await withStore('readwrite', (store) => store.put(blob, WRAPPED_PRIVATE_KEY_ID));
+};
+
+/**
+ * Charge le blob chiffré, le déchiffre avec `wrapKey`, et réimporte la privée
+ * RSA en CryptoKey NON-extractable (handle opaque pour la durée de session).
+ * Retourne null si aucun blob n'est présent.
+ */
+export const loadAndUnwrapDevicePrivateKey = async (
+    wrapKey: CryptoKey,
+): Promise<CryptoKey | null> => {
+    const blob = await withStore<WrappedPrivateKeyBlob | undefined>(
+        'readonly',
+        (store) => store.get(WRAPPED_PRIVATE_KEY_ID) as IDBRequest<WrappedPrivateKeyBlob | undefined>,
+    );
+    if (!blob) return null;
+    const pkcs8 = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: blob.iv }, wrapKey, blob.ciphertext);
+    return crypto.subtle.importKey(
+        'pkcs8',
+        pkcs8,
+        { name: 'RSA-OAEP', hash: 'SHA-512' },
+        false,
+        ['decrypt', 'unwrapKey'],
+    );
+};
+
+export const hasWrappedPrivateKey = async (): Promise<boolean> => {
+    const count = await withStore<number>(
+        'readonly',
+        (store) => store.count(WRAPPED_PRIVATE_KEY_ID),
+    );
+    return count > 0;
+};
+
+export const clearWrappedPrivateKey = async (): Promise<void> => {
+    await withStore('readwrite', (store) => store.delete(WRAPPED_PRIVATE_KEY_ID));
+};
 
 
 /**--------------------------------------------------------------

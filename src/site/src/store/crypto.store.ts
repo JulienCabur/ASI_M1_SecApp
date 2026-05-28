@@ -26,6 +26,12 @@ interface CryptoStoreState {
   kek: CryptoKey | null;
   /** Privée MEK du médecin (RSA-OAEP, extractable, en mémoire seulement). */
   privateMEK: CryptoKey | null;
+  /**
+   * Privée RSA du device, déballée une seule fois via WebAuthn au bootstrap et
+   * gardée en mémoire pour éviter une cérémonie biométrique à chaque usage.
+   * Non-extractable, jamais persistée en clair.
+   */
+  devicePrivateKey: CryptoKey | null;
   isInitializing: boolean;
   isPending: boolean;
 
@@ -37,6 +43,8 @@ interface CryptoStoreState {
   setDeviceId: (deviceId: string) => void;
   /** Nom lisible de cet appareil, généré à l'enregistrement et affiché dans PendingApproval. */
   setDeviceName: (name: string) => void;
+  /** Met en cache la privée device déballée pour la durée de session. */
+  setDevicePrivateKey: (key: CryptoKey) => void;
   setInitializing: (v: boolean) => void;
   setPending: (v: boolean) => void;
   clear: () => void;
@@ -47,6 +55,7 @@ export const useCryptoStore = create<CryptoStoreState>((set) => ({
   deviceName: null,
   kek: null,
   privateMEK: null,
+  devicePrivateKey: null,
   // Démarre à true : le spinner est visible dès le montage d'AuthProvider.
   isInitializing: true,
   isPending: false,
@@ -55,6 +64,7 @@ export const useCryptoStore = create<CryptoStoreState>((set) => ({
   setDoctorSession: (deviceId, privateMEK) => set({ deviceId, privateMEK, kek: null, isPending: false }),
   setDeviceId: (deviceId) => set({ deviceId }),
   setDeviceName: (name) => set({ deviceName: name }),
+  setDevicePrivateKey: (key) => set({ devicePrivateKey: key }),
   setInitializing: (v) => set({ isInitializing: v }),
   setPending: (v) => set({ isPending: v }),
   clear: () => set({
@@ -62,6 +72,7 @@ export const useCryptoStore = create<CryptoStoreState>((set) => ({
     deviceName: null,
     kek: null,
     privateMEK: null,
+    devicePrivateKey: null,
     isInitializing: false,
     isPending: false,
   }),
