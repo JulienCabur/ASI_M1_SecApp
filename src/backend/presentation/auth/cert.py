@@ -67,26 +67,19 @@ async def cert_login_proof_route(
             signature=body.signature,
             certificate=body.certificate,
         )
-    except Exception:
+    except Exception as e:
         auth_service.clear_challenge(username=body.username)
         logs_service.add_logs(
-            action=f"CERT_LOGIN_PROOF_FAIL:{client_ip}",
+            action=f"CERT_LOGIN_PROOF_FAIL:{client_ip}:{type(e).__name__}:{str(e)}",
             log_level="WARNING",
             user_id=body.username,
             user_role="doctor",
             patient_id="null",
         )
-        # Message générique côté client : on ne précise pas si c'est nonce, timestamp,
-        # CN ou signature qui a échoué (anti oracle).
         raise HTTPException(status_code=400, detail="Vérification du certificat échouée")
 
     state = secrets.token_urlsafe(32)
     verifier, challenge = generate_pkce_pair()
-    # `prompt=login` : empêche Keycloak d'auto-login avec un compte précédent
-    # (cookie KEYCLOAK_IDENTITY toujours vivant). Indispensable quand on change
-    # de médecin dans la même session navigateur via .p12.
-    # `login_hint` : pré-remplit le champ username Keycloak avec le CN du cert
-    # qu'on vient de prouver, pour éviter une saisie en double.
     authorize_url = build_authorize_url(
         state=state,
         code_challenge=challenge,

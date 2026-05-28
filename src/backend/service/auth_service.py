@@ -57,7 +57,11 @@ class AuthService:
         self.db = db
         self.csr_repository = "/app/csr"
         self.cert_repository = "/app/certs_doctors"
-        self.ca_chain_path = "/app/certs/ca-chain.pem"
+        # Chaîne à embarquer dans les .p12 médecins. DIFFÉRENTE de ca-chain.pem
+        # (qui sert à valider le cert serveur Keycloak côté BFF, signing-ca2),
+        # parce que les certs médecins sont signés par signing-ca1. cf.
+        # pki_deploy.sh pour le détail des deux chaînes.
+        self.ca_chain_path = "/app/certs/doctor-ca-chain.pem"
 
     def store_user(self, user_data: UserInDB) -> User:
         """

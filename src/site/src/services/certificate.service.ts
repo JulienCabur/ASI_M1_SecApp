@@ -1,5 +1,4 @@
-
-import forge from 'node-forge';
+import forge from "node-forge";
 
 export interface SignResult {
   signatureHex: string;
@@ -27,9 +26,9 @@ export interface BuildP12Input {
 }
 
 const toHex = (bytes: string): string => {
-  let out = '';
+  let out = "";
   for (let i = 0; i < bytes.length; i += 1) {
-    out += bytes.charCodeAt(i).toString(16).padStart(2, '0');
+    out += bytes.charCodeAt(i).toString(16).padStart(2, "0");
   }
   return out;
 };
@@ -37,7 +36,8 @@ const toHex = (bytes: string): string => {
 const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('Lecture du fichier impossible'));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Lecture du fichier impossible"));
     reader.onload = () => resolve(reader.result as ArrayBuffer);
     reader.readAsArrayBuffer(file);
   });
@@ -48,21 +48,28 @@ export const signChallengeWithP12 = async (
   data: string,
 ): Promise<SignResult> => {
   const buffer = await readFileAsArrayBuffer(p12File);
-  const der = forge.util.createBuffer(buffer as unknown as forge.util.ByteStringBuffer | ArrayBuffer);
+  const der = forge.util.createBuffer(
+    buffer as unknown as forge.util.ByteStringBuffer | ArrayBuffer,
+  );
   const asn1 = forge.asn1.fromDer(der);
   const p12 = forge.pkcs12.pkcs12FromAsn1(asn1, false, password);
 
-  const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [];
-  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] ?? [];
+  const keyBags =
+    p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[
+      forge.pki.oids.pkcs8ShroudedKeyBag
+    ] ?? [];
+  const certBags =
+    p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] ??
+    [];
 
   const privateKey = keyBags[0]?.key;
   const certificate = certBags[0]?.cert;
   if (!privateKey || !certificate) {
-    throw new Error('Certificat ou clé privée introuvable dans le .p12');
+    throw new Error("Certificat ou clé privée introuvable dans le .p12");
   }
 
   const md = forge.md.sha256.create();
-  md.update(data, 'utf8');
+  md.update(data, "utf8");
 
   // RSA-PSS / SHA-256 / MGF1(SHA-256) / salt = MAX_LENGTH (cryptography.PSS.MAX_LENGTH côté back).
   // Pour RSA-2048 + SHA-256 : keyBytes(256) − hashLen(32) − 2 = 222.
@@ -99,15 +106,24 @@ export const generateBrowserKeypairAndCsr = (
   const keypair = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
   const csr = forge.pki.createCertificationRequest();
   csr.publicKey = keypair.publicKey;
-  // OID explicite pour domainComponent : le shortName "DC" n'est pas
-  // systématiquement résolu par node-forge selon les versions. La PKI exige
-  // exactement DC=be, DC=healthapp pour matcher la policy `match_pol`.
-  const DOMAIN_COMPONENT_OID = '0.9.2342.19200300.100.1.25';
+  const DOMAIN_COMPONENT_OID = "0.9.2342.19200300.100.1.25";
+  const ia5 = forge.asn1.Type.IA5STRING as unknown as forge.asn1.Class;
+  const utf8 = forge.asn1.Type.UTF8 as unknown as forge.asn1.Class;
   csr.setSubject([
-    { type: DOMAIN_COMPONENT_OID, shortName: 'DC', value: 'be' },
-    { type: DOMAIN_COMPONENT_OID, shortName: 'DC', value: 'healthapp' },
-    { name: 'organizationName', value: organization },
-    { name: 'commonName', value: commonName },
+    {
+      type: DOMAIN_COMPONENT_OID,
+      shortName: "DC",
+      value: "be",
+      valueTagClass: ia5,
+    },
+    {
+      type: DOMAIN_COMPONENT_OID,
+      shortName: "DC",
+      value: "healthapp",
+      valueTagClass: ia5,
+    },
+    { name: "organizationName", value: organization, valueTagClass: utf8 },
+    { name: "commonName", value: commonName, valueTagClass: utf8 },
   ]);
   // SHA-256 : la policy PKI exige `default_md = sha256`. MD5/SHA-1 seraient
   // refusés à la signature.
@@ -131,15 +147,18 @@ export const generateBrowserKeypairAndCsr = (
 export const buildP12 = (input: BuildP12Input): string => {
   const certificate = forge.pki.certificateFromPem(input.certificatePem);
 
-  const caCerts = (input.caChainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) ?? [])
-    .map((pem) => forge.pki.certificateFromPem(pem));
+  const caCerts = (
+    input.caChainPem.match(
+      /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g,
+    ) ?? []
+  ).map((pem) => forge.pki.certificateFromPem(pem));
 
   const p12Asn1 = forge.pkcs12.toPkcs12Asn1(
     input.privateKey,
     [certificate, ...caCerts],
     input.password,
     {
-      algorithm: 'aes256',
+      algorithm: "aes256",
       friendlyName: input.friendlyName,
       generateLocalKeyId: true,
     },
@@ -156,7 +175,8 @@ export const generateP12Password = (): string => {
   crypto.getRandomValues(bytes);
   // base64url sans padding : 24 octets → 32 caractères, exactement comme
   // ce que produisait le script PKI côté serveur (cohérence d'UX).
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 1)
+    bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 };

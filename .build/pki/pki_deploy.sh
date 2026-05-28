@@ -121,6 +121,11 @@ for SERVICE in $SERVICES; do
     else
         cp $EXPORT_DIR/ca-chain2.pem $SERVICE_EXPORT/ca-chain.pem
     fi
+    
+    if [[ "$SERVICE" == "backend" ]]; then
+        cp $EXPORT_DIR/ca-chain.pem $SERVICE_EXPORT/doctor-ca-chain.pem
+        chmod 644 $SERVICE_EXPORT/doctor-ca-chain.pem
+    fi
     cp $EXPORT_DIR/root-ca.crt $SERVICE_EXPORT/root-ca.crt
 
     if [[ "$SERVICE" == "logstash" ]]; then
