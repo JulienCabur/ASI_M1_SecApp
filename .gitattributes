@@ -1,0 +1,17 @@
+# Force LF pour tous les fichiers texte par défaut
+* text=auto eol=lf
+
+# Scripts shell : toujours LF, jamais CRLF
+*.sh text eol=lf
+
+# Fichiers de config qui doivent rester LF dans les containers
+*.conf text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+*.env text eol=lf
+
+# Fichiers Windows/IDE : laisser le comportement par défaut
+*.sln text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
