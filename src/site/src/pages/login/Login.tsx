@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router';
+import { Navigate, useSearchParams } from 'react-router';
 import { Button, Typography } from 'antd';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,7 +12,15 @@ const { Title, Text } = Typography;
 
 const Login: React.FC = () => {
   const { isAuthenticated } = useAuth();
-  const [choice, setChoice] = useState<RoleChoice | null>(null);
+  const [searchParams] = useSearchParams();
+  const error = searchParams.get('error');
+
+  // Pré-sélectionner le rôle patient sur un échec Keycloak (la plupart des utilisateurs
+  // sont patients). Sur flow_type=add_device, on ne force pas : un médecin peut aussi
+  // revenir ici après avoir enregistré son passkey.
+  const initialChoice: RoleChoice | null = error === 'auth_failed' ? 'patient' : null;
+
+  const [choice, setChoice] = useState<RoleChoice | null>(initialChoice);
   const [caInfoOpen, setCaInfoOpen] = useState(false);
 
   if (isAuthenticated) {

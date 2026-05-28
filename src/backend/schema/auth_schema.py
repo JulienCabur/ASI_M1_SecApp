@@ -39,6 +39,7 @@ class CertLoginProofRequest(ChallengeResponseRequest):
     `redirect_to` est conservé dans le cookie `oidc_state` pour ramener
     l'utilisateur sur la page initialement demandée après le callback Keycloak."""
     redirect_to: str = Field(default="/", description="Chemin frontend de retour après login")
+    flow_type: str = Field(default="standard", description="Type de flux OIDC (standard | add_device)")
 
 
 class CertLoginProofResponse(BaseModel):
