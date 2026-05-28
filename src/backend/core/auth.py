@@ -6,7 +6,6 @@ from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer
 from schema.auth_schema import UserInDB
 from dotenv import load_dotenv
-
 load_dotenv()
 
 security = HTTPBearer(auto_error=False)
@@ -105,7 +104,6 @@ async def _resolve_access_token(
     1. Le cookie session BFF (rafraîchit côté serveur si expiré).
     2. À défaut, l'en-tête Authorization Bearer (compat tests / clients machine).
     """
-    # Import local pour éviter une dépendance circulaire au démarrage.
     from core.session import (
         get_session_payload,
         is_session_expired,
@@ -142,6 +140,7 @@ async def get_current_user(
     token = await _resolve_access_token(request, response, credentials)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session manquante")
+
     try:
         public_key = await get_public_key(token)
         payload = jwt.decode(

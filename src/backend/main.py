@@ -77,8 +77,8 @@ ROUTE_PRIVILEGES = {
 
 
 class MetadataMiddleware(BaseHTTPMiddleware):
-    """Vérifie les métadonnées structurelles de chaque requête pour détecter
-    des anomalies (décalage horaire, taille anormale) sans accéder au contenu."""
+    """Vérifie les métadonnées structurelles de chaque requête.
+    """
 
     async def dispatch(self, request: Request, call_next):
         timestamp_str = request.headers.get("X-Request-Timestamp")
@@ -92,26 +92,18 @@ class MetadataMiddleware(BaseHTTPMiddleware):
 
                 metadata = MetadataBase(time=client_time,size_data=size_data,privilege_need=privilege,tree_depth=tree_depth,method=request.method)
                 svc = MetadataService(db=None)
-                is_anomaly, reasons = svc.verify_metadata(metadata)
-                if is_anomaly:
-                    for reason in reasons:
-                        await _metadata_logs.add_logs(
-                            action="METADATA_ANOMALY_DETECTED",
-                            log_level="WARNING",
-                            user_id="unknown",
-                            user_role="unknown",
-                            patient_id="null",
-                            message=reason,
-                        )
+                _, blocking, warnings = svc.verify_metadata(metadata)
+
+                for reason in warnings:
+                    await _metadata_logs.add_logs(action="METADATA_ANOMALY_DETECTED", log_level="WARNING", user_id="unknown", user_role="unknown", patient_id="null", message=reason)
+
+                if blocking:
+                    for reason in blocking:
+                        await _metadata_logs.add_logs(action="METADATA_REQUEST_BLOCKED", log_level="WARNING", user_id="unknown", user_role="unknown", patient_id="null", message=reason)
+                    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": "Requête rejetée : métadonnées invalides"})
+
             except Exception as e:
-                await _metadata_logs.add_logs(
-                    action="METADATA_PROCESSING_ERROR",
-                    log_level="ERROR",
-                    user_id="unknown",
-                    user_role="unknown",
-                    patient_id="null",
-                    message=str(e),
-                )
+                await _metadata_logs.add_logs(action="METADATA_PROCESSING_ERROR", log_level="ERROR", user_id="unknown", user_role="unknown", patient_id="null", message=str(e))
 
         return await call_next(request)
 
@@ -159,7 +151,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(MetadataMiddleware)
-
 app.include_router(file_router)
 app.include_router(auth_router)
 app.include_router(check_authenticity_router)

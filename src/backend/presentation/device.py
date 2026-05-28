@@ -6,7 +6,6 @@ Ce module fournit des routes pour gérer les clés, valider les tokens JWT, et e
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Form
-from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from schema.auth_schema import UserInDB
 from core.database import get_db
