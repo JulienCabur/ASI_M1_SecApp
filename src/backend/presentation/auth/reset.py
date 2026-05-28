@@ -15,17 +15,15 @@ from service.log_service import LogsService
 router = APIRouter()
 logs_service = LogsService("backend_auth")
 
-# Rate-limit en mémoire (process-local). Pour du multi-worker, déplacer vers Redis.
+# Rate-limit in memory (process-local). Move to Redis for multi-worker deployments.
 _RESET_RATE_LIMIT: Dict[str, list] = {}
 _ADD_DEVICE_RATE_LIMIT: Dict[str, list] = {}
-_RATE_LIMIT_WINDOW = 3600  # 1h
-_RATE_LIMIT_MAX = 3
 
 
 def _check_rate_limit(store: Dict[str, list], key: str) -> bool:
     now = time.time()
-    history = [t for t in store.get(key, []) if now - t < _RATE_LIMIT_WINDOW]
-    if len(history) >= _RATE_LIMIT_MAX:
+    history = [t for t in store.get(key, []) if now - t < 3600]
+    if len(history) >= 3:
         store[key] = history
         return False
     history.append(now)
@@ -47,7 +45,7 @@ async def reset_request_route(
         logs_service.add_logs(
             action="RESET_REQUEST_RATE_LIMITED",
             log_level="WARNING",
-            user_id="système",
+            user_id="system",
             user_role="unknown",
             patient_id="null",
         )
@@ -92,7 +90,7 @@ async def add_device_request_route(
         logs_service.add_logs(
             action="ADD_DEVICE_REQUEST_RATE_LIMITED",
             log_level="WARNING",
-            user_id="système",
+            user_id="system",
             user_role="unknown",
             patient_id="null",
         )

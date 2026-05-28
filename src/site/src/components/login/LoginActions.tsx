@@ -36,12 +36,12 @@ const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
   const [registerOpen, setRegisterOpen] = useState(false);
   const [issuedCert, setIssuedCert] = useState<CertificateIssued | null>(null);
 
-  // Retour après email d'ajout d'appareil : lancer automatiquement l'OIDC
-  // avec le flag add_device pour que le callback saute le cleanup des passkeys.
+  // `role` est le choix UI ('patient' | 'doctor'), pas le rôle JWT Keycloak
+  // ('role_patients' / 'role_docteurs').
   useEffect(() => {
-    if (role === 'patient' && flowType === 'add_device') {
-      startLogin('/', 'add_device');
-    }
+    if (flowType !== 'add_device') return;
+    if (role === 'patient') startLogin('/', 'add_device');
+    else if (role === 'doctor') setCertLoginOpen(true);
   }, [role, flowType]);
 
   // Patient : flow OIDC standard (passkey/TOTP côté Keycloak).
@@ -72,13 +72,17 @@ const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
           </Title>
           <Text type="secondary">Connectez-vous pour continuer</Text>
         </div>
-        {role === 'patient' && urlError === 'auth_failed' && (
+        {urlError === 'auth_failed' && (
           <Alert
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
             message="Passkey introuvable sur cet appareil"
-            description="Votre clé d'accès n'est pas enregistrée sur cet appareil ou ce navigateur."
+            description={
+              role === 'doctor'
+                ? "Votre passkey Windows Hello n'est pas enregistré sur cet appareil. Étape 1 : enregistrez cet appareil (email). Étape 2 : reconnectez-vous avec votre certificat."
+                : "Votre clé d'accès n'est pas enregistrée sur cet appareil ou ce navigateur."
+            }
             action={
               <Button
                 size="small"
@@ -111,6 +115,9 @@ const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
             </>
           ) : (
             <>
+              <Button size="large" block icon={<MobileOutlined />} onClick={() => setAddDeviceOpen(true)}>
+                Premier accès sur cet appareil
+              </Button>
               <Button
                 size="large"
                 block
@@ -139,6 +146,7 @@ const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
         open={certLoginOpen}
         onClose={() => setCertLoginOpen(false)}
         redirectTo="/"
+        flowType={flowType ?? 'standard'}
       />
       <DoctorRegistrationModal
         open={registerOpen}

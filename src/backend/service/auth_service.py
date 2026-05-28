@@ -403,19 +403,19 @@ class AuthService:
         self._send_reenrollment_email(admin, user_id)
 
     def send_add_device_email(self, email: str) -> None:
-        """Envoie un email d'enrôlement WebAuthn pour un nouvel appareil.
+        """Envoie un email Keycloak pour enregistrer un nouveau passkey WebAuthn.
 
-        Identique à send_credentials_reset_email mais le redirect_uri pointe
-        vers /login?flow_type=add_device. Le callback OIDC lira ce flag et
-        sautera cleanup_stale_credentials(), préservant ainsi les passkeys des
-        autres appareils.
+        Identique à send_credentials_reset_email mais le redirect_uri pointe vers
+        /login?flow_type=add_device afin que le callback OIDC ignore
+        cleanup_stale_credentials() et préserve les passkeys des autres appareils.
 
-        Ne lève pas si l'email est inconnu (anti-énumération)."""
+        Lève une exception si l'utilisateur est introuvable ; la route appelante
+        intercepte l'exception et retourne quand même 200 pour éviter l'énumération."""
         admin = self._keycloak_admin()
         users = admin.get_users({"email": email, "exact": True})
         if not users:
-            return
+            raise Exception("User not found")
         user_id = users[0].get("id")
         if not user_id:
-            return
+            raise Exception("User has no id")
         self._send_reenrollment_email(admin, user_id, redirect_suffix="?flow_type=add_device")

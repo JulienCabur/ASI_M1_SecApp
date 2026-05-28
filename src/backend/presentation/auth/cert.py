@@ -104,6 +104,7 @@ async def cert_login_proof_route(
             "code_verifier": verifier,
             "redirect_to": redirect_to,
             "cert_proven_username": body.username,
+            "flow_type": body.flow_type,
         },
     )
     logs_service.add_logs(

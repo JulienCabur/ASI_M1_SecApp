@@ -14,12 +14,11 @@ const Login: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [searchParams] = useSearchParams();
   const error = searchParams.get('error');
-  const flowType = searchParams.get('flow_type');
 
-  // Pré-sélectionner le rôle patient si on revient d'un échec Keycloak
-  // ou d'un retour d'email d'ajout d'appareil (les deux concernent uniquement les patients).
-  const initialChoice: RoleChoice | null =
-    error === 'auth_failed' || flowType === 'add_device' ? 'patient' : null;
+  // Pré-sélectionner le rôle patient sur un échec Keycloak (la plupart des utilisateurs
+  // sont patients). Sur flow_type=add_device, on ne force pas : un médecin peut aussi
+  // revenir ici après avoir enregistré son passkey.
+  const initialChoice: RoleChoice | null = error === 'auth_failed' ? 'patient' : null;
 
   const [choice, setChoice] = useState<RoleChoice | null>(initialChoice);
   const [caInfoOpen, setCaInfoOpen] = useState(false);

@@ -160,6 +160,7 @@ export const getCertificateLoginChallenge = async (username: string): Promise<Ce
 
 export interface CertificateLoginPayload extends CertificateResetPayload {
   redirect_to: string;
+  flow_type?: string;
 }
 
 interface CertificateLoginResponse {
