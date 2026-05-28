@@ -1,11 +1,14 @@
-import { useState } from 'react';
-import { Button, Card, Typography } from 'antd';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { Alert, Button, Card, Typography } from 'antd';
 import {
   ArrowLeftOutlined,
   MailOutlined,
+  MobileOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { startLogin } from '@/services/auth.service';
+import AddDeviceModal from './AddDeviceModal';
 import EmailResetModal from './EmailResetModal';
 import CertificateResetModal from './CertificateResetModal';
 import CertificateLoginModal from './CertificateLoginModal';
@@ -22,11 +25,24 @@ interface LoginActionsProps {
 }
 
 const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
+  const [searchParams] = useSearchParams();
+  const urlError = searchParams.get('error');
+  const flowType = searchParams.get('flow_type');
+
   const [emailResetOpen, setEmailResetOpen] = useState(false);
+  const [addDeviceOpen, setAddDeviceOpen] = useState(false);
   const [certResetOpen, setCertResetOpen] = useState(false);
   const [certLoginOpen, setCertLoginOpen] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [issuedCert, setIssuedCert] = useState<CertificateIssued | null>(null);
+
+  // Retour après email d'ajout d'appareil : lancer automatiquement l'OIDC
+  // avec le flag add_device pour que le callback saute le cleanup des passkeys.
+  useEffect(() => {
+    if (role === 'patient' && flowType === 'add_device') {
+      startLogin('/', 'add_device');
+    }
+  }, [role, flowType]);
 
   // Patient : flow OIDC standard (passkey/TOTP côté Keycloak).
   // Médecin : on exige une preuve de possession du cert AVANT Keycloak ;
@@ -56,6 +72,24 @@ const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
           </Title>
           <Text type="secondary">Connectez-vous pour continuer</Text>
         </div>
+        {role === 'patient' && urlError === 'auth_failed' && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="Passkey introuvable sur cet appareil"
+            description="Votre clé d'accès n'est pas enregistrée sur cet appareil ou ce navigateur."
+            action={
+              <Button
+                size="small"
+                icon={<MobileOutlined />}
+                onClick={() => setAddDeviceOpen(true)}
+              >
+                Enregistrer cet appareil
+              </Button>
+            }
+          />
+        )}
         <div className={style.actions}>
           <Button
             type="primary"
@@ -67,9 +101,14 @@ const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
             {role === 'doctor' ? 'Se connecter avec mon certificat' : 'Se connecter'}
           </Button>
           {role === 'patient' ? (
-            <Button size="large" block icon={<MailOutlined />} onClick={() => setEmailResetOpen(true)}>
-              Réinitialiser ma clé d'accès
-            </Button>
+            <>
+              <Button size="large" block icon={<MobileOutlined />} onClick={() => setAddDeviceOpen(true)}>
+                Premier accès sur cet appareil
+              </Button>
+              <Button size="large" block icon={<MailOutlined />} onClick={() => setEmailResetOpen(true)}>
+                Réinitialiser ma clé d'accès
+              </Button>
+            </>
           ) : (
             <>
               <Button
@@ -93,6 +132,7 @@ const LoginActions: React.FC<LoginActionsProps> = ({ role, onBack }) => {
         </div>
       </Card>
 
+      <AddDeviceModal open={addDeviceOpen} onClose={() => setAddDeviceOpen(false)} />
       <EmailResetModal open={emailResetOpen} onClose={() => setEmailResetOpen(false)} />
       <CertificateResetModal open={certResetOpen} onClose={() => setCertResetOpen(false)} />
       <CertificateLoginModal

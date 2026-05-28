@@ -924,7 +924,7 @@
     "alwaysDisplayInConsole" : false,
     "clientAuthenticatorType" : "client-secret",
     "secret" : "A_CHANGER_MDP_KEYCLOAK_CLIENT",
-    "redirectUris" : [ "https://localhost/fastapi/auth/callback", "https://localhost/", "https://localhost/login" ],
+    "redirectUris" : [ "https://localhost/fastapi/auth/callback", "https://localhost/", "https://localhost/login", "https://localhost/login?flow_type=add_device" ],
     "webOrigins" : [ "https://localhost" ],
     "notBefore" : 0,
     "bearerOnly" : false,

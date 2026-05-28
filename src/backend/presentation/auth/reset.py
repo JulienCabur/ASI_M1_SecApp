@@ -17,18 +17,19 @@ logs_service = LogsService("backend_auth")
 
 # Rate-limit en mémoire (process-local). Pour du multi-worker, déplacer vers Redis.
 _RESET_RATE_LIMIT: Dict[str, list] = {}
-_RESET_RATE_LIMIT_WINDOW = 3600  # 1h
-_RESET_RATE_LIMIT_MAX = 3
+_ADD_DEVICE_RATE_LIMIT: Dict[str, list] = {}
+_RATE_LIMIT_WINDOW = 3600  # 1h
+_RATE_LIMIT_MAX = 3
 
 
-def _check_reset_rate_limit(key: str) -> bool:
+def _check_rate_limit(store: Dict[str, list], key: str) -> bool:
     now = time.time()
-    history = [t for t in _RESET_RATE_LIMIT.get(key, []) if now - t < _RESET_RATE_LIMIT_WINDOW]
-    if len(history) >= _RESET_RATE_LIMIT_MAX:
-        _RESET_RATE_LIMIT[key] = history
+    history = [t for t in store.get(key, []) if now - t < _RATE_LIMIT_WINDOW]
+    if len(history) >= _RATE_LIMIT_MAX:
+        store[key] = history
         return False
     history.append(now)
-    _RESET_RATE_LIMIT[key] = history
+    store[key] = history
     return True
 
 
@@ -42,7 +43,7 @@ async def reset_request_route(
     Réponse uniforme (200) qu'un compte existe ou non, pour empêcher l'énumération."""
     client_ip = request.client.host if request.client else "unknown"
     rate_key = f"reset:{client_ip}"
-    if not _check_reset_rate_limit(rate_key):
+    if not _check_rate_limit(_RESET_RATE_LIMIT, rate_key):
         logs_service.add_logs(
             action="RESET_REQUEST_RATE_LIMITED",
             log_level="WARNING",
@@ -68,6 +69,49 @@ async def reset_request_route(
         traceback.print_exc()
         logs_service.add_logs(
             action=f"RESET_REQUEST_FAIL:{type(exc).__name__}:{str(exc)[:200]}",
+            log_level="WARNING",
+            user_id=payload.email,
+            user_role="unknown",
+            patient_id="null",
+        )
+    return {"status": "ok"}
+
+
+@router.post("/add_device/request")
+async def add_device_request_route(
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Envoie un email Keycloak pour enregistrer un nouveau passkey WebAuthn sur un
+    nouvel appareil, SANS supprimer les passkeys existants sur les autres appareils.
+    Réponse uniforme (200) pour empêcher l'énumération."""
+    client_ip = request.client.host if request.client else "unknown"
+    rate_key = f"add_device:{client_ip}"
+    if not _check_rate_limit(_ADD_DEVICE_RATE_LIMIT, rate_key):
+        logs_service.add_logs(
+            action="ADD_DEVICE_REQUEST_RATE_LIMITED",
+            log_level="WARNING",
+            user_id="système",
+            user_role="unknown",
+            patient_id="null",
+        )
+        return {"status": "ok"}
+
+    auth_service = AuthService(db=db)
+    try:
+        auth_service.send_add_device_email(payload.email)
+        logs_service.add_logs(
+            action="ADD_DEVICE_REQUEST_SENT",
+            log_level="INFO",
+            user_id=payload.email,
+            user_role="unknown",
+            patient_id="null",
+        )
+    except Exception as exc:
+        traceback.print_exc()
+        logs_service.add_logs(
+            action=f"ADD_DEVICE_REQUEST_FAIL:{type(exc).__name__}:{str(exc)[:200]}",
             log_level="WARNING",
             user_id=payload.email,
             user_role="unknown",

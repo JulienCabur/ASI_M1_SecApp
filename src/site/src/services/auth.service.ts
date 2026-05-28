@@ -32,10 +32,13 @@ const toUser = (me: MeResponse): User | null => {
 };
 
 /** Lance le flow OIDC : redirige le navigateur vers /auth/login (back),
- *  qui à son tour redirige vers la page de login Keycloak. */
-export const startLogin = (redirectTo: string = '/'): void => {
+ *  qui à son tour redirige vers la page de login Keycloak.
+ *  `flowType` peut valoir "add_device" pour le flux d'ajout d'appareil :
+ *  le callback sautera alors cleanup_stale_credentials(). */
+export const startLogin = (redirectTo: string = '/', flowType: string = 'standard'): void => {
   const target = encodeURIComponent(redirectTo);
-  window.location.href = `${API_BASE}/auth/login?redirect_to=${target}`;
+  const ftParam = flowType !== 'standard' ? `&flow_type=${encodeURIComponent(flowType)}` : '';
+  window.location.href = `${API_BASE}/auth/login?redirect_to=${target}${ftParam}`;
 };
 
 /** Récupère le profil utilisateur depuis le cookie session.
@@ -108,6 +111,14 @@ const clearClientCookies = (): void => {
  *  Réponse uniforme côté serveur (anti-énumération). */
 export const requestCredentialsReset = async (email: string): Promise<void> => {
   await api.post('/auth/reset/request', { email });
+};
+
+/** Demande d'ajout d'un nouvel appareil par mail.
+ *  Comme requestCredentialsReset mais le callback OIDC ne supprimera pas
+ *  les passkeys existants (les autres appareils gardent leur accès).
+ *  Réponse uniforme côté serveur (anti-énumération). */
+export const requestAddDevice = async (email: string): Promise<void> => {
+  await api.post('/auth/add_device/request', { email });
 };
 
 /** Reset par certificat médecin : challenge -> signature locale -> POST.

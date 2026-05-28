@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router';
+import { Navigate, useSearchParams } from 'react-router';
 import { Button, Typography } from 'antd';
 import { SafetyCertificateOutlined } from '@ant-design/icons';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,7 +12,16 @@ const { Title, Text } = Typography;
 
 const Login: React.FC = () => {
   const { isAuthenticated } = useAuth();
-  const [choice, setChoice] = useState<RoleChoice | null>(null);
+  const [searchParams] = useSearchParams();
+  const error = searchParams.get('error');
+  const flowType = searchParams.get('flow_type');
+
+  // Pré-sélectionner le rôle patient si on revient d'un échec Keycloak
+  // ou d'un retour d'email d'ajout d'appareil (les deux concernent uniquement les patients).
+  const initialChoice: RoleChoice | null =
+    error === 'auth_failed' || flowType === 'add_device' ? 'patient' : null;
+
+  const [choice, setChoice] = useState<RoleChoice | null>(initialChoice);
   const [caInfoOpen, setCaInfoOpen] = useState(false);
 
   if (isAuthenticated) {

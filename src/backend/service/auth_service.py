@@ -308,17 +308,22 @@ class AuthService:
 
     _ACTION_TOKEN_LIFESPAN_SECONDS = 3600
 
-    def _send_reenrollment_email(self, admin: KeycloakAdmin, user_id: str) -> None:
-        """Envoie un mail Keycloak avec un action token qui force CONFIGURE_TOTP
-        + webauthn-register-passwordless. Le token authentifie l'utilisateur
+    def _send_reenrollment_email(
+        self, admin: KeycloakAdmin, user_id: str, redirect_suffix: str = ""
+    ) -> None:
+        """Envoie un mail Keycloak avec un action token qui force
+        webauthn-register-passwordless. Le token authentifie l'utilisateur
         sans qu'il ait à présenter ses credentials existants, et les required
         actions ajoutent de *nouveaux* credentials sans toucher aux anciens.
 
         On force `client_id` + `redirect_uri` car sans eux Keycloak génère un
         lien vers le client `account` (page blanche chez nous) et un redirect
-        par défaut hors de nos `redirectUris`."""
+        par défaut hors de nos `redirectUris`.
+
+        `redirect_suffix` permet d'ajouter des query params au redirect_uri,
+        par exemple "?flow_type=add_device" pour le flux d'ajout d'appareil."""
         client_id = _env("KEYCLOAK_CLIENT_ID", "health_app_frontend")
-        redirect_uri = _env("FRONTEND_URL", "https://localhost").rstrip("/") + "/login"
+        redirect_uri = _env("FRONTEND_URL", "https://localhost").rstrip("/") + "/login" + redirect_suffix
         admin.send_update_account(
             user_id=user_id,
             payload=list(self._RESET_ACTIONS),
@@ -396,3 +401,21 @@ class AuthService:
         if not user_id:
             raise Exception("Utilisateur introuvable")
         self._send_reenrollment_email(admin, user_id)
+
+    def send_add_device_email(self, email: str) -> None:
+        """Envoie un email d'enrôlement WebAuthn pour un nouvel appareil.
+
+        Identique à send_credentials_reset_email mais le redirect_uri pointe
+        vers /login?flow_type=add_device. Le callback OIDC lira ce flag et
+        sautera cleanup_stale_credentials(), préservant ainsi les passkeys des
+        autres appareils.
+
+        Ne lève pas si l'email est inconnu (anti-énumération)."""
+        admin = self._keycloak_admin()
+        users = admin.get_users({"email": email, "exact": True})
+        if not users:
+            return
+        user_id = users[0].get("id")
+        if not user_id:
+            return
+        self._send_reenrollment_email(admin, user_id, redirect_suffix="?flow_type=add_device")
