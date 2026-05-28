@@ -7,7 +7,7 @@ MOMBAERTS Ciaran - etu51729
 
 ## Description
 
-Application web de gestion de dossiers médicaux avec authentification forte. Le backend est en Python (FastAPI), le frontend en React/TypeScript. L'identité est gérée par Keycloak (OIDC). Les médecins disposent en plus d'une authentification par certificat X.509 émis par une PKI interne à trois niveaux. Les fichiers médicaux sont chiffrés côté serveur. Les logs d'audit sont centralisés dans une stack ELK (Elasticsearch, Logstash, Kibana).
+Application web de gestion de dossiers médicaux avec authentification forte. Le backend est en Python (FastAPI), le frontend en React/TypeScript. L'identité est gérée par Keycloak (OIDC). Les médecins disposent en plus d'une authentification par certificat X.509 émis par une PKI interne à trois niveaux. Les fichiers médicaux sont chiffrés côté client (chiffrement de bout en bout) : le serveur ne manipule jamais le contenu en clair. Les logs d'audit sont centralisés dans une stack ELK (Elasticsearch, Logstash, Kibana).
 
 ## Prérequis
 

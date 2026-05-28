@@ -13,4 +13,13 @@ if (Test-Path "$current_path\.env") {
 
 Copy-Item -Path "$current_path\env.example" -Destination "$current_path\.env" -Force
 
+$envFile = "$current_path\.env"
+$acl = Get-Acl $envFile
+$acl.SetAccessRuleProtection($true, $false) 
+$acl.Access | ForEach-Object { $acl.RemoveAccessRule($_) | Out-Null }
+$owner = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($owner, "FullControl", "Allow")
+$acl.AddAccessRule($rule)
+Set-Acl -Path $envFile -AclObject $acl
+
 Write-Host "Done!"

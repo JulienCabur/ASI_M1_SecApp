@@ -1,16 +1,18 @@
-import style from './navbar.module.scss';
-import { useNavigate } from 'react-router';
+import { Modal } from 'antd';
 import {
-  FaHome,
-  FaFolderOpen,
-  FaSignOutAlt,
-  FaUserMd,
   FaBell,
+  FaFolderOpen,
+  FaHome,
   FaMobileAlt,
+  FaSignOutAlt,
   FaUserInjured,
+  FaUserMd,
+  FaUserSlash,
 } from 'react-icons/fa';
 import { FaFileMedical } from 'react-icons/fa6';
-import { logout } from '@/services/auth.service';
+import { useNavigate } from 'react-router';
+import { deleteAccount, logout } from '@/services/auth.service';
+import style from './navbar.module.scss';
 
 export const NavItem = ({ label, to }: { label: string; to: string }) => {
   const navigate = useNavigate();
@@ -67,6 +69,28 @@ export const NavItem = ({ label, to }: { label: string; to: string }) => {
           }}
         >
           <FaSignOutAlt className={style.icon} />
+        </div>
+      );
+    case 'DeleteAccount':
+      return (
+        <div
+          className={`${style.navItem} ${style.navItemDanger}`}
+          onClick={() => {
+            Modal.confirm({
+              title: 'Supprimer mon compte',
+              content:
+                'Cette action est irréversible. Toutes vos données (fichiers, appareils, relations) seront définitivement effacées.',
+              okText: 'Supprimer',
+              okButtonProps: { danger: true },
+              cancelText: 'Annuler',
+              onOk: async () => {
+                await deleteAccount();
+                void logout();
+              },
+            });
+          }}
+        >
+          <FaUserSlash className={style.icon} />
         </div>
       );
     default:

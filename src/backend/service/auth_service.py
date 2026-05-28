@@ -1,23 +1,26 @@
 
 import datetime
+import os
 import secrets
 from typing import Any, Dict, List
-from sqlalchemy.orm import Session
-from schema.auth_schema import UserInDB, CertificateRequest, ChallengeResponse
-from models.user import User
-from keycloak import KeycloakAdmin
-from keycloak.exceptions import KeycloakPostError
-from dotenv import load_dotenv
-from core.auth import resolve_keycloak_verify
+
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.x509.oid import NameOID
+from dotenv import load_dotenv
+from keycloak import KeycloakAdmin
+from keycloak.exceptions import KeycloakPostError
+from sqlalchemy.orm import Session
+
+from core.auth import resolve_keycloak_verify
+from models.devices import Device
+from models.file import File
+from models.relation import Relation
+from models.user import User
+from schema.auth_schema import CertificateRequest, ChallengeResponse, UserInDB
 from service.hospitals import HospitalService
-import os
 
 
 load_dotenv()  # Charger les variables d'environnement depuis le fichier .env
@@ -320,6 +323,14 @@ class AuthService:
 
         for path in [csr_path, csr_tmp_path, crt_path, crt_tmp_path]:
             if os.path.exists(path):
+                try:
+                    size = os.path.getsize(path)
+                    with open(path, "r+b") as f:
+                        f.write(os.urandom(size))
+                        f.flush()
+                        os.fsync(f.fileno())
+                except Exception:
+                    pass
                 os.remove(path)
 
     def generate_challenge(self, username: str) -> ChallengeResponse:
@@ -516,3 +527,23 @@ class AuthService:
         if not user_id:
             raise Exception("User has no id")
         self._send_reenrollment_email(admin, user_id, redirect_suffix="?flow_type=add_device")
+
+    def erase_user_data(self, user_id: str, storage_path: str) -> None:
+        """Supprime toutes les données d'un utilisateur (droit à l'effacement RGPD).
+        """
+        from service.file_service import FileService
+        fs = FileService(db=self.db, storage_path=storage_path)
+        fs.delete_user_storage(user_id)
+        self.db.query(File).filter(File.user_id == user_id).delete(synchronize_session=False)
+
+        self.db.query(Device).filter(Device.user_id == user_id).delete(synchronize_session=False)
+        self.db.query(Relation).filter(
+            (Relation.patient_id == user_id) | (Relation.doctor_id == user_id)
+        ).delete(synchronize_session=False)
+        self.db.query(User).filter(User.id == user_id).delete(synchronize_session=False)
+        self.db.commit()
+        try:
+            admin = self._keycloak_admin()
+            admin.delete_user(user_id)
+        except Exception:
+            pass

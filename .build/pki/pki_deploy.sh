@@ -89,7 +89,7 @@ chmod 644 $EXPORT_DIR/root-ca.crt
 chmod 644 $EXPORT_DIR/ca-chain.pem $EXPORT_DIR/signing-ca2.crt $EXPORT_DIR/signing-ca1.crt $EXPORT_DIR/ca-chain2.pem
 
 
-SERVICES="keycloak webserver elasticsearch kibana backend logstash"
+SERVICES="keycloak webserver elasticsearch kibana backend logstash postgres"
 
 for SERVICE in $SERVICES; do
     SERVICE_EXPORT="$EXPORT_DIR/$SERVICE"
@@ -136,6 +136,12 @@ for SERVICE in $SERVICES; do
     chown -R 1000:1000 $SERVICE_EXPORT
     chmod 644 $SERVICE_EXPORT/server.crt $SERVICE_EXPORT/ca-chain.pem $SERVICE_EXPORT/root-ca.crt
     chmod 600 $SERVICE_EXPORT/server.key
+
+    # PostgreSQL : la clé doit être possédée par le user postgres (uid 999, image Debian officielle).
+    # Ce bloc vient APRÈS le chown général pour ne pas être écrasé.
+    if [[ "$SERVICE" == "postgres" ]]; then
+        chown 999:999 "$SERVICE_EXPORT/server.key"
+    fi
 
     rm $BASE_DIR/$SERVICE.csr
 done
