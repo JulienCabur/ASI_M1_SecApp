@@ -130,20 +130,13 @@ async def register_doctor_route(
     """
     auth_service = AuthService(db=db)
     try:
-        # Pré-vérification d'unicité avant d'émettre un certificat PKI : un doublon
-        # détecté ici évite une révocation derrière. La création Keycloak revérifie
-        # de toute façon (course possible entre deux requêtes simultanées).
         auth_service.check_doctor_uniqueness(user_info.username, user_info.email)
         auth_service.submit_browser_csr(
             csr_pem=user_info.csr,
             common_name=user_info.username,
             organization=user_info.organization,
         )
-        logs_service.add_logs(action="SUBMIT_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
-
-        # Polling : le watcher PKI signe en moins d'une seconde en régime
-        # nominal, mais on garde un timeout court pour ne pas garder une
-        # requête HTTP ouverte si le service PKI est tombé.
+        await logs_service.add_logs(action="SUBMIT_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null", message="CSR submitted for doctor registration")
         deadline = time.monotonic() + _PKI_SIGN_TIMEOUT
         cert_path = None
         while time.monotonic() < deadline:
@@ -155,15 +148,15 @@ async def register_doctor_route(
         if cert_path is None:
             auth_service.delete_sensitive_files(user_info.username)
             raise HTTPException(status_code=504, detail="La PKI n'a pas signé le CSR dans le délai imparti")
-        logs_service.add_logs(action="CHECK_CSR_SIGNED", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        await logs_service.add_logs(action="CHECK_CSR_SIGNED", log_level="INFO", user_id=user_info.username, user_role="roles_doctor", patient_id="null", message="CSR verified as signed")
 
         cert_pem = auth_service.create_doctor_in_keycloak(cert_path, user_info)
-        logs_service.add_logs(action="REGISTER_DOCTOR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        await logs_service.add_logs(action="REGISTER_DOCTOR", log_level="INFO", user_id=user_info.username, user_role="roles_doctor", patient_id="null", message="Doctor registered successfully")
 
         ca_chain_pem = auth_service.read_ca_chain_pem()
 
         auth_service.delete_sensitive_files(user_info.username)
-        await logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null", message="Sensitive files deleted after registration")
+        await logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=user_info.username, user_role="roles_doctor", patient_id="null", message="Sensitive files deleted after registration")
         return {
             "status": "success",
             "username": user_info.username,
@@ -171,19 +164,12 @@ async def register_doctor_route(
             "ca_chain_pem": ca_chain_pem,
         }
     except DoctorConflictError as e:
-        # 409 ciblé : la couche présentation préserve `field` pour que le front
-        # surligne le bon input (username ou email) sans parser un message libre.
-        raise HTTPException(
-            status_code=409,
-            detail={"message": str(e), "field": e.field},
-        )
+        raise HTTPException(status_code=409,detail={"message": str(e), "field": e.field})
     except HTTPException:
         raise
     except Exception as e:
-        # Nettoyage best-effort : si l'erreur survient après le dépôt du CSR
-        # ou la production du .crt, on ne veut pas laisser traîner ces fichiers
-        # côté volume partagé avec la PKI.
         try:
+            await logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=user_info.username, user_role="roles_doctor", patient_id="null", message="Sensitive files deleted after registration")
             auth_service.delete_sensitive_files(user_info.username)
         except Exception:
             pass
@@ -203,11 +189,14 @@ async def store_public_mek_route(
     """
     try:
         jwk_dict = json.loads(public_mek_jwk)
+        await logs_service.add_logs(action="STORE_PUBLIC_MEK_RECEIVED", log_level="INFO", user_id=doctor_id, user_role="roles_doctor", patient_id="null", message="Received request to store public MEK")
     except json.JSONDecodeError:
+        await logs_service.add_logs(action="STORE_PUBLIC_MEK_INVALID_JSON", log_level="WARNING", user_id=doctor_id, user_role="roles_doctor", patient_id="null", message="Invalid JSON for public MEK JWK")
         raise HTTPException(status_code=422, detail="public_mek_jwk doit être un JSON valide")
     try:
         validated = JWKSchema.model_validate(jwk_dict)
     except Exception as e:
+        await logs_service.add_logs(action="STORE_PUBLIC_MEK_INVALID_JWK", log_level="WARNING", user_id=doctor_id, user_role="roles_doctor", patient_id="null", message=f"Invalid JWK: {e}")
         raise HTTPException(status_code=422, detail=f"JWK invalide : {e}")
 
     auth_service = AuthService(db=db)
@@ -215,4 +204,5 @@ async def store_public_mek_route(
         auth_service.store_public_mek(doctor_id, validated.model_dump(exclude_none=True))
         return {"status": "Public MEK stored successfully"}
     except Exception as e:
+        await logs_service.add_logs(action="STORE_PUBLIC_MEK_ERROR", log_level="WARNING", user_id=doctor_id, user_role="roles_doctor", patient_id="null", message=f"Error storing public MEK: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error storing public MEK: {str(e)}")
