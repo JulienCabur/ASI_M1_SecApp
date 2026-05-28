@@ -248,8 +248,6 @@ class RelationService:
                 "username": counterpart.username if counterpart else counterpart_id,
                 "role": counterpart.roles if counterpart else None,
                 "direction": "incoming" if is_patient else "outgoing",
-                # Pour une demande "incoming", la contrepartie est un médecin
-                # → on remonte sa public MEK pour permettre au patient de wrap.
                 "public_mek": counterpart.public_mek if (counterpart and is_patient) else None,
             }
         return list(aggregated.values())
@@ -392,18 +390,4 @@ class RelationService:
         relation.ciphered_kek = ciphered_kek
         self.db.commit()
         return relation.id
-    
-    # temporary
-    def create_doctors(self):
-        """
-        Crée des médecins pour les tests.
-        """
-        doctor1 = User(id="doctor4", username="Dr. Ben", roles="doctor")
-        self.db.add(doctor1)
-        doctor1_device = Device(user_id="doctor4", device_name="Ben's Device", public_key={"kty": "RSA", "n": "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86eX", "e": "AQAB"}, is_verified=True)
-        self.db.add(doctor1_device)
-        doctor1_device2 = Device(user_id="doctor4", device_name="Ben's Second Device", public_key={"kty": "RSA", "n": "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86eX", "e": "AQAB"}, is_verified=True)
-        self.db.add(doctor1_device2)
-        self.db.commit()
-
     

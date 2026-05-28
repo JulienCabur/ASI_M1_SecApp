@@ -49,6 +49,7 @@ async def reset_request_route(
             user_id="système",
             user_role="unknown",
             patient_id="null",
+            message="Rate limit exceeded for password reset requests",
         )
         # On répond quand même 200 pour rester non-distinguable.
         return {"status": "ok"}
@@ -62,6 +63,7 @@ async def reset_request_route(
             user_id=payload.email,
             user_role="unknown",
             patient_id="null",
+            message="Password reset email sent",
         )
     except Exception as exc:
         # Trace serveur pour debug ; le client reste à 200 pour anti-énumération.
@@ -100,6 +102,7 @@ async def reset_with_certificate_route(
             user_id=body.username,
             user_role="doctor",
             patient_id="null",
+            message="Credentials reset via certificate",
         )
         return {"status": "ok"}
     except Exception as e:

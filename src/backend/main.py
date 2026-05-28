@@ -95,7 +95,7 @@ class MetadataMiddleware(BaseHTTPMiddleware):
                 if is_anomaly:
                     for reason in reasons:
                         await _metadata_logs.add_logs(
-                            action=f"METADATA_ANOMALY_{reason[:40].upper().replace(' ', '_')}",
+                            action="METADATA_ANOMALY_DETECTED",
                             log_level="WARNING",
                             user_id="unknown",
                             user_role="unknown",

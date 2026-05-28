@@ -26,9 +26,9 @@ async def post_logs(
     Endpoint pour ajouter un log à Logstash.
     """
     try:
-        web_logs = await log_service.add_logs(action=action, log_level=log_level, user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
+        web_logs = await log_service.add_logs(action=action, log_level=log_level, user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id, message="Frontend log submitted")
         if not web_logs:
-            await log_service.add_logs(action="ADD_LOG_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
+            await log_service.add_logs(action="ADD_LOG_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id, message="Failed to write web log")
             raise HTTPException(status_code=404, detail="Cannot write web logs")
         return {"message": "Log added successfully"}
     except Exception as e:

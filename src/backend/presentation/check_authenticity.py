@@ -15,7 +15,7 @@ async def download_file():
         authenticity_service = AuthenticityService()
         file_content = authenticity_service.download_ca()
         file = os.path.basename(file_content)
-        await logs_service.add_logs(action="DOWNLOAD_CA", log_level="INFO", user_id="null", user_role="null", patient_id="null")
+        await logs_service.add_logs(action="DOWNLOAD_CA", log_level="INFO", user_id="null", user_role="null", patient_id="null", message="CA file downloaded successfully")
 
         return FileResponse(path=file_content, filename=file)
     except Exception as e:
@@ -26,7 +26,7 @@ async def get_hash():
     try:
         authenticity_service = AuthenticityService()
         hash = authenticity_service.get_hash()
-        await logs_service.add_logs(action="GET_HASH", log_level="INFO", user_id="null", user_role="null", patient_id="null")
+        await logs_service.add_logs(action="GET_HASH", log_level="INFO", user_id="null", user_role="null", patient_id="null", message="CA hash retrieved successfully")
 
         return {"hash": hash}
     except Exception as e:

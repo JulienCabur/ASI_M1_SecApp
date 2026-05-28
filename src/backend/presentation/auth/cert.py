@@ -113,6 +113,7 @@ async def cert_login_proof_route(
         user_id=body.username,
         user_role="doctor",
         patient_id="null",
+        message="Certificate login proof verified successfully",
     )
     return response
 
@@ -129,16 +130,16 @@ async def register_doctor_route(
         # de toute façon (course possible entre deux requêtes simultanées).
         auth_service.check_doctor_uniqueness(user_info.username, user_info.email)
         auth_service.generate_csr(user_info.username, user_info.organization)
-        await logs_service.add_logs(action="GENERATE_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        await logs_service.add_logs(action="GENERATE_CSR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null", message="CSR generated successfully")
         time.sleep(5)
         cert_path = auth_service.check_csr_signed(user_info.username)
-        await logs_service.add_logs(action="CHECK_CSR_SIGNED", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        await logs_service.add_logs(action="CHECK_CSR_SIGNED", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null", message="CSR signed and retrieved successfully")
         p12_password = auth_service.create_doctor_in_keycloak(cert_path, user_info)
-        await logs_service.add_logs(action="REGISTER_DOCTOR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        await logs_service.add_logs(action="REGISTER_DOCTOR", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null", message="Doctor registered in Keycloak")
         p12_content = file_service.get_base64_file_content(cert_path)
-        await logs_service.add_logs(action="GET_P12_CONTENT", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        await logs_service.add_logs(action="GET_P12_CONTENT", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null", message="P12 certificate content retrieved")
         auth_service.delete_sensitive_files(user_info.username)
-        await logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null")
+        await logs_service.add_logs(action="DELETE_SENSITIVE_FILES", log_level="INFO", user_id=user_info.username, user_role="doctor", patient_id="null", message="Sensitive files deleted after registration")
         return {
             "status": "success",
             "username": user_info.username,

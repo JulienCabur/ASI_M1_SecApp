@@ -115,6 +115,7 @@ async def callback_route(
                 user_id=actual_username or "unknown",
                 user_role=user_role,
                 patient_id="null",
+                message=f"Certificate username '{actual_username}' does not match expected '{expected_cert_username}'",
             )
             return RedirectResponse(url=fail_url, status_code=302)
 
@@ -151,6 +152,7 @@ async def callback_route(
                     user_id=user_sub,
                     user_role=user_role,
                     patient_id="null",
+                    message="New user stored in database",
                 )
         except Exception as e:
             await logs_service.add_logs(
@@ -172,6 +174,7 @@ async def callback_route(
         user_id=user_sub or "unknown",
         user_role=user_role,
         patient_id="null",
+        message="User logged in",
     )
 
     redirect_to = expected.get("redirect_to", "/")
@@ -221,6 +224,7 @@ async def logout_route(request: Request) -> JSONResponse:
             user_id=claims.get("sub", "unknown"),
             user_role=(claims.get("realm_access", {}).get("roles", ["unknown"]) or ["unknown"])[0],
             patient_id="null",
+            message="User logged out",
         )
     clear_session_cookie(response)
     return response

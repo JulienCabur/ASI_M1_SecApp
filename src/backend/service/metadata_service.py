@@ -8,15 +8,6 @@ class MetadataService:
     def verify_metadata(self, metadata: MetadataBase) -> tuple[bool, list[str]]:
         """
         Vérifie les métadonnées structurelles d'une requête.
-        Retourne (is_anomaly, [raisons]) — toutes les anomalies détectées, pas seulement la première.
-
-        Détections :
-        - Décalage horaire client/serveur > 5 min  (replay, horloge manipulée)
-        - Timestamp dans le futur > 30 s            (timestamp forgé)
-        - Taille négative                           (valeur forgée)
-        - Taille > 600 Mo                           (contournement limite frontend)
-        - GET/HEAD/OPTIONS avec body                (requête structurellement invalide)
-        - Profondeur d'arbre hors norme             (sondage de routes inexistantes)
         """
         reasons= []
 
@@ -28,10 +19,10 @@ class MetadataService:
         skew_s = (now - client_time).total_seconds()
 
         if abs(skew_s) > timedelta(minutes=5).total_seconds():
-            reasons.append(f"Décalage horaire : {abs(skew_s):.0f}s (max {int(timedelta(minutes=5).total_seconds())}s)")
+            reasons.append(f"Décalage horaire : {abs(skew_s)}s (max {int(timedelta(minutes=5).total_seconds())}s)")
 
         if skew_s < -30:
-            reasons.append(f"Timestamp dans le futur de {-skew_s:.0f}s")
+            reasons.append(f"Timestamp dans le futur de {-skew_s}s")
 
         if metadata.size_data < 0:
             reasons.append("Taille négative")
