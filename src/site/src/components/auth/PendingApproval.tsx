@@ -7,10 +7,11 @@ import { getDeviceKeys } from '@/services/device.service';
 import {
   clearPrivateKey,
   clearPublicKey,
-  loadPrivateKey,
+  clearWrappedPrivateKey,
   unwrapKEKWithRSAKey,
   unwrapPrivateMEKWithDeviceKey,
 } from '@/services/crypto.service';
+import { getDevicePrivateKey } from '@/hooks/useCryptoSession';
 import { logout } from '@/services/auth.service';
 import { ApiError } from '@/services/api';
 import styles from './PendingApproval.module.scss';
@@ -36,7 +37,7 @@ const fromBase64 = (b64: string): ArrayBuffer => {
  */
 export const PendingApproval = () => {
   const { deviceId, deviceName, setSession, setDoctorSession, setPending, clear: clearCrypto } = useCryptoStore();
-  const { role, clear: clearAuth } = useAuthStore();
+  const { role, user, clear: clearAuth } = useAuthStore();
 
   const [checking, setChecking] = useState(false);
   const [stillPending, setStillPending] = useState(false);
@@ -44,6 +45,7 @@ export const PendingApproval = () => {
   const handleCancel = async () => {
     await clearPrivateKey();
     await clearPublicKey();
+    await clearWrappedPrivateKey();
     localStorage.clear();
     clearCrypto();
     clearAuth();
@@ -62,9 +64,11 @@ export const PendingApproval = () => {
 
       // Scénario A — Device A a approuvé : ciphered_kek est disponible.
       if (remote.ciphered_kek) {
-        const privateKey = await loadPrivateKey();
+        // Déballe la privée device via WebAuthn (cérémonie déclenchée par ce
+        // clic utilisateur, contexte légitime pour une invite biométrique).
+        const privateKey = user ? await getDevicePrivateKey(user.id) : null;
         if (!privateKey) {
-          throw new ApiError('Clé privée introuvable en IndexedDB', 404, null);
+          throw new ApiError('Clé privée device indisponible (WebAuthn)', 404, null);
         }
         const wrapped = fromBase64(remote.ciphered_kek);
 

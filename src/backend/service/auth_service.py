@@ -401,7 +401,7 @@ class AuthService:
     _RESET_ACTIONS = ["webauthn-register-passwordless"]
 
     # Types de credentials Keycloak considérés comme "reset-ables".
-    _RESET_CREDENTIAL_TYPES = ("webauthn-passwordless")
+    _RESET_CREDENTIAL_TYPES = ("webauthn-passwordless",)
 
     _ACTION_TOKEN_LIFESPAN_SECONDS = 3600
 
