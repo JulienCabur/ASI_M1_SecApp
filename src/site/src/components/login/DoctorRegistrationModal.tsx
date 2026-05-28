@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Alert, DatePicker, Form, Input, Modal, message } from 'antd';
+import { useEffect, useState } from 'react';
+import { Alert, DatePicker, Form, Input, Modal, Select, message } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { registerDoctor } from '@/services/auth.service';
@@ -9,6 +9,7 @@ import {
   generateBrowserKeypairAndCsr,
   generateP12Password,
 } from '@/services/certificate.service';
+import { listHospitals } from '@/services/hospitals.service';
 
 export interface CertificateIssued {
   filename: string;
@@ -50,6 +51,35 @@ const triggerP12Download = (b64: string, filename: string): void => {
 const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open, onClose, onIssued }) => {
   const [form] = Form.useForm<CertificateFormValues>();
   const [submitting, setSubmitting] = useState(false);
+  const [hospitals, setHospitals] = useState<string[]>([]);
+  const [hospitalsLoading, setHospitalsLoading] = useState(false);
+  const [hospitalsError, setHospitalsError] = useState<string | null>(null);
+
+  // Charge la liste à l'ouverture de la modale (pas au mount global de l'app).
+  // En cas d'échec on bloque le submit : sans la liste, le back rejetterait
+  // toute saisie de toute façon (`_assert_known_hospital`).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setHospitalsLoading(true);
+    setHospitalsError(null);
+    listHospitals()
+      .then((items) => {
+        if (cancelled) return;
+        setHospitals(items);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const detail = err instanceof Error ? err.message : 'Liste des hôpitaux indisponible';
+        setHospitalsError(detail);
+      })
+      .finally(() => {
+        if (!cancelled) setHospitalsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const handleSubmit = async (values: CertificateFormValues) => {
     setSubmitting(true);
@@ -194,14 +224,42 @@ const DoctorRegistrationModal: React.FC<DoctorRegistrationModalProps> = ({ open,
         </Form.Item>
         <Form.Item
           name="organization"
-          label="Organisation"
+          label="Hôpital de rattachement"
           rules={[
-            { required: true, message: 'Organisation requise' },
-            { max: 120, message: '120 caractères maximum' },
+            { required: true, message: 'Hôpital requis' },
+            {
+              validator: (_, value: string | undefined) => {
+                // Garde-fou : seules les valeurs présentes dans le référentiel
+                // chargé peuvent être soumises. Le back revérifie de toute
+                // façon, c'est un signal UX précoce pour l'utilisateur.
+                if (!value) return Promise.resolve();
+                if (!hospitals.includes(value)) {
+                  return Promise.reject(new Error('Hôpital hors référentiel'));
+                }
+                return Promise.resolve();
+              },
+            },
           ]}
         >
-          <Input placeholder="Hôpital Saint-Pierre" />
+          <Select
+            placeholder={hospitalsLoading ? 'Chargement…' : 'Sélectionner un hôpital'}
+            loading={hospitalsLoading}
+            disabled={hospitalsLoading || hospitalsError !== null}
+            showSearch
+            optionFilterProp="label"
+            options={hospitals.map((h) => ({ label: h, value: h }))}
+            notFoundContent={hospitalsError ? 'Référentiel indisponible' : 'Aucun hôpital'}
+          />
         </Form.Item>
+        {hospitalsError && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 8 }}
+            message="Impossible de charger la liste des hôpitaux"
+            description={hospitalsError}
+          />
+        )}
       </Form>
     </Modal>
   );

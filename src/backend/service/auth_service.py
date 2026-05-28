@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.x509.oid import NameOID
+from service.hospitals import HospitalService
 import os
 
 
@@ -81,6 +82,19 @@ class AuthService:
     # 4096 max pour éviter des CSR pathologiquement gros.
     _CSR_KEY_MIN_BITS = 2048
     _CSR_KEY_MAX_BITS = 4096
+
+    def _assert_known_hospital(self, organization: str) -> None:
+        """L'organisation déclarée doit appartenir au référentiel `hospitals`.
+
+        Sans ce filtre, on émettrait des certificats médecin pour des entités
+        arbitraires, et on accepterait au login des certs dont le O n'a aucun
+        sens métier (utile aussi pour la révocation logique : si un hôpital
+        est retiré du référentiel, tous les certs portant son O deviennent
+        non utilisables sans toucher à la PKI)."""
+        if not organization:
+            raise Exception("L'organisation est requise")
+        if organization not in HospitalService(db=self.db).get_hospitals():
+            raise Exception("Hôpital inconnu (hors référentiel)")
     # Borne max sur la taille du CSR envoyé pour éviter qu'un POST géant
     # remplisse le volume partagé avec la PKI avant validation.
     _CSR_MAX_BYTES = 16 * 1024
@@ -96,6 +110,11 @@ class AuthService:
         """
         if not csr_pem or len(csr_pem.encode("utf-8")) > self._CSR_MAX_BYTES:
             raise Exception("CSR vide ou trop volumineux")
+
+        # Refuse d'émettre un cert si l'hôpital revendiqué n'existe pas dans
+        # notre référentiel. Vérifié ici (avant la PKI) pour éviter la signature
+        # d'un cert qu'on rejettera de toute façon au login.
+        self._assert_known_hospital(organization)
 
         try:
             csr = x509.load_pem_x509_csr(csr_pem.encode("utf-8"), default_backend())
@@ -340,6 +359,16 @@ class AuthService:
         cert_cn = cn_attrs[0].value if cn_attrs else None
         if not cert_cn or cert_cn != username:
             raise Exception("Le certificat ne correspond pas à l'utilisateur revendiqué")
+
+        # Vérifie que l'hôpital encodé dans le cert est toujours dans le
+        # référentiel — couvre le cas d'un cert encore valide cryptographiquement
+        # mais émis pour un hôpital depuis retiré (révocation logique sans
+        # toucher à la PKI).
+        o_attrs = cert.subject.get_attributes_for_oid(NameOID.ORGANIZATION_NAME)
+        cert_o = o_attrs[0].value if o_attrs else None
+        if not cert_o:
+            raise Exception("Certificat sans organisation")
+        self._assert_known_hospital(cert_o)
 
         verification_data = f"{nonce}:{timestamp}".encode()
         try:
