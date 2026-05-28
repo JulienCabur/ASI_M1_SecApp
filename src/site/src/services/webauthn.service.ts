@@ -86,7 +86,10 @@ export const registerDeviceWrapCredential = async (
       challenge,
       rp: { name: 'secuapp', id: window.location.hostname },
       user: {
-        id: new TextEncoder().encode(userId),
+        // Prefix évite que ce credential écrase le credential Keycloak dans
+        // Windows Hello : les deux ont le même rpId (localhost) mais des userId
+        // distincts, donc Windows Hello crée un slot séparé.
+        id: new TextEncoder().encode(`secuapp-wrap:${userId}`),
         name: userName,
         displayName: userName,
       },
@@ -95,11 +98,15 @@ export const registerDeviceWrapCredential = async (
         { type: 'public-key', alg: -257 }, // RS256
       ],
       authenticatorSelection: {
-        // 'platform' = lier au matériel de cette machine (Windows Hello),
-        // exclut l'option téléphone/hybride qui produit des reconnexions instables.
+        // 'platform' = lier au matériel de cette machine (Windows Hello).
+        // 'discouraged' : credential non-discoverable → n'apparaît PAS dans le
+        // passkey picker de Chrome. Keycloak a son propre passkey discoverable
+        // pour l'auth ; si on crée un second credential discoverable ici,
+        // Chrome affiche les deux au login Keycloak et l'utilisateur ne voit
+        // plus "Windows Hello". PRF fonctionne sans residentKey.
         authenticatorAttachment: 'platform',
-        residentKey: 'required',
-        requireResidentKey: true,
+        residentKey: 'discouraged',
+        requireResidentKey: false,
         userVerification: 'required',
       },
       timeout: 60_000,
