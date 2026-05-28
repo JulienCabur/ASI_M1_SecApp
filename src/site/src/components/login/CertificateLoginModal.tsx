@@ -18,6 +18,7 @@ interface CertificateLoginModalProps {
   open: boolean;
   onClose: () => void;
   redirectTo?: string;
+  flowType?: string;
 }
 
 /**
@@ -36,6 +37,7 @@ const CertificateLoginModal: React.FC<CertificateLoginModalProps> = ({
   open,
   onClose,
   redirectTo = '/',
+  flowType = 'standard',
 }) => {
   const [form] = Form.useForm<CertificateLoginValues>();
   const [submitting, setSubmitting] = useState(false);
@@ -66,6 +68,7 @@ const CertificateLoginModal: React.FC<CertificateLoginModalProps> = ({
         signature: signatureHex,
         certificate: certificatePem,
         redirect_to: redirectTo,
+        flow_type: flowType,
       });
       // Top-level navigation : le cookie `secuapp_oidc_state` (Strict, httpOnly)
       // posé par le back voyage avec cette navigation puisqu'on est same-site.

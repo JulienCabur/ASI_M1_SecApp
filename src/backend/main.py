@@ -16,6 +16,7 @@ from presentation.auth import router as auth_router
 from presentation.check_authenticity import router as check_authenticity_router
 from presentation.device import router as key_router
 from presentation.relation import router as relation_router
+from presentation.hospitals import router as hospitals_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -163,6 +164,7 @@ app.include_router(file_router)
 app.include_router(auth_router)
 app.include_router(check_authenticity_router)
 app.include_router(key_router)
+app.include_router(hospitals_router)
 app.include_router(relation_router)
 
 @app.get("/")

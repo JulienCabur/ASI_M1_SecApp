@@ -44,11 +44,17 @@ logs_service = LogsService("backend_auth")
 
 
 @router.get("/login")
-async def login_route(request: Request, redirect_to: str = Query(default="/")) -> RedirectResponse:
+async def login_route(
+    request: Request,
+    redirect_to: str = Query(default="/"),
+    flow_type: str = Query(default="standard"),
+) -> RedirectResponse:
     """Démarre le flux Authorization Code + PKCE.
     On dépose un cookie temporaire signé contenant `state` et `code_verifier`
     pour les vérifier au callback. `redirect_to` permet à l'app front de
-    revenir sur la page initialement demandée après login."""
+    revenir sur la page initialement demandée après login.
+    `flow_type` permet de distinguer un login normal ("standard") d'un ajout
+    d'appareil ("add_device") afin de ne pas nettoyer les anciens passkeys."""
     state = secrets.token_urlsafe(32)
     verifier, challenge = generate_pkce_pair()
     authorize_url = build_authorize_url(state=state, code_challenge=challenge)
@@ -59,6 +65,7 @@ async def login_route(request: Request, redirect_to: str = Query(default="/")) -
             "state": state,
             "code_verifier": verifier,
             "redirect_to": redirect_to if redirect_to.startswith("/") else "/",
+            "flow_type": flow_type,
         },
     )
     return response
@@ -120,12 +127,14 @@ async def callback_route(
             return RedirectResponse(url=fail_url, status_code=302)
 
     # Cleanup post-reset : si l'utilisateur vient de finir le flow d'action
-    # email (CONFIGURE_TOTP + webauthn-register-passwordless), il a un nouveau
-    # TOTP/passkey *en plus* des anciens. On garde le plus récent de chaque
-    # type et on supprime les autres. Hors flow de reset c'est un no-op
-    # (un seul credential par type). Une exception ici ne doit pas casser
-    # le login : sera retenté à la prochaine connexion.
-    if user_sub:
+    # email (webauthn-register-passwordless), il a un nouveau passkey *en plus*
+    # des anciens. On garde le plus récent de chaque type et on supprime les
+    # autres. Hors flow de reset c'est un no-op (un seul credential par type).
+    # Pour le flow "add_device", on préserve intentionnellement tous les
+    # passkeys existants (multi-appareils). Une exception ici ne doit pas
+    # casser le login : sera retenté à la prochaine connexion.
+    flow_type = expected.get("flow_type", "standard")
+    if user_sub and flow_type != "add_device":
         try:
             AuthService(db=db).cleanup_stale_credentials(user_sub)
         except Exception as e:
