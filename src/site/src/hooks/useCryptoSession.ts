@@ -26,23 +26,60 @@
 import {
   clearPrivateKey,
   clearPublicKey,
+  clearWrappedPrivateKey,
+  deriveAesKeyFromSecret,
   exportPublicKeyJwk,
   generateKEKFromRSAKey,
-  generateKeyPair,
   generateExtractableKeyPair,
-  loadPrivateKey,
-  savePrivateKey,
+  hasWrappedPrivateKey,
+  loadAndUnwrapDevicePrivateKey,
   savePublicKey,
   unwrapKEKWithRSAKey,
   unwrapPrivateMEKWithDeviceKey,
+  wrapAndSaveDevicePrivateKey,
   wrapPrivateKeyWithRSAKey,} from '@/services/crypto.service';
+import { deriveDeviceWrapSecret, registerDeviceWrapCredential } from '@/services/webauthn.service';
 import { getDeviceKeys, registerDevice, storeKek, storePublicMEK } from '@/services/device.service';
+import { logout } from '@/services/auth.service';
 import { useCryptoStore } from '@/store/crypto.store';
 import { useAuthStore } from '@/store/auth.store';
 import type { Role } from '@/types';
 
-const deviceIdKey   = (userId: string) => `secuapp.device_id.${userId}`;
-const deviceNameKey = (userId: string) => `secuapp.device_name.${userId}`;
+const deviceIdKey      = (userId: string) => `secuapp.device_id.${userId}`;
+const deviceNameKey    = (userId: string) => `secuapp.device_name.${userId}`;
+const credKey          = (userId: string) => `secuapp.webauthn_cred.${userId}`;
+const credTransportsKey = (userId: string) => `secuapp.webauthn_transports.${userId}`;
+
+const loadTransports = (userId: string): AuthenticatorTransport[] => {
+  try {
+    const raw = localStorage.getItem(credTransportsKey(userId));
+    return raw ? (JSON.parse(raw) as AuthenticatorTransport[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Déballe la privée device en mémoire, en déclenchant une cérémonie WebAuthn
+ * (PRF) si elle n'est pas déjà en cache dans le store.
+ *
+ * Utilisé à la demande par les composants (PendingApproval, Dossier) pour
+ * éviter de multiplier les invites biométriques : une fois déballée, la clé
+ * reste en mémoire pour toute la session.
+ */
+export const getDevicePrivateKey = async (userId: string): Promise<CryptoKey | null> => {
+  const cached = useCryptoStore.getState().devicePrivateKey;
+  if (cached) return cached;
+
+  const credentialId = localStorage.getItem(credKey(userId));
+  if (!credentialId) return null;
+
+  const secret = await deriveDeviceWrapSecret(credentialId, loadTransports(userId));
+  const wrapKey = await deriveAesKeyFromSecret(secret);
+  const privateKey = await loadAndUnwrapDevicePrivateKey(wrapKey);
+  if (privateKey) useCryptoStore.getState().setDevicePrivateKey(privateKey);
+  return privateKey;
+};
 
 const toBase64 = (buf: ArrayBuffer): string => {
   const bytes = new Uint8Array(buf);
@@ -71,12 +108,27 @@ const generateDeviceName = (): string => {
  * - Si is_verified: false → Device B : stocke uniquement le deviceId, lève isPending.
  *   La KEK arrivera de Device A via /keys/verify_device.
  */
-const bootstrapDevice = async (userId: string, role: Role | null): Promise<void> => {
+const bootstrapDevice = async (userId: string, userName: string, role: Role | null): Promise<void> => {
   const store = useCryptoStore.getState();
 
-  const pair = await generateKeyPair();
-  await savePrivateKey(pair.privateKey);
+  // Paire extractable : on doit exporter le PKCS8 pour le chiffrer avant
+  // persistance. La privée ne survit en clair qu'en mémoire de session.
+  const pair = await generateExtractableKeyPair();
+
+  // Enregistre un passkey plateforme (Windows Hello) dédié au wrapping.
+  const { credentialId, secret, transports } = await registerDeviceWrapCredential(userId, userName);
+  const prfSecret = secret ?? (await deriveDeviceWrapSecret(credentialId, transports));
+  const wrapKey = await deriveAesKeyFromSecret(prfSecret);
+
+  // Persiste la privée device chiffrée (jamais en clair) + la publique (non sensible).
+  await wrapAndSaveDevicePrivateKey(pair.privateKey, wrapKey);
   await savePublicKey(pair.publicKey);
+  localStorage.setItem(credKey(userId), credentialId);
+  localStorage.setItem(credTransportsKey(userId), JSON.stringify(transports));
+
+  // Met en cache un handle non-extractable pour la session.
+  const sessionPrivateKey = await loadAndUnwrapDevicePrivateKey(wrapKey);
+  if (sessionPrivateKey) store.setDevicePrivateKey(sessionPrivateKey);
 
   const jwk = await exportPublicKeyJwk(pair.publicKey);
   const name = generateDeviceName();
@@ -118,19 +170,35 @@ const bootstrapDevice = async (userId: string, role: Role | null): Promise<void>
   store.setSession(device_id, sealed.kek);
 };
 
-type RecoveryResult = 'ok' | 'pending' | 'failed';
+type RecoveryResult = 'ok' | 'pending' | 'failed' | 'ceremony_failed';
+
+/**
+ * Déballe la privée device via WebAuthn, avec UN réessai silencieux si la
+ * première cérémonie échoue (annulation accidentelle, timeout, glitch lecteur).
+ * Renvoie null si le credential est absent ; relance si les deux essais échouent.
+ */
+const unlockDevicePrivateKeyWithRetry = async (userId: string): Promise<CryptoKey | null> => {
+  try {
+    return await getDevicePrivateKey(userId);
+  } catch (err) {
+    console.warn('[crypto] Cérémonie WebAuthn échouée, nouvel essai…', err);
+    return await getDevicePrivateKey(userId);
+  }
+};
 
 /**
  * Tente de récupérer la session d'un device déjà enregistré.
  *
  * Retourne :
- *   'ok'      → KEK déchiffrée, session chargée
- *   'pending' → device existe mais pas encore approuvé (ciphered_kek null)
- *   'failed'  → device introuvable (404) ou clé privée absente → re-bootstrap nécessaire
+ *   'ok'              → KEK déchiffrée, session chargée
+ *   'pending'         → device existe mais pas encore approuvé (ciphered_kek null)
+ *   'failed'          → device introuvable (404) ou artefacts absents → re-bootstrap
+ *   'ceremony_failed' → cérémonie WebAuthn KO après réessai → logout demandé
  */
 const recoverDevice = async (deviceId: string, userId: string, role: Role | null): Promise<RecoveryResult> => {
-  const privateKey = await loadPrivateKey();
-  if (!privateKey) return 'failed';
+  // Présence détectée sans cérémonie WebAuthn : blob chiffré + credential.
+  if (!(await hasWrappedPrivateKey())) return 'failed';
+  if (!localStorage.getItem(credKey(userId))) return 'failed';
 
   // Restaurer le nom de l'appareil depuis localStorage (persisté au bootstrap).
   const savedName = localStorage.getItem(deviceNameKey(userId));
@@ -146,10 +214,21 @@ const recoverDevice = async (deviceId: string, userId: string, role: Role | null
 
   if (!remote.ciphered_kek) {
     // Device enregistré mais Device A n'a pas encore approuvé.
+    // On NE déclenche PAS de cérémonie WebAuthn ici : la privée device n'est
+    // pas encore nécessaire (elle le sera au moment de l'approbation).
     useCryptoStore.getState().setDeviceId(deviceId);
     useCryptoStore.getState().setPending(true);
     return 'pending';
   }
+
+  // Device approuvé : déballer la privée device via WebAuthn (un réessai max).
+  let privateKey: CryptoKey | null;
+  try {
+    privateKey = await unlockDevicePrivateKeyWithRetry(userId);
+  } catch {
+    return 'ceremony_failed';
+  }
+  if (!privateKey) return 'failed';
 
   const wrappedPayload = fromBase64(remote.ciphered_kek);
 
@@ -173,7 +252,8 @@ const recoverDevice = async (deviceId: string, userId: string, role: Role | null
  * .finally() afin de garantir que le spinner disparaît dans tous les cas.
  */
 export const initCryptoSession = async (userId: string): Promise<void> => {
-  const { role } = useAuthStore.getState();
+  const { role, user } = useAuthStore.getState();
+  const userName = user ? (user.email || `${user.firstName} ${user.lastName}`.trim()) : userId;
   const stored = localStorage.getItem(deviceIdKey(userId));
 
   if (stored) {
@@ -183,13 +263,27 @@ export const initCryptoSession = async (userId: string): Promise<void> => {
       return;
     }
 
+    if (result === 'ceremony_failed') {
+      // Cérémonie WebAuthn KO après réessai : on NE re-bootstrappe PAS (cela
+      // détruirait le blob chiffré et imposerait une ré-approbation). On
+      // déconnecte proprement, l'utilisateur réessaiera au prochain login.
+      useCryptoStore.getState().clear();
+      useAuthStore.getState().clear();
+      await logout();
+      window.location.replace('/login');
+      return;
+    }
+
     // 'failed' : device disparu côté backend ou IDB corrompue.
     // On purge les artefacts locaux avant de re-bootstrapper.
     localStorage.removeItem(deviceIdKey(userId));
     localStorage.removeItem(deviceNameKey(userId));
+    localStorage.removeItem(credKey(userId));
+    localStorage.removeItem(credTransportsKey(userId));
     await clearPrivateKey();
     await clearPublicKey();
+    await clearWrappedPrivateKey();
   }
 
-  await bootstrapDevice(userId, role);
+  await bootstrapDevice(userId, userName, role);
 };

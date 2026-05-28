@@ -23,10 +23,10 @@ import {
 } from '@/services/files.service';
 import { getPatientKek } from '@/services/relation.service';
 import {
-  loadPrivateKey,
   unwrapKEKWithRSAKey,
   unwrapPatientKEKWithPrivateMEK,
 } from '@/services/crypto.service';
+import { getDevicePrivateKey } from '@/hooks/useCryptoSession';
 import { useCryptoStore } from '@/store/crypto.store';
 import { useAuthStore } from '@/store/auth.store';
 import { useNotificationsStore } from '@/store/notifications.store';
@@ -125,8 +125,9 @@ const Dossier: React.FC = () => {
         } else {
           // Cas legacy : non-médecin qui consulte un dossier patient (ne devrait
           // pas arriver via l'UI mais on garde le path par sécurité).
-          const privateKey = await loadPrivateKey();
-          if (!privateKey) throw new Error('Clé privée introuvable dans IndexedDB.');
+          const currentUser = useAuthStore.getState().user;
+          const privateKey = currentUser ? await getDevicePrivateKey(currentUser.id) : null;
+          if (!privateKey) throw new Error('Clé privée device indisponible (WebAuthn).');
           kek = await unwrapKEKWithRSAKey(wrapped, privateKey);
         }
         if (!cancelled) setPatientKek(kek);
