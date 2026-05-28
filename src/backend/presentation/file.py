@@ -36,7 +36,7 @@ async def create_directory(
             "path": directory_path
         }
     except Exception as e:
-        await log_service.add_logs(action="CREATE_DIRECTORY_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+        await log_service.add_logs(action="CREATE_DIRECTORY_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de la création du répertoire: {str(e)}")
 
 @router.get("/download_file", response_model=Dict[str, Any])
@@ -69,7 +69,7 @@ async def download_file(
         else:
             file_data = file_service.save_file(file=file, username=str(current_user.id))
     except Exception as e:
-        await log_service.add_logs(action="DOWNLOAD_FILE_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id if patient_id else "null")
+        await log_service.add_logs(action="DOWNLOAD_FILE_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id if patient_id else "null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors du téléchargement du fichier: {str(e)}")
     file_content = file_service.get_base64_file_content(cert_path=file_data.path)
     await log_service.add_logs(action="DOWNLOAD_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
@@ -98,8 +98,8 @@ async def upload_file(
             raise HTTPException(status_code=400, detail="DEK must be a base64-encoded JSON envelope (256 characters).")
         try:
             base64.b64decode(dek, validate=True)
-        except Exception:
-            await log_service.add_logs(action="UPLOAD_FILE_INVALID_DEK", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+        except Exception as e:
+            await log_service.add_logs(action="UPLOAD_FILE_INVALID_DEK", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null", message=str(e))
             raise HTTPException(status_code=400, detail="DEK n'est pas du base64 valide.")
 
         file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
@@ -107,7 +107,7 @@ async def upload_file(
         await log_service.add_logs(action="UPLOAD_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
         return {"message": message}
     except Exception as e:
-        await log_service.add_logs(action="UPLOAD_FILE_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+        await log_service.add_logs(action="UPLOAD_FILE_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'upload du fichier: {str(e)}")
 
 @router.post("/upload_file_for_doctor", response_model=Dict[str, Any])
@@ -133,8 +133,8 @@ async def upload_file_for_doctor(
             raise HTTPException(status_code=400, detail="DEK must be a base64-encoded JSON envelope (256 characters).")
         try:
             base64.b64decode(dek, validate=True)
-        except Exception:
-            await log_service.add_logs(action="UPLOAD_FILE_FOR_DOCTOR_INVALID_DEK", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
+        except Exception as e:
+            await log_service.add_logs(action="UPLOAD_FILE_FOR_DOCTOR_INVALID_DEK", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id, message=str(e))
             raise HTTPException(status_code=400, detail="DEK n'est pas du base64 valide.")
 
         file_service = FileService(db=db, storage_path=os.getenv("STORAGE_PATH"))
@@ -142,7 +142,7 @@ async def upload_file_for_doctor(
         await log_service.add_logs(action="UPLOAD_FILE_FOR_DOCTOR", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
         return {"message": message}
     except Exception as e:
-        await log_service.add_logs(action="UPLOAD_FILE_FOR_DOCTOR_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id)
+        await log_service.add_logs(action="UPLOAD_FILE_FOR_DOCTOR_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id, message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'upload du fichier: {str(e)}")
 
 @router.post("/delete_file", response_model=Dict[str, Any])
@@ -161,7 +161,7 @@ async def delete_file(
         await log_service.add_logs(action="DELETE_FILE", log_level="INFO", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
         return {"message": message}
     except Exception as e:
-        await log_service.add_logs(action="DELETE_FILE_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null")
+        await log_service.add_logs(action="DELETE_FILE_ERROR", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de la suppression du fichier: {str(e)}")
 
 @router.post("/delete_file_for_doctor", response_model=Dict[str, Any])

@@ -42,7 +42,7 @@ async def register_device_route(
         await logs_service.add_logs(action="REGISTER_DEVICE", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return {"device_id": device.id, "is_verified": device.is_verified}
     except Exception as e:
-        await logs_service.add_logs(action="REGISTER_DEVICE_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
+        await logs_service.add_logs(action="REGISTER_DEVICE_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de l'enregistrement du dispositif: {str(e)}")
 
 @router.post("/store_kek", response_model=Dict[str, Any])
@@ -61,7 +61,7 @@ async def store_device_keys_route(
         await logs_service.add_logs(action="STORE_DEVICE_KEYS", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return {"status": "Clés stockées avec succès pour le dispositif"}
     except Exception as e:
-        await logs_service.add_logs(action="STORE_DEVICE_KEYS_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
+        await logs_service.add_logs(action="STORE_DEVICE_KEYS_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors du stockage des clés: {str(e)}")
 
 @router.get("/get_device_keys", response_model=KeyResponse)
@@ -76,7 +76,7 @@ async def get_device_keys_route(
         await logs_service.add_logs(action="GET_DEVICE_KEYS", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return device_keys
     except Exception as e:
-        await logs_service.add_logs(action="GET_DEVICE_KEYS_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
+        await logs_service.add_logs(action="GET_DEVICE_KEYS_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération des clés: {str(e)}")
 
 @router.get("/list_unverified_devices", response_model=List[DeviceResponse])
@@ -90,7 +90,7 @@ async def list_unverified_devices_route(
         await logs_service.add_logs(action="LIST_UNVERIFIED_DEVICES", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return unverified_devices
     except Exception as e:
-        await logs_service.add_logs(action="LIST_UNVERIFIED_DEVICES_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
+        await logs_service.add_logs(action="LIST_UNVERIFIED_DEVICES_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de la liste des dispositifs non vérifiés: {str(e)}")
 
 @router.post("/verify_device", response_model=Dict[str, Any])
@@ -106,7 +106,7 @@ async def verify_device_route(
         await logs_service.add_logs(action="VERIFY_DEVICE", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return {"device_id": device.id, "is_verified": device.is_verified}
     except Exception as e:
-        await logs_service.add_logs(action="VERIFY_DEVICE_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
+        await logs_service.add_logs(action="VERIFY_DEVICE_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de la vérification du dispositif: {str(e)}")
 
 @router.get("/list_verified_devices", response_model=List[DeviceResponse])
@@ -120,7 +120,7 @@ async def list_verified_devices_route(
         await logs_service.add_logs(action="LIST_VERIFIED_DEVICES", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return verified_devices
     except Exception as e:
-        await logs_service.add_logs(action="LIST_VERIFIED_DEVICES_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
+        await logs_service.add_logs(action="LIST_VERIFIED_DEVICES_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de la liste des dispositifs vérifiés: {str(e)}")
 
 @router.post("/reject_device", response_model=Dict[str, Any])
@@ -135,7 +135,7 @@ async def reject_device_route(
         await logs_service.add_logs(action="REJECT_DEVICE", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return {"status": "Dispositif refusé avec succès"}
     except Exception as e:
-        await logs_service.add_logs(action="REJECT_DEVICE_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
+        await logs_service.add_logs(action="REJECT_DEVICE_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors du refus du dispositif: {str(e)}")
 
 @router.post("/revoke_device", response_model=Dict[str, Any])
@@ -150,5 +150,5 @@ async def revoke_device_route(
         await logs_service.add_logs(action="REVOKE_DEVICE", log_level="INFO", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
         return {"status": "Dispositif révoqué avec succès"}
     except Exception as e:
-        await logs_service.add_logs(action="REVOKE_DEVICE_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null")
+        await logs_service.add_logs(action="REVOKE_DEVICE_ERROR", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de la révocation du dispositif: {str(e)}")

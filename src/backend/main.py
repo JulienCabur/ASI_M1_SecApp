@@ -100,14 +100,16 @@ class MetadataMiddleware(BaseHTTPMiddleware):
                             user_id="unknown",
                             user_role="unknown",
                             patient_id="null",
+                            message=reason,
                         )
-            except Exception:
+            except Exception as e:
                 await _metadata_logs.add_logs(
                     action="METADATA_PROCESSING_ERROR",
                     log_level="ERROR",
                     user_id="unknown",
                     user_role="unknown",
                     patient_id="null",
+                    message=str(e),
                 )
 
         return await call_next(request)

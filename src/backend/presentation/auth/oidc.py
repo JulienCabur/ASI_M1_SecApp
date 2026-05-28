@@ -85,13 +85,14 @@ async def callback_route(
 
     try:
         token_response = await exchange_code_for_tokens(code, expected["code_verifier"])
-    except httpx.HTTPError:
+    except httpx.HTTPError as e:
         await logs_service.add_logs(
             action="OIDC_CALLBACK_FAIL",
             log_level="WARNING",
             user_id="anonymous",
             user_role="unknown",
             patient_id="null",
+            message=str(e),
         )
         return RedirectResponse(url=fail_url, status_code=302)
 
@@ -126,13 +127,14 @@ async def callback_route(
     if user_sub:
         try:
             AuthService(db=db).cleanup_stale_credentials(user_sub)
-        except Exception:
+        except Exception as e:
             await logs_service.add_logs(
                 action="CRED_CLEANUP_FAIL",
                 log_level="WARNING",
                 user_id=user_sub,
                 user_role=user_role,
                 patient_id="null",
+                message=str(e),
             )
         try:
             if not db.query(User).filter(User.id == user_sub).first():
@@ -157,6 +159,7 @@ async def callback_route(
                 user_id=user_sub,
                 user_role=user_role,
                 patient_id="null",
+                message=str(e),
             )
 
     payload = session_payload_from_token_response(token_response)

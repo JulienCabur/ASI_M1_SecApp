@@ -72,6 +72,7 @@ async def reset_request_route(
             user_id=payload.email,
             user_role="unknown",
             patient_id="null",
+            message=str(exc),
         )
     return {"status": "ok"}
 
@@ -109,5 +110,6 @@ async def reset_with_certificate_route(
             user_id=body.username,
             user_role="doctor",
             patient_id="null",
+            message=str(e),
         )
         raise HTTPException(status_code=400, detail=f"Échec reset par certificat : {str(e)}")

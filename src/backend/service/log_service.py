@@ -112,7 +112,7 @@ class LogsService:
         self._health_cache_time = now
         return result
 
-    async def add_logs(self, action: str, log_level: str, user_id: str, user_role: str, patient_id: str = "null"):
+    async def add_logs(self, action: str, log_level: str, user_id: str, user_role: str, patient_id: str = "null", message: str = None):
         """
         Enregistre un log : calcule la chaîne d'audit de façon synchrone,
         puis délègue l'envoi réseau en arrière-plan pour ne pas bloquer la requête.
@@ -122,11 +122,13 @@ class LogsService:
         raw_string = f"{timestamp}{log_level}{self.service_name}{action}{user_id}{user_role}{user_role}{self.source_ip}{patient_id}{self.sequence}{self.previous_hash}"
         valid_hash = hashlib.sha256(raw_string.encode('utf-8')).hexdigest()
 
+        log_message = message if message is not None else f"Action {action} effectuée par l'utilisateur."
+
         log_data = {
             "@timestamp": timestamp,
             "log": {"level": log_level},
             "service": {"name": self.service_name},
-            "message": f"Action {action} effectuée par l'utilisateur.",
+            "message": log_message,
             "event": {"action": action},
             "user": {"id": user_id, "roles": [user_role]},
             "source": {"ip": self.source_ip},

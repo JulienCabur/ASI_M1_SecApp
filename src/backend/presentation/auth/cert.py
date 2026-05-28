@@ -67,7 +67,7 @@ async def cert_login_proof_route(
             signature=body.signature,
             certificate=body.certificate,
         )
-    except Exception:
+    except Exception as e:
         auth_service.clear_challenge(username=body.username)
         await logs_service.add_logs(
             action=f"CERT_LOGIN_PROOF_FAIL:{client_ip}",
@@ -75,6 +75,7 @@ async def cert_login_proof_route(
             user_id=body.username,
             user_role="doctor",
             patient_id="null",
+            message=str(e),
         )
         # Message générique côté client : on ne précise pas si c'est nonce, timestamp,
         # CN ou signature qui a échoué (anti oracle).

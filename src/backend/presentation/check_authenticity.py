@@ -19,7 +19,7 @@ async def download_file():
 
         return FileResponse(path=file_content, filename=file)
     except Exception as e:
-        await logs_service.add_logs(action="DOWNLOAD_CA_ERROR", log_level="ERROR", user_id="null", user_role="null", patient_id="null")
+        await logs_service.add_logs(action="DOWNLOAD_CA_ERROR", log_level="ERROR", user_id="null", user_role="null", patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors du téléchargement du fichier: {str(e)}")
 @router.get("/hash_ca")
 async def get_hash():
@@ -30,5 +30,5 @@ async def get_hash():
 
         return {"hash": hash}
     except Exception as e:
-        await logs_service.add_logs(action="GET_HASH_ERROR", log_level="ERROR", user_id="null", user_role="null", patient_id="null")
+        await logs_service.add_logs(action="GET_HASH_ERROR", log_level="ERROR", user_id="null", user_role="null", patient_id="null", message=str(e))
         raise HTTPException(status_code=400, detail=f"Erreur lors de la récupération du hash: {str(e)}")
