@@ -1,0 +1,32 @@
+diff --git a/es/Dom/dynamicCSS.js b/es/Dom/dynamicCSS.js
+index f616a155b630da1a58189a88369d87b0e40f9019..2f95ebf8560b628661e1b02dfb85dfe92ccaf7d0 100644
+--- a/es/Dom/dynamicCSS.js
++++ b/es/Dom/dynamicCSS.js
+@@ -48,8 +48,9 @@ export function injectCSS(css, option = {}) {
+   if (isPrependQueue && priority) {
+     styleNode.setAttribute(APPEND_PRIORITY, `${priority}`);
+   }
+-  if (csp?.nonce) {
+-    styleNode.nonce = csp?.nonce;
++  const _nonce = csp?.nonce || (typeof window !== 'undefined' && window.__CSP_NONCE__);
++  if (_nonce) {
++    styleNode.nonce = _nonce;
+   }
+   styleNode.innerHTML = css;
+   const container = getContainer(option);
+diff --git a/lib/Dom/dynamicCSS.js b/lib/Dom/dynamicCSS.js
+index 89f939247c743f41db1e956549a0f951ed8306f9..951c48a5e62f3f5146458b1715b7800b2e5e14fb 100644
+--- a/lib/Dom/dynamicCSS.js
++++ b/lib/Dom/dynamicCSS.js
+@@ -58,8 +58,9 @@ function injectCSS(css, option = {}) {
+   if (isPrependQueue && priority) {
+     styleNode.setAttribute(APPEND_PRIORITY, `${priority}`);
+   }
+-  if (csp?.nonce) {
+-    styleNode.nonce = csp?.nonce;
++  const _nonce = csp?.nonce || (typeof window !== 'undefined' && window.__CSP_NONCE__);
++  if (_nonce) {
++    styleNode.nonce = _nonce;
+   }
+   styleNode.innerHTML = css;
+   const container = getContainer(option);

@@ -136,6 +136,7 @@ services:
       COOKIE_SECURE: "true"
       COOKIE_DOMAIN: localhost
       LOGSTASH_URL: https://logstash:5044
+      LOGSTASH_HEALTHCHECK: http://logstash:9600/_health_report
     depends_on:
       pki:
         condition: service_healthy

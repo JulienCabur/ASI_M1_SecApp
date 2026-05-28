@@ -82,6 +82,10 @@ class DeviceService:
             raise Exception("Dispositif non trouvé")
         if device.user_id != user_id:
             raise Exception("Le dispositif n'appartient pas à l'utilisateur")
+        if not device.is_verified:
+            raise Exception("Le dispositif doit être vérifié avant de stocker les clés")
+        if device.ciphered_kek is not None:
+            raise Exception("Les clés du dispositif ont déjà été stockées")
         device.ciphered_kek = ciphered_kek
         self.db.commit()
         self.db.refresh(device)
