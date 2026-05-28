@@ -67,6 +67,11 @@ const fromBase64 = (b64: string): ArrayBuffer => {
 const toBase64Url = (buf: ArrayBuffer): string =>
   toBase64(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB — limite mémoire navigateur (arrayBuffer + ciphertext = 2× taille)
+
+const sanitizeFileName = (name: string): string =>
+  (name.replace(/[/\\]/g, '_').replace(/\.\./g, '_').trim().slice(0, 255)) || 'fichier';
+
 const fromBase64Url = (b64url: string): ArrayBuffer => {
   const padded = b64url.replace(/-/g, '+').replace(/_/g, '/');
   const pad = padded.length % 4 === 0 ? '' : '='.repeat(4 - (padded.length % 4));
@@ -146,11 +151,12 @@ export const listFiles = async (ctx?: FileContext): Promise<RemoteFile[]> => {
 };
 
 export const uploadFile = async (file: File, ctx?: FileContext): Promise<void> => {
+  if (file.size > MAX_FILE_SIZE) throw new Error(`Le fichier dépasse la taille maximale autorisée (500 Mo).`);
   const kek = resolveKek(ctx);
   const plain = await file.arrayBuffer();
   const enc = await encryptFileWithKEK(
     plain,
-    { name: file.name, date: new Date().toISOString() },
+    { name: sanitizeFileName(file.name), date: new Date().toISOString() },
     kek,
   );
   const envelope = encodeEnvelope(enc);
@@ -215,10 +221,11 @@ export const deleteFile = async (id: string, ctx?: FileContext): Promise<void> =
 // ─── Quarantaine : opérations initiées par le médecin ────────────────────────
 
 export const uploadFileForDoctor = async (file: File, ctx: Required<FileContext>): Promise<void> => {
+  if (file.size > MAX_FILE_SIZE) throw new Error(`Le fichier dépasse la taille maximale autorisée (500 Mo).`);
   const plain = await file.arrayBuffer();
   const enc = await encryptFileWithKEK(
     plain,
-    { name: file.name, date: new Date().toISOString() },
+    { name: sanitizeFileName(file.name), date: new Date().toISOString() },
     ctx.kek,
   );
   const envelope = encodeEnvelope(enc);

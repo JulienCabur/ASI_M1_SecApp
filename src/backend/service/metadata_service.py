@@ -1,28 +1,39 @@
-from models.user import User
+from datetime import datetime, timezone, timedelta
 from schema.metadata_schema import MetadataBase
 
 class MetadataService:
-    """
-    Classe pour gérer les opérations liées aux métadonnées.
-    """
     def __init__(self, db):
-        """
-        Initialise le service de gestion des métadonnées avec une session de base de données.
-        :param db: Session de base de données SQLAlchemy.
-        """
         self.db = db
-    
-    def verify_metadata(self, user_id: str, metadata: MetadataBase) -> None:
-        """
-        Vérifie les métadonnées d'un utilisateur.
-        :param user_id: ID de l'utilisateur.
-        :param metadata: Métadonnées à vérifier.
-        :return: Métadonnées de l'utilisateur.
-        """
-        user = self.db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise ValueError(f"L'utilisateur avec l'ID '{user_id}' n'existe pas.")
 
-        
+    def verify_metadata(self, metadata: MetadataBase) -> tuple[bool, list[str]]:
+        """
+        Vérifie les métadonnées structurelles d'une requête.
+        """
+        reasons= []
 
-        return None
+        now = datetime.now(timezone.utc)
+        client_time = metadata.time
+        if client_time.tzinfo is None:
+            client_time = client_time.replace(tzinfo=timezone.utc)
+
+        skew_s = (now - client_time).total_seconds()
+
+        if abs(skew_s) > timedelta(minutes=5).total_seconds():
+            reasons.append(f"Décalage horaire : {abs(skew_s)}s (max {int(timedelta(minutes=5).total_seconds())}s)")
+
+        if skew_s < -30:
+            reasons.append(f"Timestamp dans le futur de {-skew_s}s")
+
+        if metadata.size_data < 0:
+            reasons.append("Taille négative")
+
+        if metadata.size_data > (600 * 1024 * 1024):
+            reasons.append(f"Taille excessive : {metadata.size_data} octets")
+
+        if metadata.method.upper() in {"GET", "HEAD", "OPTIONS"} and metadata.size_data > 0:
+            reasons.append(f"Corps non attendu sur {metadata.method} ({metadata.size_data} octets)")
+
+        if metadata.tree_depth != 2:
+            reasons.append(f"Profondeur d'arbre inhabituelle : {metadata.tree_depth} (attendu 2)")
+
+        return bool(reasons), reasons

@@ -25,6 +25,7 @@ export const api: AxiosInstance = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  config.headers.set('X-Request-Timestamp', new Date().toISOString());
   const method = (config.method ?? 'get').toLowerCase();
   if (MUTATION_METHODS.has(method)) {
     const csrf = readCsrfToken();
