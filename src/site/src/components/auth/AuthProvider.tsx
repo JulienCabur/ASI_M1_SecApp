@@ -4,6 +4,7 @@ import { fetchMe } from '@/services/auth.service';
 import { useAuthStore } from '@/store/auth.store';
 import { useCryptoStore } from '@/store/crypto.store';
 import { initCryptoSession } from '@/hooks/useCryptoSession';
+import { useSecurityMonitor } from '@/hooks/useSecurityMonitor';
 import { PendingApproval } from './PendingApproval';
 import styles from './AuthProvider.module.scss';
 
@@ -26,6 +27,8 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const { setUser, clear: clearAuth } = useAuthStore();
   const { isInitializing, isPending, setInitializing, clear: clearCrypto } = useCryptoStore();
+
+  useSecurityMonitor();
 
   useEffect(() => {
     let cancelled = false;

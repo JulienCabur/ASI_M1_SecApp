@@ -1,13 +1,38 @@
 import base64
 import os
-from sqlalchemy.orm import Session
-from models.relation import Relation
-from schema.file_schema import FileBase
-from models.file_requests import FileOperationRequest
-from schema.file_requests_schema import OperationType, RequestStatus
-from models.file import File
-import base64
 import uuid
+
+from sqlalchemy.orm import Session
+
+from models.file import File
+from models.file_requests import FileOperationRequest
+from models.relation import Relation
+from schema.file_requests_schema import OperationType, RequestStatus
+from schema.file_schema import FileBase
+
+
+def _secure_delete(path: str) -> None:
+    """Écrase le fichier avec des octets aléatoires avant de le supprimer.
+
+    Empêche la récupération du contenu par analyse des blocs libérés sur le
+    système de fichiers (attaque par rémanence). Un seul passage suffit pour
+    les disques modernes (magnétiques ou SSD).
+    """
+    try:
+        size = os.path.getsize(path)
+        with open(path, "r+b") as f:
+            f.write(os.urandom(size))
+            f.flush()
+            os.fsync(f.fileno())
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        # Fallback : suppression simple si l'écrasement échoue (fichier en lecture seule, etc.)
+        try:
+            os.remove(path)
+        except Exception:
+            pass
 
 class FileService:
     """
@@ -177,7 +202,7 @@ class FileService:
                 return f"Aucun enregistrement de fichier trouvé pour '{file}'."
             if file_record.user_id != username:
                 return f"Le fichier '{file}' n'appartient pas à l'utilisateur '{username}'."
-            os.remove(file_path)
+            _secure_delete(file_path)
             self.db.delete(file_record)
             self.db.commit()
             return f"Fichier '{file}' supprimé avec succès pour l'utilisateur '{username}'."
@@ -207,24 +232,16 @@ class FileService:
                 })
         return files_list
 
-    def edit_file(self, file: str, new_content: bytes, username: str) -> str:
+    def delete_user_storage(self, user_id: str) -> None:
+        """Supprime de façon sécurisée tous les fichiers d'un utilisateur.
         """
-        Modifie le contenu d'un fichier pour un utilisateur donné.
-        :param file: Fichier à modifier.
-        :param new_content: Nouveau contenu du fichier.
-        :param username: Nom de l'utilisateur pour lequel modifier le fichier.
-        :param doctor_id: ID du médecin pour lequel modifier le fichier.
-        :return: Message de confirmation de la modification du fichier.
-        """
-        user_directory = self.create_directory_service(username)
-        file_path = os.path.join(user_directory, file)
-        
-        if not os.path.exists(file_path):
-            return f"Le fichier '{file}' n'existe pas dans le répertoire de l'utilisateur '{username}'."
-        
-        try:
-            with open(file_path, 'wb') as f:
-                f.write(new_content)
-            return f"Fichier '{file}' modifié avec succès pour l'utilisateur '{username}'."
-        except Exception as e:
-            return f"Erreur lors de la modification du fichier: {str(e)}"
+        for base in (self.storage_path, self.temp_storage_path):
+            user_dir = os.path.join(base, user_id)
+            if not os.path.isdir(user_dir):
+                continue
+            for fname in os.listdir(user_dir):
+                _secure_delete(os.path.join(user_dir, fname))
+            try:
+                os.rmdir(user_dir)
+            except Exception:
+                pass

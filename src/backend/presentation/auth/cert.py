@@ -59,6 +59,7 @@ async def cert_login_proof_route(
     et on renvoie l'`authorize_url` Keycloak. Le front fait `window.location = url`."""
     auth_service = AuthService(db=db)
     client_ip = request.client.host if request.client else "unknown"
+
     try:
         auth_service.verify_challenge_response(
             username=body.username,

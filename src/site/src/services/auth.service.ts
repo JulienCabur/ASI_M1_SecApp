@@ -106,6 +106,12 @@ const clearClientCookies = (): void => {
   }
 };
 
+/** Supprime définitivement le compte de l'utilisateur authentifié.
+ *  Le backend efface toutes les données puis révoque la session. */
+export const deleteAccount = async (): Promise<void> => {
+  await api.delete('/auth/account');
+};
+
 /** Demande de réinitialisation des identifiants (passwordless) par mail.
  *  Le lien envoyé par Keycloak permet de ré-enrôler une passkey WebAuthn.
  *  Réponse uniforme côté serveur (anti-énumération). */

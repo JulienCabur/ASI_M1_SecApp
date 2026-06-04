@@ -26,6 +26,7 @@ const Navbar = () => {
         )}
         <NavItem label="Devices" to="/devices" />
         <NavItem label="Logout" to="/logout" />
+        <NavItem label="DeleteAccount" to="" />
       </div>
 
       <div className={style.bottom}>
