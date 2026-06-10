@@ -51,7 +51,7 @@ async def store_device_keys_route(
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
     try:
-        if len(key_data.ciphered_kek) != 684:
+        if len(key_data.ciphered_kek) != 684 and not (3840 <= len(key_data.ciphered_kek) <= 3920):
             await logs_service.add_logs(action="STORE_DEVICE_KEYS_INVALID_KEK", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message="KEK must be a 684-character base64 string")
             raise HTTPException(status_code=400, detail="Le KEK chiffré doit être une chaîne base64 de 684 caractères (684 bytes).")
 
