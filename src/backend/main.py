@@ -31,6 +31,9 @@ app = FastAPI(
     description="Core API for the UNamur Medical Institute project",
     version="1.0.0",
     root_path="/fastapi",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 _allowed_origins = [
@@ -121,13 +124,6 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if request.url.path in {"/auth/login","/auth/callback"}:
             return await call_next(request)
-        try:
-            if os.getenv("DISABLE_CSRF_FOR_BEARER", "false").lower() == "true":
-                auth = request.headers.get("Authorization")
-                if auth and auth.lower().startswith("bearer "):
-                    return await call_next(request)
-        except Exception:
-            pass
         cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
         if cookie_token:
             header_token = request.headers.get("X-CSRF-Token")
