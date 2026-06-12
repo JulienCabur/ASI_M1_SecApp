@@ -244,7 +244,7 @@ services:
       - auth-network
 
   keycloak:
-    image: quay.io/keycloak/keycloak:23.0
+    image: quay.io/keycloak/keycloak:latest
     container_name: keycloak
     entrypoint: >
       /bin/bash -c " until [ -f /opt/keycloak/conf/truststores/root-ca.crt ]; do
@@ -267,7 +267,7 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_FEATURES: web-authn,declarative-user-profile
+      KC_FEATURES: web-authn
       KC_HOSTNAME: localhost
       KC_HOSTNAME_PORT: 8443
       KC_HOSTNAME_STRICT: "false"

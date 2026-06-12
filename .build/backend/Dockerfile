@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -11,7 +11,8 @@ RUN apt update && apt install -y --no-install-recommends \
     libffi-dev \
     postgresql-client \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt remove --purge -y perl # Remove Perl to mitigate vulnerabilities
 
 COPY src/backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt

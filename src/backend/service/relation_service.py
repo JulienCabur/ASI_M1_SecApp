@@ -350,23 +350,21 @@ class RelationService:
         Supprime une relation entre un patient et un médecin.
         :param relation_id: ID de la relation à supprimer.
         """
-        user = self.db.query(User).filter(User.id == patient_id, User.roles == "patient").first()
-        if not user:
-            raise ValueError(f"Le patient avec l'ID '{patient_id}' n'existe pas ou n'est pas un patient.")
-
-        doctor = self.db.query(User).filter(User.id == doctor_id, User.roles == "doctor").first()
-        if not doctor:
-            raise ValueError(f"Le médecin avec l'ID '{doctor_id}' n'existe pas ou n'est pas un médecin.")
-
-        relations = self.db.query(Relation).filter(Relation.patient_id == patient_id, Relation.doctor_id == doctor_id).all()
-        if not relations:
-            raise ValueError(f"La relation entre le patient '{patient_id}' et le médecin '{doctor_id}' n'existe pas.")
+        relations = self.db.query(Relation).filter(
+            Relation.patient_id == patient_id,
+            Relation.doctor_id == doctor_id
+        ).all()
         
+        if not relations:
+            raise ValueError(f"Aucune relation trouvée entre le patient '{patient_id}' et le médecin '{doctor_id}'.")
+
         for relation in relations:
+            file_requests = self.db.query(FileOperationRequest).filter(FileOperationRequest.relation_id == relation.id).all()
+            for file_request in file_requests:
+                self.db.delete(file_request)
             self.db.delete(relation)
         self.db.commit()
-    
-        
+
     def list_doctors(self):
         """
         Récupère la liste de tous les médecins.
