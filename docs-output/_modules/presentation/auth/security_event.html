@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>presentation.auth.security_event &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=12dfc556" />
+    <script src="../../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for presentation.auth.security_event</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Réception des événements de sécurité remontés par le navigateur (whistleblower).</span>
+
+<span class="sd">Le frontend détecte des comportements suspects (DevTools ouverts, timestamps</span>
+<span class="sd">incohérents, tentatives de manipulation du DOM) et les reporte ici.</span>
+<span class="sd">On logue dans la chaîne d&#39;audit sans bloquer la requête : l&#39;objectif est la</span>
+<span class="sd">détection a posteriori et l&#39;alerte, pas l&#39;interruption de l&#39;UX.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Request</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.log_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogsService</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">()</span>
+<span class="n">logs_service</span> <span class="o">=</span> <span class="n">LogsService</span><span class="p">(</span><span class="s2">&quot;backend_security&quot;</span><span class="p">)</span>
+
+<span class="n">_ALLOWED_EVENT_TYPES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;DEVTOOLS_OPENED&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;CLIPBOARD_EXFILTRATION&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RAPID_NAVIGATION&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;VISIBILITY_ANOMALY&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RIGHT_CLICK_SENSITIVE&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;KEYBOARD_SHORTCUT_BLOCKED&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;CONSOLE_TAMPERING&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;IFRAME_INJECTION_ATTEMPT&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;DOM_MUTATION_SUSPICIOUS&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;FOCUS_BLUR_PATTERN&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="SecurityEventPayload">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.security_event.SecurityEventPayload">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SecurityEventPayload</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">event_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span>
+    <span class="n">detail</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">512</span><span class="p">)</span>
+    <span class="n">client_ts</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">max_length</span><span class="o">=</span><span class="mi">64</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="security_event_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.security_event.security_event_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/security-event&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">security_event_route</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">SecurityEventPayload</span><span class="p">,</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reçoit un événement de sécurité depuis le navigateur et le logue.&quot;&quot;&quot;</span>
+    <span class="n">client_ip</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span> <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span> <span class="k">else</span> <span class="s2">&quot;unknown&quot;</span>
+    <span class="n">event_type</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">event_type</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">event_type</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_ALLOWED_EVENT_TYPES</span><span class="p">:</span>
+        <span class="n">event_type</span> <span class="o">=</span> <span class="s2">&quot;UNKNOWN_CLIENT_EVENT&quot;</span>
+
+    <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+        <span class="n">action</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;CLIENT_SECURITY_EVENT:</span><span class="si">{</span><span class="n">event_type</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+        <span class="n">user_id</span><span class="o">=</span><span class="n">client_ip</span><span class="p">,</span>
+        <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+        <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+        <span class="n">message</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">detail</span><span class="p">[:</span><span class="mi">512</span><span class="p">],</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;received&quot;</span><span class="p">}</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/core.html">core</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>presentation.auth.reset &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=12dfc556" />
+    <script src="../../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for presentation.auth.reset</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Reset des credentials : par mail (patient) ou par certificat (médecin).&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Depends</span><span class="p">,</span> <span class="n">HTTPException</span><span class="p">,</span> <span class="n">Request</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Session</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">core.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_db</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">schema.auth_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">ChallengeResponseRequest</span><span class="p">,</span> <span class="n">PasswordResetRequest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.auth_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">AuthService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.log_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogsService</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">()</span>
+<span class="n">logs_service</span> <span class="o">=</span> <span class="n">LogsService</span><span class="p">(</span><span class="s2">&quot;backend_auth&quot;</span><span class="p">)</span>
+
+<span class="c1"># Rate-limit in memory (process-local). Move to Redis for multi-worker deployments.</span>
+<span class="n">_RESET_RATE_LIMIT</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="n">_ADD_DEVICE_RATE_LIMIT</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_rate_limit</span><span class="p">(</span><span class="n">store</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">],</span> <span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">history</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">store</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">now</span> <span class="o">-</span> <span class="n">t</span> <span class="o">&lt;</span> <span class="mi">3600</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">history</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="n">store</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">history</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">history</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">now</span><span class="p">)</span>
+    <span class="n">store</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">history</span>
+    <span class="k">return</span> <span class="kc">True</span>
+
+
+<div class="viewcode-block" id="reset_request_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.reset.reset_request_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/reset/request&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">reset_request_route</span><span class="p">(</span>
+    <span class="n">payload</span><span class="p">:</span> <span class="n">PasswordResetRequest</span><span class="p">,</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Déclenche l&#39;envoi d&#39;un mail Keycloak `UPDATE_PASSWORD`.</span>
+<span class="sd">    Réponse uniforme (200) qu&#39;un compte existe ou non, pour empêcher l&#39;énumération.&quot;&quot;&quot;</span>
+    <span class="n">client_ip</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span> <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span> <span class="k">else</span> <span class="s2">&quot;unknown&quot;</span>
+    <span class="n">rate_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;reset:</span><span class="si">{</span><span class="n">client_ip</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_check_rate_limit</span><span class="p">(</span><span class="n">_RESET_RATE_LIMIT</span><span class="p">,</span> <span class="n">rate_key</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;RESET_REQUEST_RATE_LIMITED&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="s2">&quot;system&quot;</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Rate limit exceeded for password reset requests&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="c1"># On répond quand même 200 pour rester non-distinguable.</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">}</span>
+
+    <span class="n">auth_service</span> <span class="o">=</span> <span class="n">AuthService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">send_credentials_reset_email</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">email</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;RESET_REQUEST_SENT&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">payload</span><span class="o">.</span><span class="n">email</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Password reset email sent&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="c1"># Trace serveur pour debug ; le client reste à 200 pour anti-énumération.</span>
+        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;RESET_REQUEST_FAIL:</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)[:</span><span class="mi">200</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">payload</span><span class="o">.</span><span class="n">email</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Failed to send password reset email: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="add_device_request_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.reset.add_device_request_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/add_device/request&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">add_device_request_route</span><span class="p">(</span>
+    <span class="n">payload</span><span class="p">:</span> <span class="n">PasswordResetRequest</span><span class="p">,</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Envoie un email Keycloak pour enregistrer un nouveau passkey WebAuthn sur un</span>
+<span class="sd">    nouvel appareil, SANS supprimer les passkeys existants sur les autres appareils.</span>
+<span class="sd">    Réponse uniforme (200) pour empêcher l&#39;énumération.&quot;&quot;&quot;</span>
+    <span class="n">client_ip</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span> <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span> <span class="k">else</span> <span class="s2">&quot;unknown&quot;</span>
+    <span class="n">rate_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;add_device:</span><span class="si">{</span><span class="n">client_ip</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">_check_rate_limit</span><span class="p">(</span><span class="n">_ADD_DEVICE_RATE_LIMIT</span><span class="p">,</span> <span class="n">rate_key</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;ADD_DEVICE_REQUEST_RATE_LIMITED&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="s2">&quot;system&quot;</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Rate limit exceeded for add device requests&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">}</span>
+
+    <span class="n">auth_service</span> <span class="o">=</span> <span class="n">AuthService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">send_add_device_email</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">email</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;ADD_DEVICE_REQUEST_SENT&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">payload</span><span class="o">.</span><span class="n">email</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Add device email sent&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;ADD_DEVICE_REQUEST_FAIL&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">payload</span><span class="o">.</span><span class="n">email</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Failed to send add device email: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="reset_with_certificate_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.reset.reset_with_certificate_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/reset/with-certificate&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">reset_with_certificate_route</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">ChallengeResponseRequest</span><span class="p">,</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reset par certificat médecin : on vérifie la signature du challenge,</span>
+<span class="sd">    puis Keycloak force un changement de mot de passe à la prochaine connexion.&quot;&quot;&quot;</span>
+    <span class="n">auth_service</span> <span class="o">=</span> <span class="n">AuthService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">verify_challenge_response</span><span class="p">(</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">nonce</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">nonce</span><span class="p">,</span>
+            <span class="n">timestamp</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">timestamp</span><span class="p">,</span>
+            <span class="n">signature</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">signature</span><span class="p">,</span>
+            <span class="n">certificate</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">certificate</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">force_credentials_reset</span><span class="p">(</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;RESET_WITH_CERTIFICATE&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;doctor&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Credentials reset via certificate&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;ok&quot;</span><span class="p">}</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">clear_challenge</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;RESET_WITH_CERTIFICATE_FAIL&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;doctor&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Échec reset par certificat : </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/core.html">core</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

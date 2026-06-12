@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>schema.auth_schema &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=12dfc556" />
+    <script src="../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for schema.auth_schema</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Schémas Pydantic pour l&#39;authentification, la gestion des utilisateurs</span>
+<span class="sd">et les flux de connexion par certificat X.509.&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">EmailStr</span><span class="p">,</span> <span class="n">Field</span>
+
+<div class="viewcode-block" id="AuthBase">
+<a class="viewcode-back" href="../../modules/schema.html#schema.auth_schema.AuthBase">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AuthBase</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Champs communs à tous les modèles d&#39;authentification.&quot;&quot;&quot;</span>
+
+    <span class="n">username</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">email</span><span class="p">:</span> <span class="n">EmailStr</span></div>
+
+
+
+<div class="viewcode-block" id="PasswordResetRequest">
+<a class="viewcode-back" href="../../modules/schema.html#schema.auth_schema.PasswordResetRequest">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PasswordResetRequest</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Requête de réinitialisation de mot de passe par e-mail.&quot;&quot;&quot;</span>
+
+    <span class="n">email</span><span class="p">:</span> <span class="n">EmailStr</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Adresse e-mail du compte à réinitialiser&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="UserInDB">
+<a class="viewcode-back" href="../../modules/schema.html#schema.auth_schema.UserInDB">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">UserInDB</span><span class="p">(</span><span class="n">AuthBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Représentation de l&#39;utilisateur authentifié extrait du JWT Keycloak.&quot;&quot;&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">roles</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="CertificateRequest">
+<a class="viewcode-back" href="../../modules/schema.html#schema.auth_schema.CertificateRequest">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CertificateRequest</span><span class="p">(</span><span class="n">AuthBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Requête de génération et signature d&#39;un certificat X.509 médecin.</span>
+
+<span class="sd">    Le CSR est généré côté navigateur (clé privée jamais transmise au serveur).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">first_name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">last_name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">organization</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">date_of_birth</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="c1"># CSR PEM généré côté navigateur. La clé privée correspondante reste dans</span>
+    <span class="c1"># le navigateur ; le back se contente de la faire signer par la PKI puis</span>
+    <span class="c1"># renvoie le certificat signé pour que le navigateur assemble le .p12.</span>
+    <span class="n">csr</span><span class="p">:</span> <span class="nb">str</span></div>
+
+
+<div class="viewcode-block" id="ChallengeResponse">
+<a class="viewcode-back" href="../../modules/schema.html#schema.auth_schema.ChallengeResponse">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ChallengeResponse</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Challenge cryptographique envoyé au client pour preuve de possession de la clé privée.&quot;&quot;&quot;</span>
+
+    <span class="n">nonce</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span></div>
+
+
+<div class="viewcode-block" id="ChallengeResponseRequest">
+<a class="viewcode-back" href="../../modules/schema.html#schema.auth_schema.ChallengeResponseRequest">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ChallengeResponseRequest</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Réponse au challenge signée par le client avec sa clé privée de certificat.&quot;&quot;&quot;</span>
+    <span class="n">username</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">example</span><span class="o">=</span><span class="s2">&quot;dr.house&quot;</span><span class="p">)</span>
+    <span class="n">nonce</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Le nonce hexadécimal reçu lors du challenge&quot;</span><span class="p">)</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Le timestamp ISO reçu lors du challenge&quot;</span><span class="p">)</span>
+    <span class="n">signature</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Signature hexadécimale (PSS/SHA256)&quot;</span><span class="p">)</span>
+    <span class="n">certificate</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Le certificat PEM du docteur&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="CertLoginProofRequest">
+<a class="viewcode-back" href="../../modules/schema.html#schema.auth_schema.CertLoginProofRequest">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CertLoginProofRequest</span><span class="p">(</span><span class="n">ChallengeResponseRequest</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Preuve de possession du certificat avant redirection OIDC.</span>
+<span class="sd">    `redirect_to` est conservé dans le cookie `oidc_state` pour ramener</span>
+<span class="sd">    l&#39;utilisateur sur la page initialement demandée après le callback Keycloak.&quot;&quot;&quot;</span>
+    <span class="n">redirect_to</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Chemin frontend de retour après login&quot;</span><span class="p">)</span>
+    <span class="n">flow_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;standard&quot;</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Type de flux OIDC (standard | add_device)&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="CertLoginProofResponse">
+<a class="viewcode-back" href="../../modules/schema.html#schema.auth_schema.CertLoginProofResponse">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CertLoginProofResponse</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">authorize_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;URL Keycloak vers laquelle le navigateur doit naviguer&quot;</span><span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/core.html">core</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

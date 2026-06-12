@@ -30,6 +30,7 @@ async def register_device_route(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Enregistre un nouvel appareil avec sa clé publique RSA-OAEP 4096 bits."""
     try:
         jwk = device_data.public_key
         if jwk.kty != "RSA" or jwk.e != "AQAB" or len(jwk.n) != 683 or not re.fullmatch(r'[A-Za-z0-9_\-]+', jwk.n):
@@ -50,6 +51,7 @@ async def store_device_keys_route(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Associe un KEK chiffré à un appareil de l'utilisateur authentifié."""
     try:
         if len(key_data.ciphered_kek) != 684 and not (3840 <= len(key_data.ciphered_kek) <= 3920):
             await logs_service.add_logs(action="STORE_DEVICE_KEYS_INVALID_KEK", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], patient_id="null", message="KEK must be a 684-character base64 string")
@@ -69,6 +71,7 @@ async def get_device_keys_route(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> KeyResponse:
+    """Retourne la clé publique et le KEK chiffré d'un appareil de l'utilisateur."""
     try:
         device_service = DeviceService(db=db)
         device_keys = device_service.get_device_keys(user_id=current_user.id, device_id=device_id)
@@ -83,6 +86,7 @@ async def list_unverified_devices_route(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> List[DeviceResponse]:
+    """Liste les appareils de l'utilisateur en attente de vérification."""
     try:
         device_service = DeviceService(db=db)
         unverified_devices = device_service.list_unverified_devices(user_id=current_user.id)
@@ -99,6 +103,7 @@ async def verify_device_route(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Marque un appareil comme vérifié et y stocke le KEK chiffré associé."""
     try:
         device_service = DeviceService(db=db)
         device = device_service.verify_device(user_id=current_user.id, device_id=device_id, ciphered_kek=ciphered_kek)
@@ -113,6 +118,7 @@ async def list_verified_devices_route(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> List[DeviceResponse]:
+    """Liste les appareils vérifiés de l'utilisateur authentifié."""
     try:
         device_service = DeviceService(db=db)
         verified_devices = device_service.list_verified_devices(user_id=current_user.id)
@@ -128,6 +134,7 @@ async def reject_device_route(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Refuse un appareil en attente de vérification."""
     try:
         device_service = DeviceService(db=db)
         device_service.reject_device(user_id=current_user.id, device_id=device_id)
@@ -143,6 +150,7 @@ async def revoke_device_route(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Révoque un appareil préalablement vérifié."""
     try:
         device_service = DeviceService(db=db)
         device_service.revoke_device(user_id=current_user.id, device_id=device_id)

@@ -1,3 +1,6 @@
+"""Routes de gestion des relations patient-médecin : ajout, suppression,
+vérification, partage de KEK et gestion des demandes en attente."""
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Form
 from service.relation_service import RelationService
 from service.log_service import LogsService
@@ -15,6 +18,7 @@ async def patient_add_doctor(
     doctor_id: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Permet à un patient d'initier une relation avec un médecin."""
     try:
         if current_user.roles[0] != "role_patients":
             await logs_service.add_logs(action="ADD_DOCTOR_RELATION_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients can add doctors")
@@ -37,6 +41,7 @@ async def patient_remove_doctor(
     doctor_id: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Permet à un patient de supprimer sa relation avec un médecin."""
     try:
         if current_user.roles[0] != "role_patients":
             await logs_service.add_logs(action="REMOVE_DOCTOR_RELATION_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients can remove doctors")
@@ -59,6 +64,7 @@ async def doctor_remove_patient(
     patient_id: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Permet à un médecin de supprimer sa relation avec un patient."""
     try:
         if current_user.roles[0] != "role_docteurs":
             await logs_service.add_logs(action="DOCTOR_REMOVE_PATIENT_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only doctors can remove patients")
@@ -81,6 +87,7 @@ async def doctor_remove_patient(
 async def get_relations(
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Retourne les relations vérifiées de l'utilisateur (patients ou médecins)."""
     try:
         if current_user.roles[0] != "role_patients" and current_user.roles[0] != "role_docteurs":
             await logs_service.add_logs(action="GET_RELATIONS_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients and doctors can view their relations")
@@ -100,6 +107,7 @@ async def doctor_add_patient(
     patient_id: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Permet à un médecin d'initier une demande de relation avec un patient."""
     try:
         if current_user.roles[0] != "role_docteurs":
             await logs_service.add_logs(action="DOCTOR_ADD_PATIENT_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only doctors can add patients")
@@ -121,6 +129,7 @@ async def doctor_add_patient(
 async def get_unverified_relations(
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Retourne les relations en attente de vérification de l'utilisateur."""
     try:
         if current_user.roles[0] != "role_patients" and current_user.roles[0] != "role_docteurs":
             await logs_service.add_logs(action="GET_UNVERIFIED_RELATIONS_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients and doctors can view their unverified relations")
@@ -139,6 +148,7 @@ async def doctor_cancel_request(
     request_id: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Permet à un médecin d'annuler une demande de relation en attente."""
     try:
         if current_user.roles[0] != "role_docteurs":
             await logs_service.add_logs(action="DOCTOR_CANCEL_REQUEST_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only doctors can cancel their requests")
@@ -156,6 +166,7 @@ async def doctor_pending_requests(
     patient_id: str = Query(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Retourne les demandes de fichiers en attente d'un médecin pour un patient donné."""
     try:
         if current_user.roles[0] != "role_docteurs":
             await logs_service.add_logs(action="DOCTOR_PENDING_REQUESTS_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only doctors can view their pending requests")
@@ -177,6 +188,7 @@ async def doctor_pending_requests(
 async def patient_pending_requests(
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Retourne les demandes de relation en attente adressées au patient authentifié."""
     try:
         if current_user.roles[0] != "role_patients":
             await logs_service.add_logs(action="PATIENT_PENDING_REQUESTS_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients can view their pending requests")
@@ -195,6 +207,7 @@ async def patient_validate_request(
     request_id: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Permet au patient de valider une demande de relation soumise par un médecin."""
     try:
         if current_user.roles[0] != "role_patients":
             await logs_service.add_logs(action="PATIENT_VALIDATE_REQUEST_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients can validate requests")
@@ -212,6 +225,7 @@ async def patient_reject_request(
     request_id: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Permet au patient de rejeter une demande de relation soumise par un médecin."""
     try:
         if current_user.roles[0] != "role_patients":
             await logs_service.add_logs(action="PATIENT_REJECT_REQUEST_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients can reject requests")
@@ -230,6 +244,7 @@ async def patient_verify_doctor(
     ciphered_kek: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Vérifie la relation avec un médecin et stocke la KEK chiffrée pour lui."""
     try:
         if current_user.roles[0] != "role_patients":
             await logs_service.add_logs(action="PATIENT_VERIFY_DOCTOR_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients can verify doctors")
@@ -253,7 +268,7 @@ async def store_kek(
     ciphered_kek: str = Form(...),
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
-
+    """Stocke le KEK chiffré d'un patient pour une relation donnée."""
     try:
         if current_user.roles[0] != "role_patients":
             await logs_service.add_logs(action="PATIENT_STORE_KEK_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients can store KEKs")
@@ -276,6 +291,7 @@ async def store_kek(
 async def list_doctors(
     db = Depends(get_db),
     current_user = Depends(get_current_user)):
+    """Retourne la liste de tous les médecins disponibles (accessible aux patients)."""
     try:
         if current_user.roles[0] != "role_patients":
             await logs_service.add_logs(action="LIST_DOCTORS_FORBIDDEN", log_level="ERROR", user_id=current_user.id, user_role=current_user.roles[0], message="Only patients can list doctors")
