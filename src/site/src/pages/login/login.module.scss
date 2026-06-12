@@ -1,0 +1,34 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1E3A60 0%, #2D5A8C 100%);
+  padding: 24px;
+  gap: 32px;
+}
+
+.header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  color: white !important;
+  margin: 0 !important;
+}
+
+.subtitle {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.caBtn {
+  color: rgba(255, 255, 255, 0.55) !important;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+}

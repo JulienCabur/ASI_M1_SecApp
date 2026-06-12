@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>core &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=12dfc556" />
+    <script src="../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="models" href="models.html" />
+    <link rel="prev" title="main" href="main.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-core.auth">
+<span id="core"></span><h1>core<a class="headerlink" href="#module-core.auth" title="Link to this heading">¶</a></h1>
+<p>Utilitaires d’authentification : résolution du token JWT, récupération de la
+clé publique Keycloak (JWKS) et dépendance FastAPI <code class="docutils literal notranslate"><span class="pre">get_current_user</span></code>.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="core.auth.get_current_user">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.auth.</span></span><span class="sig-name descname"><span class="pre">get_current_user</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request:</span> <span class="pre">~starlette.requests.Request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response:</span> <span class="pre">~starlette.responses.Response</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">credentials:</span> <span class="pre">~typing.Any</span> <span class="pre">=</span> <span class="pre">Depends(dependency=&lt;fastapi.security.http.HTTPBearer</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache=True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope=None)</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="schema.html#schema.auth_schema.UserInDB" title="schema.auth_schema.UserInDB"><span class="pre">UserInDB</span></a></span></span><a class="reference internal" href="../_modules/core/auth.html#get_current_user"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.auth.get_current_user" title="Link to this definition">¶</a></dt>
+<dd><p>Dépendance FastAPI pour vérifier l’authentification.
+Lit le token depuis le cookie session BFF en priorité, sinon Authorization Bearer.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.auth.get_keycloak_public_key">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.auth.</span></span><span class="sig-name descname"><span class="pre">get_keycloak_public_key</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/core/auth.html#get_keycloak_public_key"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.auth.get_keycloak_public_key" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère la clé publique de Keycloak via son endpoint JWKS (JSON Web Key Set).
+Cette clé est utilisée pour vérifier la signature du JWT.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.auth.get_public_key">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.auth.</span></span><span class="sig-name descname"><span class="pre">get_public_key</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/core/auth.html#get_public_key"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.auth.get_public_key" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère la clé publique correspondante au token JWT en utilisant le kid du header du token pour trouver la bonne clé dans le JWKS de Keycloak.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.auth.resolve_keycloak_verify">
+<span class="sig-prename descclassname"><span class="pre">core.auth.</span></span><span class="sig-name descname"><span class="pre">resolve_keycloak_verify</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/core/auth.html#resolve_keycloak_verify"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.auth.resolve_keycloak_verify" title="Link to this definition">¶</a></dt>
+<dd><p>Retourne la valeur de vérification TLS pour Keycloak.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.auth.validate_jwt_token">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.auth.</span></span><span class="sig-name descname"><span class="pre">validate_jwt_token</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/core/auth.html#validate_jwt_token"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.auth.validate_jwt_token" title="Link to this definition">¶</a></dt>
+<dd><p>Valide un JWT donné en paramètre en vérifiant sa signature avec les clés publiques de Keycloak.
+Retourne le payload du token si valide, ou lève une HTTPException.</p>
+</dd></dl>
+
+<dl class="py function" id="module-core.database">
+<dt class="sig sig-object py" id="core.database.get_db">
+<span class="sig-prename descclassname"><span class="pre">core.database.</span></span><span class="sig-name descname"><span class="pre">get_db</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/core/database.html#get_db"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.database.get_db" title="Link to this definition">¶</a></dt>
+<dd><p>FastAPI dependency that provides a database session per request.</p>
+</dd></dl>
+
+<p id="module-core.oidc">Helpers OIDC pour le flux Authorization Code + PKCE côté backend (BFF).</p>
+<p>Toutes les interactions avec Keycloak (génération URL d’autorisation, échange
+code &lt;-&gt; tokens, refresh, end-session) sont concentrées ici. Le frontend ne
+parle jamais à Keycloak directement.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="core.oidc.build_authorize_url">
+<span class="sig-prename descclassname"><span class="pre">core.oidc.</span></span><span class="sig-name descname"><span class="pre">build_authorize_url</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">code_challenge</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scope</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'openid</span> <span class="pre">profile</span> <span class="pre">email'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_reauth</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">login_hint</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/core/oidc.html#build_authorize_url"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.oidc.build_authorize_url" title="Link to this definition">¶</a></dt>
+<dd><p>Construit l’URL d’autorisation Keycloak.</p>
+<p><cite>force_reauth=True</cite> ajoute <cite>prompt=login</cite> (OIDC §3.1.2.1) pour forcer
+Keycloak à afficher la page de login même si un cookie SSO existe déjà.
+Utilisé par le flow certificat : chaque preuve cert vise une identité
+précise, donc on ne veut pas que Keycloak auto-login avec le compte
+précédemment ouvert dans le navigateur.</p>
+<p><cite>login_hint</cite> pré-remplit le champ username de la page Keycloak.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.oidc.build_logout_url">
+<span class="sig-prename descclassname"><span class="pre">core.oidc.</span></span><span class="sig-name descname"><span class="pre">build_logout_url</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">post_logout_redirect_uri</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">id_token_hint</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/core/oidc.html#build_logout_url"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.oidc.build_logout_url" title="Link to this definition">¶</a></dt>
+<dd><p>URL que le <strong>navigateur</strong> doit visiter pour clore la session SSO Keycloak.
+Sans <cite>id_token_hint</cite>, Keycloak v18+ affiche un écran de confirmation ;
+avec, le logout est silencieux et le navigateur est redirigé immédiatement.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.oidc.end_session">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.oidc.</span></span><span class="sig-name descname"><span class="pre">end_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">refresh_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/core/oidc.html#end_session"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.oidc.end_session" title="Link to this definition">¶</a></dt>
+<dd><p>Révoque le refresh token côté Keycloak.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.oidc.exchange_code_for_tokens">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.oidc.</span></span><span class="sig-name descname"><span class="pre">exchange_code_for_tokens</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">code</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">code_verifier</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="../_modules/core/oidc.html#exchange_code_for_tokens"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.oidc.exchange_code_for_tokens" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.oidc.generate_pkce_pair">
+<span class="sig-prename descclassname"><span class="pre">core.oidc.</span></span><span class="sig-name descname"><span class="pre">generate_pkce_pair</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/core/oidc.html#generate_pkce_pair"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.oidc.generate_pkce_pair" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.oidc.refresh_tokens">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.oidc.</span></span><span class="sig-name descname"><span class="pre">refresh_tokens</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">refresh_token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="../_modules/core/oidc.html#refresh_tokens"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.oidc.refresh_tokens" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.oidc.session_payload_from_token_response">
+<span class="sig-prename descclassname"><span class="pre">core.oidc.</span></span><span class="sig-name descname"><span class="pre">session_payload_from_token_response</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token_response</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="../_modules/core/oidc.html#session_payload_from_token_response"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.oidc.session_payload_from_token_response" title="Link to this definition">¶</a></dt>
+<dd><p>Construit le payload qu’on stocke dans le cookie session.</p>
+<p>Format datetime harmonisé avec auth_service : timestamp ISO avec millisecondes + ‘Z’</p>
+</dd></dl>
+
+<p id="module-core.session">Gestion de la session utilisateur via cookie httpOnly signé (BFF).</p>
+<p>Le cookie contient les tokens OIDC (access + refresh + expiry). Le payload est
+sérialisé JSON puis signé avec itsdangerous (HMAC-SHA256) pour empêcher toute
+modification côté navigateur. Aucune donnée n’est lisible côté JS car le cookie
+est posé en HttpOnly + Secure + SameSite=Strict.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="core.session.clear_session_cookie">
+<span class="sig-prename descclassname"><span class="pre">core.session.</span></span><span class="sig-name descname"><span class="pre">clear_session_cookie</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">response</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Response</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/core/session.html#clear_session_cookie"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.session.clear_session_cookie" title="Link to this definition">¶</a></dt>
+<dd><p>Supprime tous les cookies posés par le BFF (session, CSRF, état OIDC).
+On force <cite>secure</cite> + <cite>samesite</cite> identiques à la pose pour que le navigateur
+accepte bien le <cite>Set-Cookie</cite> de suppression.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.session.consume_oidc_state_cookie">
+<span class="sig-prename descclassname"><span class="pre">core.session.</span></span><span class="sig-name descname"><span class="pre">consume_oidc_state_cookie</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Response</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/core/session.html#consume_oidc_state_cookie"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.session.consume_oidc_state_cookie" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.session.decode_session">
+<span class="sig-prename descclassname"><span class="pre">core.session.</span></span><span class="sig-name descname"><span class="pre">decode_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_age</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">28800</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/core/session.html#decode_session"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.session.decode_session" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.session.encode_session">
+<span class="sig-prename descclassname"><span class="pre">core.session.</span></span><span class="sig-name descname"><span class="pre">encode_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/core/session.html#encode_session"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.session.encode_session" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.session.get_session_payload">
+<span class="sig-prename descclassname"><span class="pre">core.session.</span></span><span class="sig-name descname"><span class="pre">get_session_payload</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Request</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/core/session.html#get_session_payload"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.session.get_session_payload" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.session.is_session_expired">
+<span class="sig-prename descclassname"><span class="pre">core.session.</span></span><span class="sig-name descname"><span class="pre">is_session_expired</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../_modules/core/session.html#is_session_expired"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.session.is_session_expired" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.session.set_csrf_cookie">
+<span class="sig-prename descclassname"><span class="pre">core.session.</span></span><span class="sig-name descname"><span class="pre">set_csrf_cookie</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">response</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Response</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/core/session.html#set_csrf_cookie"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.session.set_csrf_cookie" title="Link to this definition">¶</a></dt>
+<dd><p>CSRF en double-submit : ce cookie n’est PAS httpOnly, le JS le lit
+pour le renvoyer dans l’en-tête X-CSRF-Token. La protection vient du fait
+qu’un attaquant cross-site ne peut pas lire ce cookie (SameSite=Strict).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.session.set_oidc_state_cookie">
+<span class="sig-prename descclassname"><span class="pre">core.session.</span></span><span class="sig-name descname"><span class="pre">set_oidc_state_cookie</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">response</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Response</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/core/session.html#set_oidc_state_cookie"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.session.set_oidc_state_cookie" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.session.set_session_cookie">
+<span class="sig-prename descclassname"><span class="pre">core.session.</span></span><span class="sig-name descname"><span class="pre">set_session_cookie</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">response</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Response</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/core/session.html#set_session_cookie"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#core.session.set_session_cookie" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="main.html">main</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">core</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#core.auth.get_current_user"><code class="docutils literal notranslate"><span class="pre">get_current_user()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.auth.get_keycloak_public_key"><code class="docutils literal notranslate"><span class="pre">get_keycloak_public_key()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.auth.get_public_key"><code class="docutils literal notranslate"><span class="pre">get_public_key()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.auth.resolve_keycloak_verify"><code class="docutils literal notranslate"><span class="pre">resolve_keycloak_verify()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.auth.validate_jwt_token"><code class="docutils literal notranslate"><span class="pre">validate_jwt_token()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.database.get_db"><code class="docutils literal notranslate"><span class="pre">get_db()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.oidc.build_authorize_url"><code class="docutils literal notranslate"><span class="pre">build_authorize_url()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.oidc.build_logout_url"><code class="docutils literal notranslate"><span class="pre">build_logout_url()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.oidc.end_session"><code class="docutils literal notranslate"><span class="pre">end_session()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.oidc.exchange_code_for_tokens"><code class="docutils literal notranslate"><span class="pre">exchange_code_for_tokens()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.oidc.generate_pkce_pair"><code class="docutils literal notranslate"><span class="pre">generate_pkce_pair()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.oidc.refresh_tokens"><code class="docutils literal notranslate"><span class="pre">refresh_tokens()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.oidc.session_payload_from_token_response"><code class="docutils literal notranslate"><span class="pre">session_payload_from_token_response()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.session.clear_session_cookie"><code class="docutils literal notranslate"><span class="pre">clear_session_cookie()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.session.consume_oidc_state_cookie"><code class="docutils literal notranslate"><span class="pre">consume_oidc_state_cookie()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.session.decode_session"><code class="docutils literal notranslate"><span class="pre">decode_session()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.session.encode_session"><code class="docutils literal notranslate"><span class="pre">encode_session()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.session.get_session_payload"><code class="docutils literal notranslate"><span class="pre">get_session_payload()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.session.is_session_expired"><code class="docutils literal notranslate"><span class="pre">is_session_expired()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.session.set_csrf_cookie"><code class="docutils literal notranslate"><span class="pre">set_csrf_cookie()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.session.set_oidc_state_cookie"><code class="docutils literal notranslate"><span class="pre">set_oidc_state_cookie()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#core.session.set_session_cookie"><code class="docutils literal notranslate"><span class="pre">set_session_cookie()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="main.html" title="previous chapter">main</a></li>
+      <li>Next: <a href="models.html" title="next chapter">models</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="../_sources/modules/core.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

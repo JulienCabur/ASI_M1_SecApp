@@ -1,0 +1,27 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #f5f7fa;
+  padding: 32px;
+}
+
+.icon {
+  font-size: 64px;
+  color: #1e3a60;
+}
+
+.subtitle {
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.7;
+  color: #555;
+}
+
+.alert {
+  margin-top: 24px;
+  width: 100%;
+  max-width: 480px;
+}

@@ -1,93 +1,177 @@
 # SécuApp
-
-
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.com/Masi-s-Thorue/secuapp.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-* [Set up project integrations](https://gitlab.com/Masi-s-Thorue/secuapp/-/settings/integrations)
-
-## Collaborate with your team
-
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
+## Contributors
+RUELLE Thomas - etu51177  
+DEMIR Erdem - etu51195  
+CLAUS Gatien - etu51716  
+MOMBAERTS Ciaran - etu51729  
 
 ## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+Application web de gestion de dossiers médicaux avec authentification forte. Le backend est en Python (FastAPI), le frontend en React/TypeScript. L'identité est gérée par Keycloak (OIDC). Les médecins disposent en plus d'une authentification par certificat X.509 émis par une PKI interne à trois niveaux. Les fichiers médicaux sont chiffrés côté client (chiffrement de bout en bout) : le serveur ne manipule jamais le contenu en clair. Les logs d'audit sont centralisés dans une stack ELK (Elasticsearch, Logstash, Kibana).
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## Prérequis
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+- Docker et Docker Compose
+- pnpm (pour le build du frontend)
+- Node.js >= 18
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+## Architecture des services
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+| Service | URL locale | Description |
+|---|---|---|
+| Application (Nginx) | https://localhost | Frontend + reverse proxy vers le backend |
+| Backend (FastAPI) | http://localhost:8081 | API REST (accès direct, hors Nginx) |
+| Keycloak | http://localhost:8080 / https://localhost:8443 | Fournisseur d'identité OIDC |
+| Kibana | http://localhost:5601 | Dashboards et alertes ELK |
+| Elasticsearch | http://localhost:9200 | Moteur de recherche/indexation des logs |
+| PostgreSQL | localhost:5432 | Base de données (Keycloak + backend) |
+| Mailcatcher | http://localhost:1080 | Serveur mail de développement (SMTP : 1025) |
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## Deployment
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### 1. Préparer l'environnement
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Dans le dossier `.build`, créer un fichier `.env` à partir du modèle :
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```bash
+cp .build/env.example .build/.env
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Ou utiliser le script fourni :
 
-## License
-For open source projects, say how it is licensed.
+```bash
+# Linux/macOS
+bash .build/env-creation.sh
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+# Windows (PowerShell)
+.\.build\env-creation.ps1
+```
+
+Puis éditer `.build/.env` et remplacer toutes les valeurs `A_CHANGER_*` par des mots de passe aléatoires. La clé `XPACK_ENCRYPTION_KEY` doit faire au minimum 32 caractères.
+
+### 2. Créer le dossier secrets
+
+Ce dossier est nécessaire pour que la PKI y dépose les certificats générés :
+
+```bash
+mkdir .build/secrets
+```
+
+### 3. Builder le frontend
+
+Le frontend est servi comme des fichiers statiques par Nginx. Il faut donc le compiler avant de lancer Docker :
+
+```bash
+cd src/site
+pnpm install
+pnpm build
+```
+
+### 4. Démarrer le projet
+
+```bash
+cd .build
+docker-compose up -d
+```
+
+Au premier démarrage, la PKI génère automatiquement tous les certificats, puis les services démarrent dans l'ordre. L'opération peut prendre une à deux minutes.
+
+L'instance Keycloak est accessible via : http://localhost:8080 ou https://localhost:8443  
+L'application est accessible via : https://localhost
+
+---
+
+### Exporter la configuration Keycloak
+
+En cas de modification de la configuration du Keycloak, à la fin :
+
+```bash
+docker exec -it keycloak /opt/keycloak/bin/kc.sh export --file /opt/keycloak/conf/realm-export.json --realm health_app --users same_file
+docker cp keycloak:/opt/keycloak/conf/realm-export.json .\keycloak\import\realm-export.json
+```
+
+### Exporter la configuration Kibana
+
+En cas de modification de la configuration de Kibana (Data Views, Règles d'alerte), à la fin :
+
+```bash
+cd .build/elk-stack/setup
+ELASTIC_PASSWORD="<mot_de_passe_elastic>" bash export-kibana.sh
+```
+
+Cela met à jour le fichier `.build/elk-stack/setup/kibana_export.ndjson`.
+Au prochain `docker-compose up`, la configuration est automatiquement réimportée dans Kibana.
+
+### Supprimer les volumes
+
+```bash
+docker compose down -v
+```
+
+Attention, il faut également vider les différents fichiers générés par la pki du dossier .build/secrets.
+Pour ce faire, un autre script est mis à disposition :
+```bash
+# Linux/macOS
+bash .build/clean-secrets.sh
+
+# Windows (PowerShell)
+.\.build\clean-secrets.ps1
+```
+
+### Redémarrer le backend après modification
+
+```bash
+docker compose down backend
+docker-compose build --no-cache backend
+docker compose up backend -d
+```
+
+### Redémarrer le frontend après modification
+
+```bash
+cd src/site
+pnpm build
+```
+
+Les fichiers compilés dans `src/site/dist/` sont montés directement dans le conteneur Nginx, aucun redémarrage de conteneur n'est nécessaire.
+
+## Documentation développeur
+
+La documentation du code backend est générée avec [Sphinx](https://www.sphinx-doc.org/) à partir des docstrings.
+
+```bash
+docker exec backend sphinx-build -b html /app/docs /app/docs/_build/html
+docker cp backend:/app/docs/_build/html ./docs-output
+```
+
+La documentation HTML est ensuite disponible dans `docs-output/index.html`.
+
+## Développement
+
+Pour travailler sur le frontend avec le rechargement automatique :
+
+```bash
+cd src/site
+pnpm dev
+```
+
+Le serveur de développement Vite démarre sur http://localhost:5173. Il faut que la stack Docker soit déjà en cours d'exécution pour que les appels API fonctionnent.
+
+## Stack technique
+
+**Backend**
+- Python 3.13, FastAPI, SQLAlchemy 2, PostgreSQL (psycopg2)
+- Authentification : PyJWT, python-keycloak, itsdangerous (sessions HMAC)
+- Cryptographie : bibliothèque `cryptography` (X.509, RSA, PSS)
+
+**Frontend**
+- React 19, TypeScript, Vite
+- UI : Ant Design 6
+- État global : Zustand
+- Crypto client : node-forge (génération de CSR, chiffrement)
+
+**Infrastructure**
+- Keycloak 23 (OIDC, Authorization Code + PKCE)
+- Nginx (reverse proxy, TLS)
+- PKI OpenSSL 3 niveaux : Root CA, Signing CA 1 (médecins), Signing CA 2 (services)
+- ELK 9.3 : Elasticsearch, Logstash, Kibana

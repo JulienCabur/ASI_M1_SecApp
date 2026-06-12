@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>presentation.check_authenticity &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=12dfc556" />
+    <script src="../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for presentation.check_authenticity</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Routes publiques permettant de vérifier l&#39;authenticité de la PKI interne</span>
+<span class="sd">(téléchargement du certificat CA racine et récupération de son empreinte).&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">HTTPException</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">FileResponse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.check_authenticity_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">AuthenticityService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.log_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogsService</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">(</span> <span class="c1"># Créer un routeur APIRouter pour les routes de gestion des fichiers</span>
+    <span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;/check-authenticity&quot;</span><span class="p">,</span>
+    <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;check-authenticity&quot;</span><span class="p">]</span>
+<span class="p">)</span>
+<span class="n">logs_service</span> <span class="o">=</span> <span class="n">LogsService</span><span class="p">(</span><span class="s2">&quot;backend_authenticity&quot;</span><span class="p">)</span>
+<div class="viewcode-block" id="download_file">
+<a class="viewcode-back" href="../../modules/presentation.html#presentation.check_authenticity.download_file">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/download_ca&quot;</span><span class="p">,</span> <span class="n">response_class</span><span class="o">=</span><span class="n">FileResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">download_file</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Télécharge le certificat CA racine de la PKI interne (format PEM).&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">authenticity_service</span> <span class="o">=</span> <span class="n">AuthenticityService</span><span class="p">()</span>
+        <span class="n">file_content</span> <span class="o">=</span> <span class="n">authenticity_service</span><span class="o">.</span><span class="n">download_ca</span><span class="p">()</span>
+        <span class="n">file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">file_content</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;DOWNLOAD_CA&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;CA file downloaded successfully&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">FileResponse</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="n">file_content</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="n">file</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;DOWNLOAD_CA_ERROR&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;ERROR&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Erreur lors du téléchargement du fichier: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="get_hash">
+<a class="viewcode-back" href="../../modules/presentation.html#presentation.check_authenticity.get_hash">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/hash_ca&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_hash</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Retourne l&#39;empreinte SHA-256 du certificat CA racine pour vérification out-of-band.&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">authenticity_service</span> <span class="o">=</span> <span class="n">AuthenticityService</span><span class="p">()</span>
+        <span class="nb">hash</span> <span class="o">=</span> <span class="n">authenticity_service</span><span class="o">.</span><span class="n">get_hash</span><span class="p">()</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;GET_HASH&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;CA hash retrieved successfully&quot;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;hash&quot;</span><span class="p">:</span> <span class="nb">hash</span><span class="p">}</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;GET_HASH_ERROR&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;ERROR&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Erreur lors de la récupération du hash: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/core.html">core</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
