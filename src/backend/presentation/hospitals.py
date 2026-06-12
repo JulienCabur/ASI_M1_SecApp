@@ -1,3 +1,5 @@
+"""Routes pour la consultation de la liste des hôpitaux disponibles."""
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, Form
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
@@ -22,6 +24,7 @@ log_service = LogsService("backend_hospitals")
 async def list_hospitals(
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
+    """Retourne la liste de tous les hôpitaux enregistrés en base."""
     try:
         hospital_service = HospitalService(db=db)
         hospitals = hospital_service.get_hospitals()

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>presentation.auth.cert &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=12dfc556" />
+    <script src="../../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for presentation.auth.cert</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Login médecin par certificat (gate avant le flow OIDC standard).</span>
+
+<span class="sd">Distinct de `/auth/challenge` (utilisé par le reset) pour éviter qu&#39;une preuve</span>
+<span class="sd">produite pour un reset puisse être rejouée pour ouvrir une session, et inversement.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">secrets</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Depends</span><span class="p">,</span> <span class="n">HTTPException</span><span class="p">,</span> <span class="n">Query</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">Form</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">JSONResponse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Session</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">core.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_db</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">core.oidc</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_authorize_url</span><span class="p">,</span> <span class="n">generate_pkce_pair</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">core.session</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_oidc_state_cookie</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">schema.auth_schema</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CertLoginProofRequest</span><span class="p">,</span>
+    <span class="n">CertificateRequest</span><span class="p">,</span>
+    <span class="n">CertLoginProofResponse</span><span class="p">,</span>
+    <span class="n">ChallengeResponse</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.auth_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">AuthService</span><span class="p">,</span> <span class="n">DoctorConflictError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.log_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogsService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">schema.device_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">JWKSchema</span>
+
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">()</span>
+<span class="n">logs_service</span> <span class="o">=</span> <span class="n">LogsService</span><span class="p">(</span><span class="s2">&quot;backend_auth&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="cert_login_challenge_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.cert.cert_login_challenge_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/cert/login/challenge&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">ChallengeResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cert_login_challenge_route</span><span class="p">(</span>
+    <span class="n">username</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Username (CN du certificat médecin)&quot;</span><span class="p">),</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ChallengeResponse</span><span class="p">:</span>
+    <span class="n">auth_service</span> <span class="o">=</span> <span class="n">AuthService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">auth_service</span><span class="o">.</span><span class="n">generate_challenge</span><span class="p">(</span><span class="n">username</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="c1"># Réponse non-distinguable pour empêcher l&#39;énumération de comptes.</span>
+        <span class="c1"># On renvoie un nonce/timestamp factices ; la vérification échouera</span>
+        <span class="c1"># de toute façon faute de challenge en DB.</span>
+        <span class="k">return</span> <span class="n">ChallengeResponse</span><span class="p">(</span><span class="n">nonce</span><span class="o">=</span><span class="s2">&quot;0&quot;</span> <span class="o">*</span> <span class="mi">32</span><span class="p">,</span> <span class="n">timestamp</span><span class="o">=</span><span class="s2">&quot;1970-01-01T00:00:00.000Z&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="cert_login_proof_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.cert.cert_login_proof_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/cert/login/proof&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">CertLoginProofResponse</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">cert_login_proof_route</span><span class="p">(</span>
+    <span class="n">body</span><span class="p">:</span> <span class="n">CertLoginProofRequest</span><span class="p">,</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">JSONResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Vérifie la preuve de possession du certificat et prépare le redirect OIDC.</span>
+
+<span class="sd">    En cas de succès, on dépose `secuapp_oidc_state` (incluant `cert_proven_username`)</span>
+<span class="sd">    et on renvoie l&#39;`authorize_url` Keycloak. Le front fait `window.location = url`.&quot;&quot;&quot;</span>
+    <span class="n">auth_service</span> <span class="o">=</span> <span class="n">AuthService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span>
+    <span class="n">client_ip</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">host</span> <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">client</span> <span class="k">else</span> <span class="s2">&quot;unknown&quot;</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">verify_challenge_response</span><span class="p">(</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">nonce</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">nonce</span><span class="p">,</span>
+            <span class="n">timestamp</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">timestamp</span><span class="p">,</span>
+            <span class="n">signature</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">signature</span><span class="p">,</span>
+            <span class="n">certificate</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">certificate</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">clear_challenge</span><span class="p">(</span><span class="n">username</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;CERT_LOGIN_PROOF_FAIL:</span><span class="si">{</span><span class="n">client_ip</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;doctor&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Vérification du certificat échouée&quot;</span><span class="p">)</span>
+
+    <span class="n">state</span> <span class="o">=</span> <span class="n">secrets</span><span class="o">.</span><span class="n">token_urlsafe</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span>
+    <span class="n">verifier</span><span class="p">,</span> <span class="n">challenge</span> <span class="o">=</span> <span class="n">generate_pkce_pair</span><span class="p">()</span>
+    <span class="n">authorize_url</span> <span class="o">=</span> <span class="n">build_authorize_url</span><span class="p">(</span>
+        <span class="n">state</span><span class="o">=</span><span class="n">state</span><span class="p">,</span>
+        <span class="n">code_challenge</span><span class="o">=</span><span class="n">challenge</span><span class="p">,</span>
+        <span class="n">force_reauth</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">login_hint</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">redirect_to</span> <span class="o">=</span> <span class="n">body</span><span class="o">.</span><span class="n">redirect_to</span> <span class="k">if</span> <span class="n">body</span><span class="o">.</span><span class="n">redirect_to</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;/&quot;</span>
+
+    <span class="n">response</span> <span class="o">=</span> <span class="n">JSONResponse</span><span class="p">({</span><span class="s2">&quot;authorize_url&quot;</span><span class="p">:</span> <span class="n">authorize_url</span><span class="p">})</span>
+    <span class="n">set_oidc_state_cookie</span><span class="p">(</span>
+        <span class="n">response</span><span class="p">,</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">state</span><span class="p">,</span>
+            <span class="s2">&quot;code_verifier&quot;</span><span class="p">:</span> <span class="n">verifier</span><span class="p">,</span>
+            <span class="s2">&quot;redirect_to&quot;</span><span class="p">:</span> <span class="n">redirect_to</span><span class="p">,</span>
+            <span class="s2">&quot;cert_proven_username&quot;</span><span class="p">:</span> <span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="s2">&quot;flow_type&quot;</span><span class="p">:</span> <span class="n">body</span><span class="o">.</span><span class="n">flow_type</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">)</span>
+    <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+        <span class="n">action</span><span class="o">=</span><span class="s2">&quot;CERT_LOGIN_PROOF_OK&quot;</span><span class="p">,</span>
+        <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span>
+        <span class="n">user_id</span><span class="o">=</span><span class="n">body</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+        <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;doctor&quot;</span><span class="p">,</span>
+        <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+        <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Certificate login proof verified successfully&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">response</span></div>
+
+
+<span class="n">_PKI_SIGN_POLL_INTERVAL</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;PKI_SIGN_POLL_INTERVAL&quot;</span><span class="p">,</span> <span class="s2">&quot;0.5&quot;</span><span class="p">))</span>
+<span class="n">_PKI_SIGN_TIMEOUT</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;PKI_SIGN_TIMEOUT&quot;</span><span class="p">,</span> <span class="s2">&quot;30&quot;</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="register_doctor_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.cert.register_doctor_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/register_doctor&quot;</span><span class="p">,</span> <span class="n">response_model</span><span class="o">=</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">register_doctor_route</span><span class="p">(</span>
+    <span class="n">user_info</span><span class="p">:</span> <span class="n">CertificateRequest</span> <span class="o">=</span> <span class="n">Form</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Émet un certificat médecin à partir d&#39;un CSR généré dans le navigateur.</span>
+
+<span class="sd">    Le navigateur produit la paire de clés RSA et le CSR ; le serveur valide</span>
+<span class="sd">    strictement le subject, fait signer par la PKI, crée le compte Keycloak</span>
+<span class="sd">    (en stockant le serial), puis renvoie le certificat PEM signé + la chaîne</span>
+<span class="sd">    CA. Le .p12 est assemblé côté navigateur (la clé privée n&#39;a jamais quitté</span>
+<span class="sd">    le client).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">auth_service</span> <span class="o">=</span> <span class="n">AuthService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">check_doctor_uniqueness</span><span class="p">(</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="n">user_info</span><span class="o">.</span><span class="n">email</span><span class="p">)</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">submit_browser_csr</span><span class="p">(</span>
+            <span class="n">csr_pem</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">csr</span><span class="p">,</span>
+            <span class="n">common_name</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">organization</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">organization</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;SUBMIT_CSR&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;doctor&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;CSR submitted for doctor registration&quot;</span><span class="p">)</span>
+        <span class="n">deadline</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">+</span> <span class="n">_PKI_SIGN_TIMEOUT</span>
+        <span class="n">cert_path</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">while</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">deadline</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">cert_path</span> <span class="o">=</span> <span class="n">auth_service</span><span class="o">.</span><span class="n">check_csr_signed</span><span class="p">(</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+                <span class="k">break</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">_PKI_SIGN_POLL_INTERVAL</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cert_path</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">auth_service</span><span class="o">.</span><span class="n">delete_sensitive_files</span><span class="p">(</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">504</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;La PKI n&#39;a pas signé le CSR dans le délai imparti&quot;</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;CHECK_CSR_SIGNED&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;roles_doctor&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;CSR verified as signed&quot;</span><span class="p">)</span>
+
+        <span class="n">cert_pem</span> <span class="o">=</span> <span class="n">auth_service</span><span class="o">.</span><span class="n">create_doctor_in_keycloak</span><span class="p">(</span><span class="n">cert_path</span><span class="p">,</span> <span class="n">user_info</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;REGISTER_DOCTOR&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;roles_doctor&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Doctor registered successfully&quot;</span><span class="p">)</span>
+
+        <span class="n">ca_chain_pem</span> <span class="o">=</span> <span class="n">auth_service</span><span class="o">.</span><span class="n">read_ca_chain_pem</span><span class="p">()</span>
+
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">delete_sensitive_files</span><span class="p">(</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;DELETE_SENSITIVE_FILES&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;roles_doctor&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Sensitive files deleted after registration&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;success&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="s2">&quot;certificate_pem&quot;</span><span class="p">:</span> <span class="n">cert_pem</span><span class="p">,</span>
+            <span class="s2">&quot;ca_chain_pem&quot;</span><span class="p">:</span> <span class="n">ca_chain_pem</span><span class="p">,</span>
+        <span class="p">}</span>
+    <span class="k">except</span> <span class="n">DoctorConflictError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">409</span><span class="p">,</span><span class="n">detail</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;message&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span> <span class="s2">&quot;field&quot;</span><span class="p">:</span> <span class="n">e</span><span class="o">.</span><span class="n">field</span><span class="p">})</span>
+    <span class="k">except</span> <span class="n">HTTPException</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;DELETE_SENSITIVE_FILES&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;roles_doctor&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Sensitive files deleted after registration&quot;</span><span class="p">)</span>
+            <span class="n">auth_service</span><span class="o">.</span><span class="n">delete_sensitive_files</span><span class="p">(</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Erreur lors de l&#39;enregistrement du médecin: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="store_public_mek_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.cert.store_public_mek_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/store_public_mek&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">store_public_mek_route</span><span class="p">(</span>
+    <span class="n">public_mek_jwk</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Form</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;JWK sérialisée en JSON&quot;</span><span class="p">),</span>
+    <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Form</span><span class="p">(</span><span class="o">...</span><span class="p">),</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Stocke la public MEK d&#39;un médecin (JWK RSA-OAEP).</span>
+
+<span class="sd">    Le front envoie tout en `application/x-www-form-urlencoded` ; FastAPI ne</span>
+<span class="sd">    permet pas de mélanger Form(...) et un body Pydantic, donc on reçoit la</span>
+<span class="sd">    JWK en chaîne JSON et on la valide ici via `JWKSchema`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">jwk_dict</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">public_mek_jwk</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;STORE_PUBLIC_MEK_RECEIVED&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">doctor_id</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;roles_doctor&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Received request to store public MEK&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;STORE_PUBLIC_MEK_INVALID_JSON&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">doctor_id</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;roles_doctor&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;Invalid JSON for public MEK JWK&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">422</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;public_mek_jwk doit être un JSON valide&quot;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">validated</span> <span class="o">=</span> <span class="n">JWKSchema</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">jwk_dict</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;STORE_PUBLIC_MEK_INVALID_JWK&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">doctor_id</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;roles_doctor&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Invalid JWK: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">422</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;JWK invalide : </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">auth_service</span> <span class="o">=</span> <span class="n">AuthService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">auth_service</span><span class="o">.</span><span class="n">store_public_mek</span><span class="p">(</span><span class="n">doctor_id</span><span class="p">,</span> <span class="n">validated</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">exclude_none</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;Public MEK stored successfully&quot;</span><span class="p">}</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span><span class="n">action</span><span class="o">=</span><span class="s2">&quot;STORE_PUBLIC_MEK_ERROR&quot;</span><span class="p">,</span> <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">doctor_id</span><span class="p">,</span> <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;roles_doctor&quot;</span><span class="p">,</span> <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Error storing public MEK: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Error storing public MEK: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/core.html">core</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

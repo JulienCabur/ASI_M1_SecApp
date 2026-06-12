@@ -1,3 +1,7 @@
+"""Routes de gestion des fichiers médicaux chiffrés (upload, download, suppression,
+listage). Les fichiers sont chiffrés côté client ; le serveur ne manipule jamais
+le contenu en clair."""
+
 import base64
 import os
 
@@ -23,6 +27,7 @@ async def create_directory(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Crée le répertoire de stockage personnel du patient authentifié."""
     try:
         if current_user.roles[0] != "role_patients":
             await log_service.add_logs(action="CREATE_DIRECTORY_NOT_ALLOWED", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null", message="Only patients can create directories")
@@ -46,6 +51,8 @@ async def download_file(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ):
+    """Télécharge un fichier chiffré. Un patient accède à ses propres fichiers ;
+    un médecin accède aux fichiers d'un patient via ``patient_id``."""
     try:
         if patient_id and current_user.roles[0] != "role_docteurs":
             await log_service.add_logs(action="DOWNLOAD_FILE_NOT_ALLOWED", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null", message="Only doctors can download files from a patient's directory")
@@ -88,6 +95,8 @@ async def upload_file(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Upload un fichier chiffré dans le répertoire du patient. Le DEK doit être
+    un enveloppe base64 de 256 caractères."""
     try:
         if current_user.roles[0] != "role_patients":
             await log_service.add_logs(action="UPLOAD_FILE_NOT_ALLOWED", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null", message="Only patients can upload files")
@@ -119,6 +128,7 @@ async def upload_file_for_doctor(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Permet à un médecin d'uploader un fichier chiffré dans le répertoire d'un patient."""
     try:
         if current_user.roles[0] != "role_docteurs":
             await log_service.add_logs(action="UPLOAD_FILE_FOR_DOCTOR_NOT_ALLOWED", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id, message="Only doctors can upload files to a patient's directory")
@@ -151,6 +161,7 @@ async def delete_file(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Supprime un fichier du répertoire du patient authentifié."""
     try:
         if current_user.roles[0] != "role_patients":
             await log_service.add_logs(action="DELETE_FILE_NOT_ALLOWED", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id="null", message="Only patients can delete files from their own directory")
@@ -171,6 +182,7 @@ async def delete_file_for_doctor(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Permet à un médecin de supprimer un fichier dans le répertoire d'un patient."""
     try:
         if current_user.roles[0] != "role_docteurs":
             await log_service.add_logs(action="DELETE_FILE_FOR_DOCTOR_NOT_ALLOWED", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id, message="Only doctors can delete files from a patient's directory")
@@ -194,6 +206,8 @@ async def list_files(
     db: Session = Depends(get_db),
     current_user: UserInDB = Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Liste les fichiers disponibles. Un patient liste ses propres fichiers ;
+    un médecin liste les fichiers d'un patient via ``patient_id``."""
     try:
         if patient_id and current_user.roles[0] != "role_docteurs":
             await log_service.add_logs(action="LIST_FILES_NOT_ALLOWED", log_level="ERROR", user_id=str(current_user.id), user_role=current_user.roles[0], patient_id=patient_id, message="Only doctors can list files from a patient's directory")

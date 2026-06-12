@@ -135,6 +135,17 @@ pnpm build
 
 Les fichiers compilés dans `src/site/dist/` sont montés directement dans le conteneur Nginx, aucun redémarrage de conteneur n'est nécessaire.
 
+## Documentation développeur
+
+La documentation du code backend est générée avec [Sphinx](https://www.sphinx-doc.org/) à partir des docstrings.
+
+```bash
+docker exec backend sphinx-build -b html /app/docs /app/docs/_build/html
+docker cp backend:/app/docs/_build/html ./docs-output
+```
+
+La documentation HTML est ensuite disponible dans `docs-output/index.html`.
+
 ## Développement
 
 Pour travailler sur le frontend avec le rechargement automatique :

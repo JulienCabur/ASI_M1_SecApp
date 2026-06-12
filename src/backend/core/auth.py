@@ -1,3 +1,6 @@
+"""Utilitaires d'authentification : résolution du token JWT, récupération de la
+clé publique Keycloak (JWKS) et dépendance FastAPI ``get_current_user``."""
+
 import os
 import httpx
 import jwt

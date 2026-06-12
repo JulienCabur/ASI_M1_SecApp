@@ -1,3 +1,6 @@
+"""Point d'entrée de l'application FastAPI. Déclare les middlewares de sécurité
+(headers, CSRF, métadonnées) et enregistre tous les routeurs."""
+
 import os
 
 from fastapi import FastAPI, Request, status
@@ -137,6 +140,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Ajoute les en-têtes de sécurité HTTP à chaque réponse (CSP, HSTS, etc.)."""
+
     async def dispatch(self, request, call_next):
         response = await call_next(request)
         response.headers["Content-Security-Policy"] = (
@@ -160,4 +165,5 @@ app.include_router(relation_router)
 
 @app.get("/")
 def root():
+    """Route de santé — vérifie que le serveur est opérationnel."""
     return {"message": "Welcome to the UNamur Medical Institute API!"}

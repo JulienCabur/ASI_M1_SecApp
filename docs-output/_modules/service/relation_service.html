@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>service.relation_service &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=12dfc556" />
+    <script src="../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for service.relation_service</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.file_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">FileService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.file</span><span class="w"> </span><span class="kn">import</span> <span class="n">File</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.relation</span><span class="w"> </span><span class="kn">import</span> <span class="n">Relation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.user</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.devices</span><span class="w"> </span><span class="kn">import</span> <span class="n">Device</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.file_requests</span><span class="w"> </span><span class="kn">import</span> <span class="n">FileOperationRequest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">schema.file_requests_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">OperationType</span><span class="p">,</span> <span class="n">RequestStatus</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">schema.relation_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">RelationBase</span><span class="p">,</span> <span class="n">RelationResponse</span><span class="p">,</span> <span class="n">RelationDoctorResponse</span>
+<div class="viewcode-block" id="RelationService">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RelationService</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Classe pour gérer les opérations liées aux fichiers.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialise le service de gestion des fichiers avec une session de base de données et un chemin de stockage.</span>
+<span class="sd">        :param db: Session de base de données SQLAlchemy.</span>
+<span class="sd">        :param storage_path: Chemin du répertoire de stockage des fichiers.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span> <span class="o">=</span> <span class="n">db</span>
+    
+<div class="viewcode-block" id="RelationService.patient_add_doctor">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.patient_add_doctor">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">patient_add_doctor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RelationResponse</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Crée une relation entre un patient et un médecin.</span>
+<span class="sd">        :param patient_id: ID du patient.</span>
+<span class="sd">        :param doctor_id: ID du médecin.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">patient</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">User</span><span class="o">.</span><span class="n">roles</span> <span class="o">==</span> <span class="s2">&quot;patient&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">patient</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le patient avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">patient_id</span><span class="si">}</span><span class="s2">&#39; n&#39;existe pas ou n&#39;est pas un patient.&quot;</span><span class="p">)</span>
+
+        <span class="n">doctor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">,</span> <span class="n">User</span><span class="o">.</span><span class="n">roles</span> <span class="o">==</span> <span class="s2">&quot;doctor&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">doctor</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le médecin avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">doctor_id</span><span class="si">}</span><span class="s2">&#39; n&#39;existe pas ou n&#39;est pas un médecin.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">doctor</span><span class="o">.</span><span class="n">public_mek</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le médecin avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">doctor_id</span><span class="si">}</span><span class="s2">&#39; n&#39;a pas de dispositif vérifié.&quot;</span><span class="p">)</span>
+
+        <span class="n">relation</span> <span class="o">=</span> <span class="n">Relation</span><span class="p">(</span><span class="n">patient_id</span><span class="o">=</span><span class="n">patient_id</span><span class="p">,</span> <span class="n">doctor_id</span><span class="o">=</span><span class="n">doctor_id</span><span class="p">,</span> <span class="n">is_verified</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">relation</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">refresh</span><span class="p">(</span><span class="n">relation</span><span class="p">)</span>
+        
+        <span class="n">final_relation</span> <span class="o">=</span> <span class="n">RelationBase</span><span class="p">(</span>
+            <span class="n">relation_id</span><span class="o">=</span><span class="n">relation</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+            <span class="n">public_key</span><span class="o">=</span><span class="n">doctor</span><span class="o">.</span><span class="n">public_mek</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">RelationResponse</span><span class="p">(</span><span class="n">relation</span><span class="o">=</span><span class="p">[</span><span class="n">final_relation</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="RelationService.get_doctor_pending_requests">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.get_doctor_pending_requests">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_doctor_pending_requests</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Récupère les demandes de fichiers en attente initiées par un médecin pour un patient donné.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">relation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="n">Relation</span><span class="o">.</span><span class="n">doctor_id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">,</span>
+            <span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">,</span>
+            <span class="n">Relation</span><span class="o">.</span><span class="n">is_verified</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relation</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;relation_id&quot;</span><span class="p">:</span> <span class="n">req</span><span class="o">.</span><span class="n">relation_id</span><span class="p">,</span>
+                <span class="s2">&quot;doctor_id&quot;</span><span class="p">:</span> <span class="n">doctor_id</span><span class="p">,</span>
+                <span class="s2">&quot;file_request_id&quot;</span><span class="p">:</span> <span class="n">req</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                <span class="s2">&quot;operation_type&quot;</span><span class="p">:</span> <span class="n">req</span><span class="o">.</span><span class="n">operation_type</span><span class="p">,</span>
+                <span class="s2">&quot;file_name&quot;</span><span class="p">:</span> <span class="n">req</span><span class="o">.</span><span class="n">file_name</span><span class="p">,</span>
+                <span class="s2">&quot;date&quot;</span><span class="p">:</span> <span class="n">req</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
+                <span class="s2">&quot;ciphered_dek&quot;</span><span class="p">:</span> <span class="n">req</span><span class="o">.</span><span class="n">ciphered_dek</span><span class="p">,</span>
+            <span class="p">}</span>
+            <span class="k">for</span> <span class="n">req</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">FileOperationRequest</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+                <span class="n">FileOperationRequest</span><span class="o">.</span><span class="n">relation_id</span> <span class="o">==</span> <span class="n">relation</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                <span class="n">FileOperationRequest</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">RequestStatus</span><span class="o">.</span><span class="n">PENDING</span><span class="p">,</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+        <span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="RelationService.cancel_doctor_request">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.cancel_doctor_request">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cancel_doctor_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">request_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Annule une demande de fichier initiée par un médecin.</span>
+<span class="sd">        Pour les opérations CREATE, supprime aussi le fichier temporaire.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">file_request</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">FileOperationRequest</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="n">FileOperationRequest</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">request_id</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">file_request</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Demande introuvable : </span><span class="si">{</span><span class="n">request_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">relation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="n">Relation</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">file_request</span><span class="o">.</span><span class="n">relation_id</span><span class="p">,</span>
+            <span class="n">Relation</span><span class="o">.</span><span class="n">doctor_id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">,</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relation</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Non autorisé à annuler cette demande.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">file_request</span><span class="o">.</span><span class="n">operation_type</span> <span class="o">==</span> <span class="n">OperationType</span><span class="o">.</span><span class="n">CREATE</span><span class="p">:</span>
+            <span class="n">temp_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="s2">&quot;/temp_storage&quot;</span><span class="p">,</span>
+                <span class="nb">str</span><span class="p">(</span><span class="n">relation</span><span class="o">.</span><span class="n">patient_id</span><span class="p">),</span>
+                <span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">temp_path</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">temp_path</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">file_request</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="RelationService.get_patient_pending_requests">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.get_patient_pending_requests">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_patient_pending_requests</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Récupère les demandes de relation en attente pour un patient donné.</span>
+<span class="sd">        :param patient_id: ID du patient.</span>
+<span class="sd">        :return: Liste des demandes de relation en attente.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">relations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">Relation</span><span class="o">.</span><span class="n">is_verified</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">True</span><span class="p">))</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+        <span class="n">pending_requests</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">relation</span> <span class="ow">in</span> <span class="n">relations</span><span class="p">:</span>
+            <span class="n">file_requests</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">FileOperationRequest</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">FileOperationRequest</span><span class="o">.</span><span class="n">relation_id</span> <span class="o">==</span> <span class="n">relation</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">FileOperationRequest</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">RequestStatus</span><span class="o">.</span><span class="n">PENDING</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">file_request</span> <span class="ow">in</span> <span class="n">file_requests</span><span class="p">:</span>
+                <span class="n">pending_requests</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s2">&quot;relation_id&quot;</span><span class="p">:</span> <span class="n">relation</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                    <span class="s2">&quot;doctor_id&quot;</span><span class="p">:</span> <span class="n">relation</span><span class="o">.</span><span class="n">doctor_id</span><span class="p">,</span>
+                    <span class="s2">&quot;file_request_id&quot;</span><span class="p">:</span> <span class="n">file_request</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                    <span class="s2">&quot;operation_type&quot;</span><span class="p">:</span> <span class="n">file_request</span><span class="o">.</span><span class="n">operation_type</span><span class="p">,</span>
+                    <span class="s2">&quot;file_name&quot;</span><span class="p">:</span> <span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">,</span>
+                    <span class="s2">&quot;date&quot;</span><span class="p">:</span> <span class="n">file_request</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
+                    <span class="s2">&quot;ciphered_dek&quot;</span><span class="p">:</span> <span class="n">file_request</span><span class="o">.</span><span class="n">ciphered_dek</span>
+                <span class="p">})</span>
+        <span class="k">return</span> <span class="n">pending_requests</span></div>
+
+
+<div class="viewcode-block" id="RelationService.validate_patient_request">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.validate_patient_request">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_patient_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">request_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Valide une demande de relation pour un patient donné.</span>
+<span class="sd">        :param patient_id: ID du patient.</span>
+<span class="sd">        :param request_id: ID de la demande de relation à valider.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">file_request</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">FileOperationRequest</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">FileOperationRequest</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">request_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">file_request</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Aucune demande de relation trouvée avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">request_id</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+
+        <span class="n">relation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">file_request</span><span class="o">.</span><span class="n">relation_id</span><span class="p">,</span> <span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relation</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Aucune relation trouvée pour le patient &#39;</span><span class="si">{</span><span class="n">patient_id</span><span class="si">}</span><span class="s2">&#39; avec la demande &#39;</span><span class="si">{</span><span class="n">request_id</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+        
+        <span class="n">file_service</span> <span class="o">=</span> <span class="n">FileService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">,</span> <span class="n">storage_path</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;STORAGE_PATH&quot;</span><span class="p">))</span>
+
+        <span class="k">match</span> <span class="n">file_request</span><span class="o">.</span><span class="n">operation_type</span><span class="p">:</span>
+            <span class="k">case</span> <span class="n">OperationType</span><span class="o">.</span><span class="n">CREATE</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">file_service</span><span class="o">.</span><span class="n">temp_storage_path</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">),</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">file_service</span><span class="o">.</span><span class="n">storage_path</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">))</span>
+                    <span class="n">file_record</span> <span class="o">=</span> <span class="n">File</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">,</span> <span class="n">date</span><span class="o">=</span><span class="n">file_request</span><span class="o">.</span><span class="n">date</span><span class="p">,</span> <span class="n">user_id</span><span class="o">=</span><span class="n">patient_id</span><span class="p">,</span> <span class="n">ciphered_dek</span><span class="o">=</span><span class="n">file_request</span><span class="o">.</span><span class="n">ciphered_dek</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">file_record</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Erreur lors du déplacement du fichier: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">case</span> <span class="n">OperationType</span><span class="o">.</span><span class="n">UPDATE</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">file_record</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">File</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">File</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">,</span> <span class="n">File</span><span class="o">.</span><span class="n">user_id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">file_record</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Aucun enregistrement de fichier trouvé pour &#39;</span><span class="si">{</span><span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+                    <span class="n">shutil</span><span class="o">.</span><span class="n">move</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">file_service</span><span class="o">.</span><span class="n">temp_storage_path</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">),</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">file_service</span><span class="o">.</span><span class="n">storage_path</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">))</span>
+                    <span class="n">file_record</span><span class="o">.</span><span class="n">ciphered_dek</span> <span class="o">=</span> <span class="n">file_request</span><span class="o">.</span><span class="n">ciphered_dek</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Erreur lors de la mise à jour du fichier: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">case</span> <span class="n">OperationType</span><span class="o">.</span><span class="n">DELETE</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">file_record</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">File</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">File</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">,</span> <span class="n">File</span><span class="o">.</span><span class="n">user_id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">file_record</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Aucun enregistrement de fichier trouvé pour &#39;</span><span class="si">{</span><span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">file_service</span><span class="o">.</span><span class="n">storage_path</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">file_request</span><span class="o">.</span><span class="n">file_name</span><span class="p">))</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">file_record</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Erreur lors de la suppression du fichier: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">case</span><span class="w"> </span><span class="k">_</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Type d&#39;opération inconnu pour la demande &#39;</span><span class="si">{</span><span class="n">request_id</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+        <span class="n">file_request</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">RequestStatus</span><span class="o">.</span><span class="n">APPROVED</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="RelationService.reject_patient_request">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.reject_patient_request">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">reject_patient_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">request_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Rejette une demande de relation pour un patient donné.</span>
+<span class="sd">        :param patient_id: ID du patient.</span>
+<span class="sd">        :param request_id: ID de la demande de relation à rejeter.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">file_request</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">FileOperationRequest</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">FileOperationRequest</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">request_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">file_request</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Aucune demande de relation trouvée avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">request_id</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+
+        <span class="n">relation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">file_request</span><span class="o">.</span><span class="n">relation_id</span><span class="p">,</span> <span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relation</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Aucune relation trouvée pour le patient &#39;</span><span class="si">{</span><span class="n">patient_id</span><span class="si">}</span><span class="s2">&#39; avec la demande &#39;</span><span class="si">{</span><span class="n">request_id</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+        
+        <span class="n">file_request</span><span class="o">.</span><span class="n">status</span> <span class="o">=</span> <span class="n">RequestStatus</span><span class="o">.</span><span class="n">REJECTED</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="RelationService.doctor_add_patient">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.doctor_add_patient">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">doctor_add_patient</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RelationDoctorResponse</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Crée une relation entre un médecin et un patient.</span>
+<span class="sd">        :param doctor_id: ID du médecin.</span>
+<span class="sd">        :param patient_id: ID du patient.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">doctor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">,</span> <span class="n">User</span><span class="o">.</span><span class="n">roles</span> <span class="o">==</span> <span class="s2">&quot;doctor&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">doctor</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le médecin avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">doctor_id</span><span class="si">}</span><span class="s2">&#39; n&#39;existe pas ou n&#39;est pas un médecin.&quot;</span><span class="p">)</span>
+
+        <span class="n">patient</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">User</span><span class="o">.</span><span class="n">roles</span> <span class="o">==</span> <span class="s2">&quot;patient&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">patient</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le patient avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">patient_id</span><span class="si">}</span><span class="s2">&#39; n&#39;existe pas ou n&#39;est pas un patient.&quot;</span><span class="p">)</span>
+
+        <span class="n">doctor_devices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Device</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">Device</span><span class="o">.</span><span class="n">user_id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">doctor_devices</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le médecin avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">doctor_id</span><span class="si">}</span><span class="s2">&#39; n&#39;a pas de dispositif enregistré.&quot;</span><span class="p">)</span>
+        <span class="n">relation</span> <span class="o">=</span> <span class="n">Relation</span><span class="p">(</span><span class="n">patient_id</span><span class="o">=</span><span class="n">patient_id</span><span class="p">,</span> <span class="n">doctor_id</span><span class="o">=</span><span class="n">doctor_id</span><span class="p">,</span> <span class="n">is_verified</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">relation</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">refresh</span><span class="p">(</span><span class="n">relation</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">RelationDoctorResponse</span><span class="p">(</span><span class="n">relation</span><span class="o">=</span><span class="n">relation</span><span class="o">.</span><span class="n">id</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="RelationService.get_unverified_relations">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.get_unverified_relations">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_unverified_relations</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Récupère les relations non vérifiées d&#39;un utilisateur, dédoublonnées</span>
+<span class="sd">        par contrepartie et enrichies avec username, direction et public_mek.</span>
+
+<span class="sd">        - direction=&quot;incoming&quot; : l&#39;utilisateur courant est le patient cible</span>
+<span class="sd">          d&#39;une demande médecin → il doit l&#39;approuver/refuser. `public_mek`</span>
+<span class="sd">          contient la JWK publique MEK du médecin pour que le patient puisse</span>
+<span class="sd">          y wrapper sa KEK une seule fois (au niveau user, plus par device).</span>
+<span class="sd">        - direction=&quot;outgoing&quot; : l&#39;utilisateur courant est le médecin</span>
+<span class="sd">          demandeur → en attente de vérification par le patient. `public_mek`</span>
+<span class="sd">          est null (pas pertinent côté médecin demandeur).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">relations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">doctor_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">),</span>
+            <span class="n">Relation</span><span class="o">.</span><span class="n">is_verified</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">False</span><span class="p">),</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+        <span class="n">aggregated</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">relations</span><span class="p">:</span>
+            <span class="n">is_patient</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">user_id</span>
+            <span class="n">counterpart_id</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">doctor_id</span> <span class="k">if</span> <span class="n">is_patient</span> <span class="k">else</span> <span class="n">r</span><span class="o">.</span><span class="n">patient_id</span>
+            <span class="k">if</span> <span class="n">counterpart_id</span> <span class="ow">in</span> <span class="n">aggregated</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">counterpart</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">counterpart_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+            <span class="n">aggregated</span><span class="p">[</span><span class="n">counterpart_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;counterpart_id&quot;</span><span class="p">:</span> <span class="n">counterpart_id</span><span class="p">,</span>
+                <span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">counterpart</span><span class="o">.</span><span class="n">username</span> <span class="k">if</span> <span class="n">counterpart</span> <span class="k">else</span> <span class="n">counterpart_id</span><span class="p">,</span>
+                <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="n">counterpart</span><span class="o">.</span><span class="n">roles</span> <span class="k">if</span> <span class="n">counterpart</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="s2">&quot;direction&quot;</span><span class="p">:</span> <span class="s2">&quot;incoming&quot;</span> <span class="k">if</span> <span class="n">is_patient</span> <span class="k">else</span> <span class="s2">&quot;outgoing&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;public_mek&quot;</span><span class="p">:</span> <span class="n">counterpart</span><span class="o">.</span><span class="n">public_mek</span> <span class="k">if</span> <span class="p">(</span><span class="n">counterpart</span> <span class="ow">and</span> <span class="n">is_patient</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">aggregated</span><span class="o">.</span><span class="n">values</span><span class="p">())</span></div>
+
+    
+<div class="viewcode-block" id="RelationService.get_public_mek_for_doctor">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.get_public_mek_for_doctor">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_public_mek_for_doctor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Récupère la clé publique MEK d&#39;un médecin.</span>
+<span class="sd">        :param doctor_id: ID du médecin.</span>
+<span class="sd">        :return: Clé publique MEK du médecin.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">doctor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">,</span> <span class="n">User</span><span class="o">.</span><span class="n">roles</span> <span class="o">==</span> <span class="s2">&quot;doctor&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">doctor</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le médecin avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">doctor_id</span><span class="si">}</span><span class="s2">&#39; n&#39;existe pas ou n&#39;est pas un médecin.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">doctor</span><span class="o">.</span><span class="n">public_mek</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le médecin avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">doctor_id</span><span class="si">}</span><span class="s2">&#39; n&#39;a pas de clé publique MEK enregistrée.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;public_mek&quot;</span><span class="p">:</span> <span class="n">doctor</span><span class="o">.</span><span class="n">public_mek</span><span class="p">}</span></div>
+
+    
+<div class="viewcode-block" id="RelationService.store_kek_for_relation">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.store_kek_for_relation">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">store_kek_for_relation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">relation_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ciphered_kek</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Stocke le KEK chiffré pour une relation spécifique.</span>
+<span class="sd">        :param user_id: ID de l&#39;utilisateur.</span>
+<span class="sd">        :param relation_id: ID de la relation.</span>
+<span class="sd">        :param ciphered_kek: KEK chiffré à stocker.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">relation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">relation_id</span><span class="p">,</span> <span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">doctor_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">))</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relation</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;La relation avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">relation_id</span><span class="si">}</span><span class="s2">&#39; n&#39;existe pas.&quot;</span><span class="p">)</span>
+        <span class="n">relation</span><span class="o">.</span><span class="n">ciphered_kek</span> <span class="o">=</span> <span class="n">ciphered_kek</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">relation</span></div>
+
+    
+<div class="viewcode-block" id="RelationService.get_relations">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.get_relations">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_relations</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Récupère les relations d&#39;un utilisateur, dédoublonnées par contrepartie</span>
+<span class="sd">        (patient ou médecin) et enrichies avec le username.</span>
+
+<span class="sd">        Une relation existe par device du médecin ; côté UI on ne veut qu&#39;une</span>
+<span class="sd">        ligne par contrepartie. On agrège donc par counterpart_id et on</span>
+<span class="sd">        considère la relation &quot;vérifiée&quot; dès qu&#39;au moins un device l&#39;est.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">relations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">doctor_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+
+        <span class="n">aggregated</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">relations</span><span class="p">:</span>
+            <span class="n">counterpart_id</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">doctor_id</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">user_id</span> <span class="k">else</span> <span class="n">r</span><span class="o">.</span><span class="n">patient_id</span>
+            <span class="n">existing</span> <span class="o">=</span> <span class="n">aggregated</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">counterpart_id</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">existing</span><span class="p">:</span>
+                <span class="n">existing</span><span class="p">[</span><span class="s2">&quot;is_verified&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">existing</span><span class="p">[</span><span class="s2">&quot;is_verified&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="n">r</span><span class="o">.</span><span class="n">is_verified</span>
+                <span class="k">continue</span>
+            <span class="n">counterpart</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">counterpart_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+            <span class="n">aggregated</span><span class="p">[</span><span class="n">counterpart_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;counterpart_id&quot;</span><span class="p">:</span> <span class="n">counterpart_id</span><span class="p">,</span>
+                <span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">counterpart</span><span class="o">.</span><span class="n">username</span> <span class="k">if</span> <span class="n">counterpart</span> <span class="k">else</span> <span class="n">counterpart_id</span><span class="p">,</span>
+                <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="n">counterpart</span><span class="o">.</span><span class="n">roles</span> <span class="k">if</span> <span class="n">counterpart</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="s2">&quot;is_verified&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">is_verified</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">aggregated</span><span class="o">.</span><span class="n">values</span><span class="p">())</span></div>
+
+
+<div class="viewcode-block" id="RelationService.get_patient_kek_for_doctor">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.get_patient_kek_for_doctor">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_patient_kek_for_doctor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retourne le `ciphered_kek` patient pour le médecin courant.</span>
+
+<span class="sd">        Le `ciphered_kek` a été produit par le patient au moment de</span>
+<span class="sd">        `patient_verify_doctor` : il a wrappé sa KEK avec la public MEK du</span>
+<span class="sd">        médecin (au niveau user, partagée entre tous ses devices). Seul le</span>
+<span class="sd">        détenteur de la privée MEK correspondante (en mémoire de session côté</span>
+<span class="sd">        médecin) peut la déballer. Le serveur ne voit jamais la KEK en clair.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">relation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="n">Relation</span><span class="o">.</span><span class="n">doctor_id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">,</span>
+            <span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">,</span>
+            <span class="n">Relation</span><span class="o">.</span><span class="n">is_verified</span><span class="o">.</span><span class="n">is_</span><span class="p">(</span><span class="kc">True</span><span class="p">),</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relation</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">relation</span><span class="o">.</span><span class="n">ciphered_kek</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Aucune relation vérifiée trouvée pour ce patient.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;ciphered_kek&quot;</span><span class="p">:</span> <span class="n">relation</span><span class="o">.</span><span class="n">ciphered_kek</span><span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="RelationService.find_patient_by_username">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.find_patient_by_username">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_patient_by_username</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Recherche un patient par username exact.</span>
+
+<span class="sd">        Restreint aux comptes de rôle &quot;patient&quot; pour éviter de divulguer</span>
+<span class="sd">        l&#39;existence de médecins via cet endpoint, et pour empêcher un</span>
+<span class="sd">        médecin d&#39;ajouter un autre médecin comme &quot;patient&quot;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">username</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">username</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Le username est requis.&quot;</span><span class="p">)</span>
+        <span class="n">patient</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="n">User</span><span class="o">.</span><span class="n">username</span> <span class="o">==</span> <span class="n">username</span><span class="o">.</span><span class="n">strip</span><span class="p">(),</span>
+            <span class="n">User</span><span class="o">.</span><span class="n">roles</span> <span class="o">==</span> <span class="s2">&quot;patient&quot;</span><span class="p">,</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">patient</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Aucun patient trouvé avec le username &#39;</span><span class="si">{</span><span class="n">username</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">patient</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">patient</span><span class="o">.</span><span class="n">username</span><span class="p">}</span></div>
+
+    
+<div class="viewcode-block" id="RelationService.delete_relation">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.delete_relation">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_relation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Supprime une relation entre un patient et un médecin.</span>
+<span class="sd">        :param relation_id: ID de la relation à supprimer.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">User</span><span class="o">.</span><span class="n">roles</span> <span class="o">==</span> <span class="s2">&quot;patient&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le patient avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">patient_id</span><span class="si">}</span><span class="s2">&#39; n&#39;existe pas ou n&#39;est pas un patient.&quot;</span><span class="p">)</span>
+
+        <span class="n">doctor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">,</span> <span class="n">User</span><span class="o">.</span><span class="n">roles</span> <span class="o">==</span> <span class="s2">&quot;doctor&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">doctor</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Le médecin avec l&#39;ID &#39;</span><span class="si">{</span><span class="n">doctor_id</span><span class="si">}</span><span class="s2">&#39; n&#39;existe pas ou n&#39;est pas un médecin.&quot;</span><span class="p">)</span>
+
+        <span class="n">relations</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">Relation</span><span class="o">.</span><span class="n">doctor_id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relations</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;La relation entre le patient &#39;</span><span class="si">{</span><span class="n">patient_id</span><span class="si">}</span><span class="s2">&#39; et le médecin &#39;</span><span class="si">{</span><span class="n">doctor_id</span><span class="si">}</span><span class="s2">&#39; n&#39;existe pas.&quot;</span><span class="p">)</span>
+        
+        <span class="k">for</span> <span class="n">relation</span> <span class="ow">in</span> <span class="n">relations</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">relation</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span></div>
+
+    
+        
+<div class="viewcode-block" id="RelationService.list_doctors">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.list_doctors">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">list_doctors</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Récupère la liste de tous les médecins.</span>
+<span class="sd">        :return: Liste de tous les médecins.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">doctors</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">roles</span> <span class="o">==</span> <span class="s2">&quot;doctor&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">doctors</span></div>
+
+    
+<div class="viewcode-block" id="RelationService.verify_relation">
+<a class="viewcode-back" href="../../modules/service.html#service.relation_service.RelationService.verify_relation">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">verify_relation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ciphered_kek</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Vérifie une relation entre un patient et un médecin en utilisant l&#39;ID du médecin et en stockant le KEK chiffré.</span>
+<span class="sd">        :param patient_id: ID du patient.</span>
+<span class="sd">        :param doctor_id: ID du médecin.</span>
+<span class="sd">        :param ciphered_kek: KEK chiffré à stocker pour la relation vérifiée.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">relation</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">patient_id</span><span class="p">,</span> <span class="n">Relation</span><span class="o">.</span><span class="n">doctor_id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">relation</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Aucune relation trouvée pour le patient &#39;</span><span class="si">{</span><span class="n">patient_id</span><span class="si">}</span><span class="s2">&#39; avec le médecin &#39;</span><span class="si">{</span><span class="n">doctor_id</span><span class="si">}</span><span class="s2">&#39;.&quot;</span><span class="p">)</span>
+        
+        <span class="n">relation</span><span class="o">.</span><span class="n">is_verified</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">relation</span><span class="o">.</span><span class="n">ciphered_kek</span> <span class="o">=</span> <span class="n">ciphered_kek</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">relation</span><span class="o">.</span><span class="n">id</span></div>
+</div>
+
+    
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/core.html">core</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
