@@ -1,0 +1,165 @@
+"""Point d'entrée de l'application FastAPI. Déclare les middlewares de sécurité
+(headers, CSRF, métadonnées) et enregistre tous les routeurs."""
+
+import os
+
+from fastapi import FastAPI, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+from datetime import datetime
+
+from core.database import engine, Base
+from core.session import CSRF_COOKIE_NAME
+from service.log_service import LogsService
+from service.metadata_service import MetadataService
+from schema.metadata_schema import MetadataBase
+from presentation.file import router as file_router
+from presentation.auth import router as auth_router
+from presentation.check_authenticity import router as check_authenticity_router
+from presentation.device import router as key_router
+from presentation.relation import router as relation_router
+from presentation.hospitals import router as hospitals_router
+
+Base.metadata.create_all(bind=engine)
+
+logs_service = LogsService()
+_metadata_logs = LogsService("backend_metadata")
+
+app = FastAPI(
+    title="UNamur Medical Institute",
+    description="Core API for the UNamur Medical Institute project",
+    version="1.0.0",
+    root_path="/fastapi",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
+_allowed_origins = [
+    (os.getenv("FRONTEND_URL") or "https://localhost").rstrip("/"),
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-Timestamp"],
+    allow_credentials=True,
+)
+
+ROUTE_PRIVILEGES = {
+    "/files/create_directory": "role_patients",
+    "/files/upload_file": "role_patients",
+    "/files/upload_file_for_doctor": "role_docteurs",
+    "/files/download_file": "role_patients|role_docteurs",
+    "/files/delete_file": "role_patients",
+    "/files/delete_file_for_doctor": "role_docteurs",
+    "/files/list_files": "role_patients|role_docteurs",
+    "/keys/register_device": "authenticated",
+    "/keys/store_kek": "authenticated",
+    "/keys/get_device_keys": "authenticated",
+    "/keys/list_unverified_devices": "authenticated",
+    "/keys/list_verified_devices": "authenticated",
+    "/keys/verify_device": "authenticated",
+    "/keys/reject_device": "authenticated",
+    "/keys/revoke_device": "authenticated",
+    "/relation/patient_add_doctor": "role_patients",
+    "/relation/patient_remove_doctor": "role_patients",
+    "/relation/patient_verify_doctor": "role_patients",
+    "/relation/store_kek": "role_patients",
+    "/relation/doctor_add_patient": "role_docteurs",
+    "/relation/doctor_remove_patient": "role_docteurs",
+    "/relation/get_relations": "role_patients|role_docteurs",
+    "/relation/get_unverified_relations": "role_patients|role_docteurs",
+    "/relation/get_patient_kek": "role_docteurs",
+    "/relation/patient_pending_requests": "role_patients",
+    "/relation/doctor_pending_requests": "role_docteurs",
+    "/relation/patient_validate_request": "role_patients",
+    "/relation/patient_reject_request": "role_patients",
+    "/relation/doctor_cancel_request": "role_docteurs",
+    "/auth/login": "unauthenticated",
+    "/auth/callback": "unauthenticated",
+}
+
+
+class MetadataMiddleware(BaseHTTPMiddleware):
+    """Vérifie les métadonnées structurelles de chaque requête.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        timestamp_str = request.headers.get("X-Request-Timestamp")
+        if timestamp_str:
+            try:
+                client_time = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                path = request.url.path
+                size_data = int(request.headers.get("content-length", "0"))
+                tree_depth = len([p for p in path.split("/") if p])
+                privilege = ROUTE_PRIVILEGES.get(path, "authenticated")
+
+                metadata = MetadataBase(time=client_time,size_data=size_data,privilege_need=privilege,tree_depth=tree_depth,method=request.method)
+                svc = MetadataService(db=None)
+                _, blocking, warnings = svc.verify_metadata(metadata)
+
+                for reason in warnings:
+                    await _metadata_logs.add_logs(action="METADATA_ANOMALY_DETECTED", log_level="WARNING", user_id="unknown", user_role="unknown", patient_id="null", message=reason)
+
+                if blocking:
+                    for reason in blocking:
+                        await _metadata_logs.add_logs(action="METADATA_REQUEST_BLOCKED", log_level="WARNING", user_id="unknown", user_role="unknown", patient_id="null", message=reason)
+                    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": "Requête rejetée : métadonnées invalides"})
+
+            except Exception as e:
+                await _metadata_logs.add_logs(action="METADATA_PROCESSING_ERROR", log_level="ERROR", user_id="unknown", user_role="unknown", patient_id="null", message=str(e))
+
+        return await call_next(request)
+
+
+class CSRFMiddleware(BaseHTTPMiddleware):
+    """Double-submit CSRF : pour toute mutation, le client doit envoyer
+    l'en-tête `X-CSRF-Token` égal au cookie `secuapp_csrf`. Sans cookie session
+    on n'exige rien (la route /auth/login reste appelable depuis le navigateur)."""
+
+    async def dispatch(self, request: Request, call_next):
+        if request.method in {"GET", "HEAD", "OPTIONS"}:
+            return await call_next(request)
+        if request.url.path in {"/auth/login","/auth/callback"}:
+            return await call_next(request)
+        cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
+        if cookie_token:
+            header_token = request.headers.get("X-CSRF-Token")
+            if not header_token or header_token != cookie_token:
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": "CSRF token invalide"},
+                )
+        return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Ajoute les en-têtes de sécurité HTTP à chaque réponse (CSP, HSTS, etc.)."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; frame-ancestors 'none'; object-src 'none';"
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CSRFMiddleware)
+app.add_middleware(MetadataMiddleware)
+app.include_router(file_router)
+app.include_router(auth_router)
+app.include_router(check_authenticity_router)
+app.include_router(key_router)
+app.include_router(hospitals_router)
+app.include_router(relation_router)
+
+@app.get("/")
+def root():
+    """Route de santé — vérifie que le serveur est opérationnel."""
+    return {"message": "Welcome to the UNamur Medical Institute API!"}

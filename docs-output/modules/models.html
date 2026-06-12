@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>models &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=12dfc556" />
+    <script src="../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="schema" href="schema.html" />
+    <link rel="prev" title="core" href="core.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-models.user">
+<span id="models"></span><h1>models<a class="headerlink" href="#module-models.user" title="Link to this heading">¶</a></h1>
+<p>Ce module définit le modèle d’utilisateur pour la base de données.
+Il utilise SQLAlchemy pour mapper les attributs de l’utilisateur aux colonnes de la table.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="models.user.User">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">models.user.</span></span><span class="sig-name descname"><span class="pre">User</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/user.html#User"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#models.user.User" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Base</span></code></p>
+<p>Modèle d’utilisateur pour la base de données.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.user.User.challenge_nonce">
+<span class="sig-name descname"><span class="pre">challenge_nonce</span></span><a class="headerlink" href="#models.user.User.challenge_nonce" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.user.User.challenge_timestamp">
+<span class="sig-name descname"><span class="pre">challenge_timestamp</span></span><a class="headerlink" href="#models.user.User.challenge_timestamp" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.user.User.devices">
+<span class="sig-name descname"><span class="pre">devices</span></span><a class="headerlink" href="#models.user.User.devices" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.user.User.files">
+<span class="sig-name descname"><span class="pre">files</span></span><a class="headerlink" href="#models.user.User.files" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.user.User.id">
+<span class="sig-name descname"><span class="pre">id</span></span><a class="headerlink" href="#models.user.User.id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.user.User.public_mek">
+<span class="sig-name descname"><span class="pre">public_mek</span></span><a class="headerlink" href="#models.user.User.public_mek" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.user.User.roles">
+<span class="sig-name descname"><span class="pre">roles</span></span><a class="headerlink" href="#models.user.User.roles" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.user.User.username">
+<span class="sig-name descname"><span class="pre">username</span></span><a class="headerlink" href="#models.user.User.username" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-models.file">
+<dt class="sig sig-object py" id="models.file.File">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">models.file.</span></span><span class="sig-name descname"><span class="pre">File</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/file.html#File"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#models.file.File" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Base</span></code></p>
+<p>Modèle de fichier pour la base de données.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file.File.ciphered_dek">
+<span class="sig-name descname"><span class="pre">ciphered_dek</span></span><a class="headerlink" href="#models.file.File.ciphered_dek" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file.File.date">
+<span class="sig-name descname"><span class="pre">date</span></span><a class="headerlink" href="#models.file.File.date" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file.File.name">
+<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#models.file.File.name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file.File.user">
+<span class="sig-name descname"><span class="pre">user</span></span><a class="headerlink" href="#models.file.File.user" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file.File.user_id">
+<span class="sig-name descname"><span class="pre">user_id</span></span><a class="headerlink" href="#models.file.File.user_id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file.File.uuid">
+<span class="sig-name descname"><span class="pre">uuid</span></span><a class="headerlink" href="#models.file.File.uuid" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<p id="module-models.file_requests">Modèle SQLAlchemy représentant une demande d’opération sur fichier
+(upload/delete) initiée par un médecin et en attente d’approbation patient.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="models.file_requests.FileOperationRequest">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">models.file_requests.</span></span><span class="sig-name descname"><span class="pre">FileOperationRequest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/file_requests.html#FileOperationRequest"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#models.file_requests.FileOperationRequest" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Base</span></code></p>
+<p>Demande d’opération sur fichier soumise par un médecin dans le cadre
+d’une relation patient-médecin. Le patient doit approuver ou rejeter
+la demande avant que l’opération ne soit effectuée.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file_requests.FileOperationRequest.ciphered_dek">
+<span class="sig-name descname"><span class="pre">ciphered_dek</span></span><a class="headerlink" href="#models.file_requests.FileOperationRequest.ciphered_dek" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file_requests.FileOperationRequest.date">
+<span class="sig-name descname"><span class="pre">date</span></span><a class="headerlink" href="#models.file_requests.FileOperationRequest.date" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file_requests.FileOperationRequest.file_name">
+<span class="sig-name descname"><span class="pre">file_name</span></span><a class="headerlink" href="#models.file_requests.FileOperationRequest.file_name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file_requests.FileOperationRequest.id">
+<span class="sig-name descname"><span class="pre">id</span></span><a class="headerlink" href="#models.file_requests.FileOperationRequest.id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file_requests.FileOperationRequest.operation_type">
+<span class="sig-name descname"><span class="pre">operation_type</span></span><a class="headerlink" href="#models.file_requests.FileOperationRequest.operation_type" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file_requests.FileOperationRequest.relation">
+<span class="sig-name descname"><span class="pre">relation</span></span><a class="headerlink" href="#models.file_requests.FileOperationRequest.relation" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file_requests.FileOperationRequest.relation_id">
+<span class="sig-name descname"><span class="pre">relation_id</span></span><a class="headerlink" href="#models.file_requests.FileOperationRequest.relation_id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.file_requests.FileOperationRequest.status">
+<span class="sig-name descname"><span class="pre">status</span></span><a class="headerlink" href="#models.file_requests.FileOperationRequest.status" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<p id="module-models.devices">Modèle SQLAlchemy représentant un appareil (device) enregistré par un utilisateur.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="models.devices.Device">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">models.devices.</span></span><span class="sig-name descname"><span class="pre">Device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/devices.html#Device"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#models.devices.Device" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Base</span></code></p>
+<p>Représente un appareil approuvé associé à un utilisateur.</p>
+<p>Stocke la clé publique RSA de l’appareil ainsi que la KEK (ou MEK_PRK
+pour les médecins) chiffrée avec cette clé publique.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.devices.Device.ciphered_kek">
+<span class="sig-name descname"><span class="pre">ciphered_kek</span></span><a class="headerlink" href="#models.devices.Device.ciphered_kek" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.devices.Device.device_name">
+<span class="sig-name descname"><span class="pre">device_name</span></span><a class="headerlink" href="#models.devices.Device.device_name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.devices.Device.id">
+<span class="sig-name descname"><span class="pre">id</span></span><a class="headerlink" href="#models.devices.Device.id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.devices.Device.is_verified">
+<span class="sig-name descname"><span class="pre">is_verified</span></span><a class="headerlink" href="#models.devices.Device.is_verified" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.devices.Device.public_key">
+<span class="sig-name descname"><span class="pre">public_key</span></span><a class="headerlink" href="#models.devices.Device.public_key" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.devices.Device.user">
+<span class="sig-name descname"><span class="pre">user</span></span><a class="headerlink" href="#models.devices.Device.user" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.devices.Device.user_id">
+<span class="sig-name descname"><span class="pre">user_id</span></span><a class="headerlink" href="#models.devices.Device.user_id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-models.relation">
+<dt class="sig sig-object py" id="models.relation.Relation">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">models.relation.</span></span><span class="sig-name descname"><span class="pre">Relation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/relation.html#Relation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#models.relation.Relation" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Base</span></code></p>
+<p>Modèle de relation entre les utilisateurs.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.relation.Relation.ciphered_kek">
+<span class="sig-name descname"><span class="pre">ciphered_kek</span></span><a class="headerlink" href="#models.relation.Relation.ciphered_kek" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.relation.Relation.doctor">
+<span class="sig-name descname"><span class="pre">doctor</span></span><a class="headerlink" href="#models.relation.Relation.doctor" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.relation.Relation.doctor_id">
+<span class="sig-name descname"><span class="pre">doctor_id</span></span><a class="headerlink" href="#models.relation.Relation.doctor_id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.relation.Relation.file_requests">
+<span class="sig-name descname"><span class="pre">file_requests</span></span><a class="headerlink" href="#models.relation.Relation.file_requests" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.relation.Relation.id">
+<span class="sig-name descname"><span class="pre">id</span></span><a class="headerlink" href="#models.relation.Relation.id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.relation.Relation.is_verified">
+<span class="sig-name descname"><span class="pre">is_verified</span></span><a class="headerlink" href="#models.relation.Relation.is_verified" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.relation.Relation.patient">
+<span class="sig-name descname"><span class="pre">patient</span></span><a class="headerlink" href="#models.relation.Relation.patient" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.relation.Relation.patient_id">
+<span class="sig-name descname"><span class="pre">patient_id</span></span><a class="headerlink" href="#models.relation.Relation.patient_id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-models.hostpials">
+<dt class="sig sig-object py" id="models.hostpials.Hospital">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">models.hostpials.</span></span><span class="sig-name descname"><span class="pre">Hospital</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/models/hostpials.html#Hospital"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#models.hostpials.Hospital" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Base</span></code></p>
+<p>Modèle d’hôpital pour la base de données.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.hostpials.Hospital.id">
+<span class="sig-name descname"><span class="pre">id</span></span><a class="headerlink" href="#models.hostpials.Hospital.id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="models.hostpials.Hospital.name">
+<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#models.hostpials.Hospital.name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="core.html">core</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">models</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#models.user.User"><code class="docutils literal notranslate"><span class="pre">User</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#models.file.File"><code class="docutils literal notranslate"><span class="pre">File</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#models.file_requests.FileOperationRequest"><code class="docutils literal notranslate"><span class="pre">FileOperationRequest</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#models.devices.Device"><code class="docutils literal notranslate"><span class="pre">Device</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#models.relation.Relation"><code class="docutils literal notranslate"><span class="pre">Relation</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#models.hostpials.Hospital"><code class="docutils literal notranslate"><span class="pre">Hospital</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="core.html" title="previous chapter">core</a></li>
+      <li>Next: <a href="schema.html" title="next chapter">schema</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="../_sources/modules/models.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

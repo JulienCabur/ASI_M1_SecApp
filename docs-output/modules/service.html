@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>service &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=12dfc556" />
+    <script src="../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="presentation" href="presentation.html" />
+    <link rel="prev" title="schema" href="schema.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-service.auth_service">
+<span id="service"></span><h1>service<a class="headerlink" href="#module-service.auth_service" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="service.auth_service.AuthService">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">service.auth_service.</span></span><span class="sig-name descname"><span class="pre">AuthService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Session</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Classe pour gérer les opérations liées à l’authentification.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.check_csr_signed">
+<span class="sig-name descname"><span class="pre">check_csr_signed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">common_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.check_csr_signed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.check_csr_signed" title="Link to this definition">¶</a></dt>
+<dd><p>Retourne le chemin du certificat signé par la PKI (PEM).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.check_doctor_uniqueness">
+<span class="sig-name descname"><span class="pre">check_doctor_uniqueness</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">email</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.check_doctor_uniqueness"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.check_doctor_uniqueness" title="Link to this definition">¶</a></dt>
+<dd><p>Vérifie auprès de Keycloak qu’aucun compte ne porte déjà ce username
+ou cet email. Lève <cite>DoctorConflictError</cite> si un conflit est détecté.</p>
+<p>Cette pré-vérification évite d’émettre un certificat PKI qui devrait
+être révoqué juste après si la création Keycloak échoue.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.cleanup_stale_credentials">
+<span class="sig-name descname"><span class="pre">cleanup_stale_credentials</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.cleanup_stale_credentials"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.cleanup_stale_credentials" title="Link to this definition">¶</a></dt>
+<dd><p>Pour chaque type “reset-able” (TOTP, passkey passwordless), si le
+user en a plus d’un, on garde le plus récent (le credential fraîchement
+enrôlé) et on supprime les autres.</p>
+<p>Hook appelé après chaque callback OIDC : c’est ainsi qu’on supprime
+l’ancien TOTP/passkey <em>après</em> la création du nouveau dans le flow
+de reset. En régime nominal (un seul credential de chaque type), c’est
+un no-op. Aucun signal explicite de “reset en cours” n’est nécessaire :
+la pluralité des credentials suffit.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.clear_challenge">
+<span class="sig-name descname"><span class="pre">clear_challenge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.clear_challenge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.clear_challenge" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.create_doctor_in_keycloak">
+<span class="sig-name descname"><span class="pre">create_doctor_in_keycloak</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cert_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_info</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="schema.html#schema.auth_schema.CertificateRequest" title="schema.auth_schema.CertificateRequest"><span class="pre">CertificateRequest</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.create_doctor_in_keycloak"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.create_doctor_in_keycloak" title="Link to this definition">¶</a></dt>
+<dd><p>Crée le compte Keycloak associé au certificat fraîchement signé.</p>
+<p>Le retour est le PEM du certificat — le navigateur en a besoin pour
+assembler le .p12 (la clé privée n’a jamais quitté le navigateur, donc
+c’est lui qui construit le PKCS#12 final). Le serial du cert est stocké
+en attribut Keycloak pour pouvoir lier login OIDC ↔ cert plus tard.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.delete_sensitive_files">
+<span class="sig-name descname"><span class="pre">delete_sensitive_files</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">common_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.delete_sensitive_files"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.delete_sensitive_files" title="Link to this definition">¶</a></dt>
+<dd><p>Nettoie les artefacts laissés côté serveur après émission du cert.</p>
+<p>Avec la nouvelle architecture, la clé privée ne touche jamais le
+serveur (générée par le navigateur). Il ne reste donc à supprimer
+que le CSR (au cas où le watcher PKI ne l’aurait pas encore consommé)
+et le .crt signé une fois lu et renvoyé au navigateur.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.erase_user_data">
+<span class="sig-name descname"><span class="pre">erase_user_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">storage_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.erase_user_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.erase_user_data" title="Link to this definition">¶</a></dt>
+<dd><p>Supprime toutes les données d’un utilisateur (droit à l’effacement RGPD).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.force_credentials_reset">
+<span class="sig-name descname"><span class="pre">force_credentials_reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.force_credentials_reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.force_credentials_reset" title="Link to this definition">¶</a></dt>
+<dd><p>Reset différé pour médecin (via certificat) : on envoie le mail
+d’action sans toucher aux credentials existants. Cleanup des anciens
+au prochain callback OIDC une fois les nouveaux enrôlés.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.generate_challenge">
+<span class="sig-name descname"><span class="pre">generate_challenge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="schema.html#schema.auth_schema.ChallengeResponse" title="schema.auth_schema.ChallengeResponse"><span class="pre">ChallengeResponse</span></a></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.generate_challenge"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.generate_challenge" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.read_ca_chain_pem">
+<span class="sig-name descname"><span class="pre">read_ca_chain_pem</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.read_ca_chain_pem"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.read_ca_chain_pem" title="Link to this definition">¶</a></dt>
+<dd><p>Lit la chaîne CA à embarquer dans le .p12 côté navigateur.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.send_add_device_email">
+<span class="sig-name descname"><span class="pre">send_add_device_email</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.send_add_device_email"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.send_add_device_email" title="Link to this definition">¶</a></dt>
+<dd><p>Envoie un email Keycloak pour enregistrer un nouveau passkey WebAuthn.</p>
+<p>Identique à send_credentials_reset_email mais le redirect_uri pointe vers
+/login?flow_type=add_device afin que le callback OIDC ignore
+cleanup_stale_credentials() et préserve les passkeys des autres appareils.</p>
+<p>Lève une exception si l’utilisateur est introuvable ; la route appelante
+intercepte l’exception et retourne quand même 200 pour éviter l’énumération.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.send_credentials_reset_email">
+<span class="sig-name descname"><span class="pre">send_credentials_reset_email</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">email</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.send_credentials_reset_email"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.send_credentials_reset_email" title="Link to this definition">¶</a></dt>
+<dd><p>Reset différé pour patient : on n’efface rien immédiatement, on
+envoie juste le mail d’action. Les required actions Keycloak font
+enrôler de nouveaux credentials <em>à côté</em> des anciens. La suppression
+des anciens a lieu au prochain callback OIDC, via
+<cite>cleanup_stale_credentials</cite> — c’est-à-dire seulement une fois que les
+nouveaux sont en place. Si le mail est perdu, l’utilisateur garde son
+accès.</p>
+<p>Ne lève pas si l’email est inconnu : la route appelante répond toujours
+200 pour éviter l’énumération.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.store_public_mek">
+<span class="sig-name descname"><span class="pre">store_public_mek</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">public_mek</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.store_public_mek"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.store_public_mek" title="Link to this definition">¶</a></dt>
+<dd><p>Stocke la JWK publique MEK d’un médecin (colonne JSONB).</p>
+<p><cite>public_mek</cite> est le dict issu de la JWK validée (clé publique RSA-OAEP).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.store_user">
+<span class="sig-name descname"><span class="pre">store_user</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="schema.html#schema.auth_schema.UserInDB" title="schema.auth_schema.UserInDB"><span class="pre">UserInDB</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="models.html#models.user.User" title="models.user.User"><span class="pre">User</span></a></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.store_user"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.store_user" title="Link to this definition">¶</a></dt>
+<dd><p>Stocke un nouvel utilisateur dans la base de données.
+:param user_data: Données de l’utilisateur à stocker.
+:return: L’utilisateur stocké.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.submit_browser_csr">
+<span class="sig-name descname"><span class="pre">submit_browser_csr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">csr_pem</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">common_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">organization</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.submit_browser_csr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.submit_browser_csr" title="Link to this definition">¶</a></dt>
+<dd><p>Valide un CSR généré par le navigateur puis le dépose pour la PKI.</p>
+<p>Le subject DOIT correspondre exactement à ce que la PKI accepte (policy
+<cite>match_pol</cite> dans signing-ca.conf : DC=be, DC=healthapp, O=&lt;organization&gt;,
+CN=&lt;username&gt;). Sans cette vérification, un navigateur malveillant
+pourrait soumettre un CSR avec un CN différent du username demandé et
+obtenir un certificat signé pour un autre médecin.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.auth_service.AuthService.verify_challenge_response">
+<span class="sig-name descname"><span class="pre">verify_challenge_response</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nonce</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestamp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">signature</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">certificate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../_modules/service/auth_service.html#AuthService.verify_challenge_response"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.AuthService.verify_challenge_response" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="service.auth_service.DoctorConflictError">
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">service.auth_service.</span></span><span class="sig-name descname"><span class="pre">DoctorConflictError</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">field</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/auth_service.html#DoctorConflictError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.auth_service.DoctorConflictError" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Exception</span></code></p>
+<p>Conflit d’unicité côté Keycloak lors de l’enregistrement d’un médecin.</p>
+<p><cite>field</cite> vaut “username” ou “email” et permet à la couche présentation de
+renvoyer un message ciblé sans réinterpréter la chaîne d’erreur Keycloak.</p>
+</dd></dl>
+
+<dl class="py class" id="module-service.check_authenticity_service">
+<dt class="sig sig-object py" id="service.check_authenticity_service.AuthenticityService">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">service.check_authenticity_service.</span></span><span class="sig-name descname"><span class="pre">AuthenticityService</span></span><a class="reference internal" href="../_modules/service/check_authenticity_service.html#AuthenticityService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.check_authenticity_service.AuthenticityService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Classe pour gérer les opérations liées aux fichiers.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="service.check_authenticity_service.AuthenticityService.download_ca">
+<span class="sig-name descname"><span class="pre">download_ca</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/check_authenticity_service.html#AuthenticityService.download_ca"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.check_authenticity_service.AuthenticityService.download_ca" title="Link to this definition">¶</a></dt>
+<dd><p>Télécharge le fichier de l’autorité de certification.
+:return: Chemin du fichier de l’autorité de certification.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.check_authenticity_service.AuthenticityService.get_hash">
+<span class="sig-name descname"><span class="pre">get_hash</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/check_authenticity_service.html#AuthenticityService.get_hash"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.check_authenticity_service.AuthenticityService.get_hash" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère le hash (thumbprint) du fichier.
+:return: Hash du fichier.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-service.device_service">
+<dt class="sig sig-object py" id="service.device_service.DeviceService">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">service.device_service.</span></span><span class="sig-name descname"><span class="pre">DeviceService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Session</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/device_service.html#DeviceService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.device_service.DeviceService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Classe pour gérer les opérations liées aux dispositifs.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="service.device_service.DeviceService.get_device_keys">
+<span class="sig-name descname"><span class="pre">get_device_keys</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="schema.html#schema.key_schema.KeyResponse" title="schema.key_schema.KeyResponse"><span class="pre">KeyResponse</span></a></span></span><a class="reference internal" href="../_modules/service/device_service.html#DeviceService.get_device_keys"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.device_service.DeviceService.get_device_keys" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère les clés du dispositif depuis la base de données.
+:param user_id: ID de l’utilisateur.
+:param device_id: ID du dispositif.
+:return: Dictionnaire contenant la clé publique et le KEK chiffré du dispositif.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.device_service.DeviceService.list_unverified_devices">
+<span class="sig-name descname"><span class="pre">list_unverified_devices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="reference internal" href="../_modules/service/device_service.html#DeviceService.list_unverified_devices"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.device_service.DeviceService.list_unverified_devices" title="Link to this definition">¶</a></dt>
+<dd><p>Liste les dispositifs non vérifiés pour un utilisateur donné.
+:param user_id: ID de l’utilisateur.
+:return: Liste des dispositifs non vérifiés.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.device_service.DeviceService.list_verified_devices">
+<span class="sig-name descname"><span class="pre">list_verified_devices</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="reference internal" href="../_modules/service/device_service.html#DeviceService.list_verified_devices"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.device_service.DeviceService.list_verified_devices" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.device_service.DeviceService.register_device">
+<span class="sig-name descname"><span class="pre">register_device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">public_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="models.html#models.devices.Device" title="models.devices.Device"><span class="pre">Device</span></a></span></span><a class="reference internal" href="../_modules/service/device_service.html#DeviceService.register_device"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.device_service.DeviceService.register_device" title="Link to this definition">¶</a></dt>
+<dd><p>Enregistre un nouveau dispositif pour un utilisateur donné.
+:param user_id: ID de l’utilisateur.
+:param device_name: Nom du dispositif à enregistrer.
+:param public_key: Clé publique du dispositif.
+:return: Le dispositif enregistré.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.device_service.DeviceService.reject_device">
+<span class="sig-name descname"><span class="pre">reject_device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/device_service.html#DeviceService.reject_device"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.device_service.DeviceService.reject_device" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.device_service.DeviceService.revoke_device">
+<span class="sig-name descname"><span class="pre">revoke_device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/device_service.html#DeviceService.revoke_device"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.device_service.DeviceService.revoke_device" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.device_service.DeviceService.store_device_keys">
+<span class="sig-name descname"><span class="pre">store_device_keys</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ciphered_kek</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/device_service.html#DeviceService.store_device_keys"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.device_service.DeviceService.store_device_keys" title="Link to this definition">¶</a></dt>
+<dd><p>Stocke les clés du dispositif dans la base de données.
+:param user_id: ID de l’utilisateur.
+:param ciphered_kek: KEK chiffré du dispositif.
+:param device_id: ID du dispositif.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.device_service.DeviceService.verify_device">
+<span class="sig-name descname"><span class="pre">verify_device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ciphered_kek</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="models.html#models.devices.Device" title="models.devices.Device"><span class="pre">Device</span></a></span></span><a class="reference internal" href="../_modules/service/device_service.html#DeviceService.verify_device"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.device_service.DeviceService.verify_device" title="Link to this definition">¶</a></dt>
+<dd><p>Vérifie un dispositif pour un utilisateur donné.
+:param user_id: ID de l’utilisateur.
+:param device_id: ID du dispositif à vérifier.
+:param ciphered_kek: KEK chiffré du dispositif à vérifier.
+:return: Le dispositif vérifié.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-service.file_service">
+<dt class="sig sig-object py" id="service.file_service.FileService">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">service.file_service.</span></span><span class="sig-name descname"><span class="pre">FileService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Session</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">storage_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/file_service.html#FileService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Classe pour gérer les opérations liées aux fichiers.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="service.file_service.FileService.create_directory_service">
+<span class="sig-name descname"><span class="pre">create_directory_service</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temporary</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/file_service.html#FileService.create_directory_service"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService.create_directory_service" title="Link to this definition">¶</a></dt>
+<dd><p>Crée un répertoire pour un utilisateur donné.
+:param username: Nom de l’utilisateur pour lequel créer le répertoire.
+:param temporary: Indique si le répertoire est temporaire.
+:return: Chemin du répertoire créé.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.file_service.FileService.delete_file">
+<span class="sig-name descname"><span class="pre">delete_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/file_service.html#FileService.delete_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService.delete_file" title="Link to this definition">¶</a></dt>
+<dd><p>Supprime un fichier pour un utilisateur donné.
+:param file: Fichier à supprimer.
+:param username: Nom de l’utilisateur pour lequel supprimer le fichier.
+:return: Message de confirmation de la suppression du fichier.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.file_service.FileService.delete_file_for_doctor">
+<span class="sig-name descname"><span class="pre">delete_file_for_doctor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/file_service.html#FileService.delete_file_for_doctor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService.delete_file_for_doctor" title="Link to this definition">¶</a></dt>
+<dd><p>Gère le processus de suppression d’un fichier pour un patient par un médecin.
+:param file_name: Nom du fichier à supprimer.
+:param patient_id: ID du patient pour lequel supprimer le fichier.
+:param doctor_id: ID du médecin qui supprime le fichier.
+:return: Message de confirmation de la suppression du fichier.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.file_service.FileService.delete_user_storage">
+<span class="sig-name descname"><span class="pre">delete_user_storage</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/service/file_service.html#FileService.delete_user_storage"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService.delete_user_storage" title="Link to this definition">¶</a></dt>
+<dd><p>Supprime de façon sécurisée tous les fichiers d’un utilisateur.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.file_service.FileService.get_base64_file_content">
+<span class="sig-name descname"><span class="pre">get_base64_file_content</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cert_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bytes</span></span></span><a class="reference internal" href="../_modules/service/file_service.html#FileService.get_base64_file_content"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService.get_base64_file_content" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.file_service.FileService.list_files">
+<span class="sig-name descname"><span class="pre">list_files</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="reference internal" href="../_modules/service/file_service.html#FileService.list_files"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService.list_files" title="Link to this definition">¶</a></dt>
+<dd><p>Liste les fichiers d’un utilisateur donné.
+:param username: Nom de l’utilisateur pour lequel lister les fichiers.
+:param doctor_id: ID du médecin pour lequel lister les fichiers.
+:return: Liste des fichiers de l’utilisateur.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.file_service.FileService.save_file">
+<span class="sig-name descname"><span class="pre">save_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="schema.html#schema.file_schema.FileBase" title="schema.file_schema.FileBase"><span class="pre">FileBase</span></a></span></span><a class="reference internal" href="../_modules/service/file_service.html#FileService.save_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService.save_file" title="Link to this definition">¶</a></dt>
+<dd><p>Enregistre un fichier pour un utilisateur donné.
+:param file: Fichier à enregistrer.
+:param username: Nom de l’utilisateur pour lequel enregistrer le fichier.
+:param doctor_id: ID du médecin pour lequel enregistrer le fichier.
+:return: Chemin du fichier enregistré.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.file_service.FileService.upload_file">
+<span class="sig-name descname"><span class="pre">upload_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dek</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/file_service.html#FileService.upload_file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService.upload_file" title="Link to this definition">¶</a></dt>
+<dd><p>Gère le processus de téléversement d’un fichier pour un utilisateur donné.
+:param file: Fichier à téléverser. <cite>file.filename</cite> est attendu sous forme</p>
+<blockquote>
+<div><p>de nom chiffré (b64url) — le serveur ne l’interprète jamais en clair.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>username</strong> – Nom de l’utilisateur pour lequel téléverser le fichier.</p></li>
+<li><p><strong>dek</strong> – Enveloppe (JSON-base64) contenant le DEK wrappé et les IVs.</p></li>
+<li><p><strong>date</strong> – Date d’upload chiffrée côté client (b64), opaque pour le serveur.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Chemin du fichier téléchargé.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.file_service.FileService.upload_file_for_doctor">
+<span class="sig-name descname"><span class="pre">upload_file_for_doctor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dek</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">date</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/service/file_service.html#FileService.upload_file_for_doctor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.file_service.FileService.upload_file_for_doctor" title="Link to this definition">¶</a></dt>
+<dd><p>Gère le processus de téléversement d’un fichier pour un patient par un médecin.
+:param file: Fichier à téléverser. <cite>file.filename</cite> est attendu sous forme</p>
+<blockquote>
+<div><p>de nom chiffré (b64url) — le serveur ne l’interprète jamais en clair.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>patient_id</strong> – ID du patient pour lequel téléverser le fichier.</p></li>
+<li><p><strong>doctor_id</strong> – ID du médecin qui téléverse le fichier.</p></li>
+<li><p><strong>dek</strong> – Enveloppe (JSON-base64) contenant le DEK wrappé et les IVs.</p></li>
+<li><p><strong>date</strong> – Date d’upload chiffrée côté client (b64), opaque pour le serveur.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Chemin du fichier téléchargé.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-service.hospitals">
+<dt class="sig sig-object py" id="service.hospitals.HospitalService">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">service.hospitals.</span></span><span class="sig-name descname"><span class="pre">HospitalService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Session</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/hospitals.html#HospitalService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.hospitals.HospitalService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Classe pour gérer les opérations liées aux hôpitaux.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="service.hospitals.HospitalService.get_hospitals">
+<span class="sig-name descname"><span class="pre">get_hospitals</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/service/hospitals.html#HospitalService.get_hospitals"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.hospitals.HospitalService.get_hospitals" title="Link to this definition">¶</a></dt>
+<dd><p>Retourne la liste des hôpitaux disponibles (id + nom).</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-service.log_service">
+<dt class="sig sig-object py" id="service.log_service.LogsService">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">service.log_service.</span></span><span class="sig-name descname"><span class="pre">LogsService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">service_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'backend_python'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/log_service.html#LogsService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.log_service.LogsService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Classe de service pour la gestion des logs.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="service.log_service.LogsService.add_logs">
+<em class="property"><span class="pre">async</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">add_logs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">action</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_level</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">user_role</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'null'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/log_service.html#LogsService.add_logs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.log_service.LogsService.add_logs" title="Link to this definition">¶</a></dt>
+<dd><p>Enregistre un log : calcule la chaîne d’audit de façon synchrone,
+puis délègue l’envoi réseau en arrière-plan pour ne pas bloquer la requête.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.log_service.LogsService.health_check">
+<em class="property"><span class="pre">async</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">health_check</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../_modules/service/log_service.html#LogsService.health_check"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.log_service.LogsService.health_check" title="Link to this definition">¶</a></dt>
+<dd><p>Vérifie la santé du service de logs avec un cache TTL pour éviter
+de saturer logstash (ou d’attendre le timeout) à chaque requête.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-service.metadata_service">
+<dt class="sig sig-object py" id="service.metadata_service.MetadataService">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">service.metadata_service.</span></span><span class="sig-name descname"><span class="pre">MetadataService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/metadata_service.html#MetadataService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.metadata_service.MetadataService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="service.metadata_service.MetadataService.verify_metadata">
+<span class="sig-name descname"><span class="pre">verify_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="schema.html#schema.metadata_schema.MetadataBase" title="schema.metadata_schema.MetadataBase"><span class="pre">MetadataBase</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">bool</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/service/metadata_service.html#MetadataService.verify_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.metadata_service.MetadataService.verify_metadata" title="Link to this definition">¶</a></dt>
+<dd><p>Retourne (is_anomaly, blocking_reasons, warning_reasons).</p>
+<p>Les raisons bloquantes entraînent un rejet HTTP 400 immédiat.
+Les raisons d’avertissement sont uniquement loguées.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-service.relation_service">
+<dt class="sig sig-object py" id="service.relation_service.RelationService">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">service.relation_service.</span></span><span class="sig-name descname"><span class="pre">RelationService</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Classe pour gérer les opérations liées aux fichiers.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.cancel_doctor_request">
+<span class="sig-name descname"><span class="pre">cancel_doctor_request</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.cancel_doctor_request"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.cancel_doctor_request" title="Link to this definition">¶</a></dt>
+<dd><p>Annule une demande de fichier initiée par un médecin.
+Pour les opérations CREATE, supprime aussi le fichier temporaire.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.delete_relation">
+<span class="sig-name descname"><span class="pre">delete_relation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.delete_relation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.delete_relation" title="Link to this definition">¶</a></dt>
+<dd><p>Supprime une relation entre un patient et un médecin.
+:param relation_id: ID de la relation à supprimer.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.doctor_add_patient">
+<span class="sig-name descname"><span class="pre">doctor_add_patient</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="schema.html#schema.relation_schema.RelationDoctorResponse" title="schema.relation_schema.RelationDoctorResponse"><span class="pre">RelationDoctorResponse</span></a></span></span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.doctor_add_patient"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.doctor_add_patient" title="Link to this definition">¶</a></dt>
+<dd><p>Crée une relation entre un médecin et un patient.
+:param doctor_id: ID du médecin.
+:param patient_id: ID du patient.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.find_patient_by_username">
+<span class="sig-name descname"><span class="pre">find_patient_by_username</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">username</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.find_patient_by_username"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.find_patient_by_username" title="Link to this definition">¶</a></dt>
+<dd><p>Recherche un patient par username exact.</p>
+<p>Restreint aux comptes de rôle “patient” pour éviter de divulguer
+l’existence de médecins via cet endpoint, et pour empêcher un
+médecin d’ajouter un autre médecin comme “patient”.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.get_doctor_pending_requests">
+<span class="sig-name descname"><span class="pre">get_doctor_pending_requests</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.get_doctor_pending_requests"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.get_doctor_pending_requests" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère les demandes de fichiers en attente initiées par un médecin pour un patient donné.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.get_patient_kek_for_doctor">
+<span class="sig-name descname"><span class="pre">get_patient_kek_for_doctor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.get_patient_kek_for_doctor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.get_patient_kek_for_doctor" title="Link to this definition">¶</a></dt>
+<dd><p>Retourne le <cite>ciphered_kek</cite> patient pour le médecin courant.</p>
+<p>Le <cite>ciphered_kek</cite> a été produit par le patient au moment de
+<cite>patient_verify_doctor</cite> : il a wrappé sa KEK avec la public MEK du
+médecin (au niveau user, partagée entre tous ses devices). Seul le
+détenteur de la privée MEK correspondante (en mémoire de session côté
+médecin) peut la déballer. Le serveur ne voit jamais la KEK en clair.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.get_patient_pending_requests">
+<span class="sig-name descname"><span class="pre">get_patient_pending_requests</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.get_patient_pending_requests"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.get_patient_pending_requests" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère les demandes de relation en attente pour un patient donné.
+:param patient_id: ID du patient.
+:return: Liste des demandes de relation en attente.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.get_public_mek_for_doctor">
+<span class="sig-name descname"><span class="pre">get_public_mek_for_doctor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.get_public_mek_for_doctor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.get_public_mek_for_doctor" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère la clé publique MEK d’un médecin.
+:param doctor_id: ID du médecin.
+:return: Clé publique MEK du médecin.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.get_relations">
+<span class="sig-name descname"><span class="pre">get_relations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.get_relations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.get_relations" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère les relations d’un utilisateur, dédoublonnées par contrepartie
+(patient ou médecin) et enrichies avec le username.</p>
+<p>Une relation existe par device du médecin ; côté UI on ne veut qu’une
+ligne par contrepartie. On agrège donc par counterpart_id et on
+considère la relation “vérifiée” dès qu’au moins un device l’est.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.get_unverified_relations">
+<span class="sig-name descname"><span class="pre">get_unverified_relations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.get_unverified_relations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.get_unverified_relations" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère les relations non vérifiées d’un utilisateur, dédoublonnées
+par contrepartie et enrichies avec username, direction et public_mek.</p>
+<ul class="simple">
+<li><p>direction=”incoming” : l’utilisateur courant est le patient cible
+d’une demande médecin → il doit l’approuver/refuser. <cite>public_mek</cite>
+contient la JWK publique MEK du médecin pour que le patient puisse
+y wrapper sa KEK une seule fois (au niveau user, plus par device).</p></li>
+<li><p>direction=”outgoing” : l’utilisateur courant est le médecin
+demandeur → en attente de vérification par le patient. <cite>public_mek</cite>
+est null (pas pertinent côté médecin demandeur).</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.list_doctors">
+<span class="sig-name descname"><span class="pre">list_doctors</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.list_doctors"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.list_doctors" title="Link to this definition">¶</a></dt>
+<dd><p>Récupère la liste de tous les médecins.
+:return: Liste de tous les médecins.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.patient_add_doctor">
+<span class="sig-name descname"><span class="pre">patient_add_doctor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="schema.html#schema.relation_schema.RelationResponse" title="schema.relation_schema.RelationResponse"><span class="pre">RelationResponse</span></a></span></span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.patient_add_doctor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.patient_add_doctor" title="Link to this definition">¶</a></dt>
+<dd><p>Crée une relation entre un patient et un médecin.
+:param patient_id: ID du patient.
+:param doctor_id: ID du médecin.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.reject_patient_request">
+<span class="sig-name descname"><span class="pre">reject_patient_request</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.reject_patient_request"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.reject_patient_request" title="Link to this definition">¶</a></dt>
+<dd><p>Rejette une demande de relation pour un patient donné.
+:param patient_id: ID du patient.
+:param request_id: ID de la demande de relation à rejeter.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.store_kek_for_relation">
+<span class="sig-name descname"><span class="pre">store_kek_for_relation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relation_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ciphered_kek</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.store_kek_for_relation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.store_kek_for_relation" title="Link to this definition">¶</a></dt>
+<dd><p>Stocke le KEK chiffré pour une relation spécifique.
+:param user_id: ID de l’utilisateur.
+:param relation_id: ID de la relation.
+:param ciphered_kek: KEK chiffré à stocker.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.validate_patient_request">
+<span class="sig-name descname"><span class="pre">validate_patient_request</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.validate_patient_request"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.validate_patient_request" title="Link to this definition">¶</a></dt>
+<dd><p>Valide une demande de relation pour un patient donné.
+:param patient_id: ID du patient.
+:param request_id: ID de la demande de relation à valider.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="service.relation_service.RelationService.verify_relation">
+<span class="sig-name descname"><span class="pre">verify_relation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">patient_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doctor_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ciphered_kek</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/service/relation_service.html#RelationService.verify_relation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#service.relation_service.RelationService.verify_relation" title="Link to this definition">¶</a></dt>
+<dd><p>Vérifie une relation entre un patient et un médecin en utilisant l’ID du médecin et en stockant le KEK chiffré.
+:param patient_id: ID du patient.
+:param doctor_id: ID du médecin.
+:param ciphered_kek: KEK chiffré à stocker pour la relation vérifiée.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="core.html">core</a></li>
+<li class="toctree-l1"><a class="reference internal" href="models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="schema.html">schema</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">service</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#service.auth_service.AuthService"><code class="docutils literal notranslate"><span class="pre">AuthService</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#service.auth_service.DoctorConflictError"><code class="docutils literal notranslate"><span class="pre">DoctorConflictError</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#service.check_authenticity_service.AuthenticityService"><code class="docutils literal notranslate"><span class="pre">AuthenticityService</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#service.device_service.DeviceService"><code class="docutils literal notranslate"><span class="pre">DeviceService</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#service.file_service.FileService"><code class="docutils literal notranslate"><span class="pre">FileService</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#service.hospitals.HospitalService"><code class="docutils literal notranslate"><span class="pre">HospitalService</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#service.log_service.LogsService"><code class="docutils literal notranslate"><span class="pre">LogsService</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#service.metadata_service.MetadataService"><code class="docutils literal notranslate"><span class="pre">MetadataService</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#service.relation_service.RelationService"><code class="docutils literal notranslate"><span class="pre">RelationService</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="schema.html" title="previous chapter">schema</a></li>
+      <li>Next: <a href="presentation.html" title="next chapter">presentation</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="../_sources/modules/service.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

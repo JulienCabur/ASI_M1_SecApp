@@ -1,0 +1,317 @@
+services:
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
+    entrypoint: [ "/entrypoint.sh" ]
+    init: true
+    volumes:
+      - ./elk-stack/setup/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./elk-stack/setup/lib.sh:/lib.sh:ro,Z
+      - ./elk-stack/setup/roles:/roles:ro,Z
+      - ./secrets/elasticsearch:/certs:ro,Z
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      LOGSTASH_ALERTS_PASSWORD: ${LOGSTASH_ALERTS_PASSWORD:-}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+      METRICBEAT_INTERNAL_PASSWORD: ${METRICBEAT_INTERNAL_PASSWORD:-}
+      FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
+      HEARTBEAT_INTERNAL_PASSWORD: ${HEARTBEAT_INTERNAL_PASSWORD:-}
+      MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
+      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
+    network_mode: service:elasticsearch
+    depends_on:
+      - elasticsearch
+  kibana-genkeys:
+    profiles:
+      - setup
+    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
+    command:
+      - bin/kibana-encryption-keys
+      - generate
+    network_mode: none
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
+    volumes:
+      - ./elk-stack/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+      - ./elk-stack/elasticsearch/config/log4j2.properties:/usr/share/elasticsearch/config/log4j2.properties:ro,Z
+      - elasticsearch:/usr/share/elasticsearch/data:Z
+      - ./secrets/elasticsearch:/usr/share/elasticsearch/config/certs:ro
+      - elasticsearch_audit_logs:/usr/share/elasticsearch/logs
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      node.name: elasticsearch
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      discovery.type: single-node
+    networks:
+      - elk
+    depends_on:
+      pki:
+        condition: service_healthy
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION}
+    volumes:
+      - ./elk-stack/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
+      - ./elk-stack/logstash/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro,Z
+      - ./elk-stack/logstash/pipeline/:/usr/share/logstash/pipeline/:ro,Z
+      - ./secrets/logstash:/usr/share/logstash/config/certs:ro
+      - elasticsearch_audit_logs:/usr/share/logstash/audit-logs:ro
+    ports:
+      - 5044:5044
+      - 50000:50000/tcp
+      - 50000:50000/udp
+      - 9600:9600
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      LOGSTASH_ALERTS_PASSWORD: ${LOGSTASH_ALERTS_PASSWORD:-}
+    networks:
+      - elk
+    depends_on:
+      elasticsearch:
+        condition: service_started
+      setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
+    entrypoint: ["/bin/bash", "/kibana-bootstrap.sh"]
+    volumes:
+      - ./elk-stack/kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+      - ./elk-stack/kibana/kibana-bootstrap.sh:/kibana-bootstrap.sh:ro,Z
+      - ./elk-stack/setup/kibana_export.ndjson:/kibana_export.ndjson:ro,Z
+      - ./secrets/kibana:/usr/share/kibana/config/certs:ro
+    ports:
+      - 5601:5601
+    environment:
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+      XPACK_ENCRYPTION_KEY: ${XPACK_ENCRYPTION_KEY:-}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      IMPORT_FILE: /kibana_export.ndjson
+    networks:
+      - elk
+    depends_on:
+      elasticsearch:
+        condition: service_started
+      setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  backend:
+    build:
+      context: ..
+      dockerfile: .build/backend/Dockerfile
+    container_name: backend
+    ports:
+      - "8081:8000"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
+    env_file:
+      - ./.env
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_SERVER_URL: https://keycloak:8443
+      KEYCLOAK_REALM: health_app
+      KEYCLOAK_CLIENT_ID: health_app_frontend
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      KEYCLOAK_PUBLIC_KEY_URL: https://keycloak:8443/realms/health_app/protocol/openid-connect/certs
+      STORAGE_PATH: /storage
+      DATABASE_URL: postgresql://keycloak:${POSTGRES_PASSWORD}@postgres_keycloak:5432/dbbackend
+      KEYCLOAK_VERIFY: "true"
+      KEYCLOAK_CA_BUNDLE: /app/certs/ca-chain.pem
+      KEYCLOAK_PUBLIC_URL: https://localhost:8443
+      KEYCLOAK_REDIRECT_URI: https://localhost/fastapi/auth/callback
+      DISABLE_CSRF_FOR_BEARER: "true"
+      FRONTEND_URL: https://localhost
+      SESSION_SECRET: ${SESSION_SECRET}
+      COOKIE_SECURE: "true"
+      COOKIE_DOMAIN: localhost
+      LOGSTASH_URL: https://logstash:5044
+      LOGSTASH_HEALTHCHECK: http://logstash:9600/_health_report
+    depends_on:
+      pki:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      postgres_keycloak:
+        condition: service_healthy
+
+    networks:
+      - auth-network
+      - elk
+    volumes:
+      - ./secrets/backend:/app/certs:ro
+      - pki_doctors_crt:/app/certs_doctors
+      - pki_doctors_csr:/app/csr
+  webserver:
+    image: nginx:latest
+    ports:
+      - 80:80
+      - 443:443
+    restart: always
+    depends_on:
+      - pki
+      - backend
+    env_file:
+      - ./.env
+    environment:
+      SERVER_KEY_PASS: ${SERVER_KEY_PASS}
+      VITE_API_BASE_URL: /fastapi
+    volumes:
+      - ./nginx/conf/:/etc/nginx/conf.d/:ro
+      - ../src/site/dist/:/usr/share/nginx/html/:ro
+      - ./secrets/webserver:/etc/nginx/certs:ro
+    entrypoint: >
+      /bin/bash -c " mkdir -p /etc/nginx/ssl && printf '%s\n'
+      \"$$SERVER_KEY_PASS\" > /etc/nginx/ssl/server.pass && chmod 600
+      /etc/nginx/ssl/server.pass && exec /docker-entrypoint.sh nginx -g 'daemon
+      off;' "
+    networks:
+      - auth-network
+  postgres_keycloak:
+    image: postgres
+    command: >
+      postgres
+        -c ssl=on
+        -c ssl_cert_file=/var/lib/postgresql/certs/server.crt
+        -c ssl_key_file=/var/lib/postgresql/certs/server.key
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./postgres-init/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./secrets/postgres:/var/lib/postgresql/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      pki:
+        condition: service_healthy
+    networks:
+      - auth-network
+
+  pki:
+    image: debian:bookworm-slim
+    container_name: pki_authority
+    env_file:
+      - ./.env
+    environment:
+      ROOT_PASS: ${ROOT_PASS}
+      SIGNING1_PASS: ${SIGNING1_PASS}
+      SIGNING2_PASS: ${SIGNING2_PASS}
+      KEYCLOAK_KEY_PASS: ${KEYCLOAK_KEY_PASS}
+      WEBSERVER_KEY_PASS: ${WEBSERVER_KEY_PASS}
+      ELASTICSEARCH_KEY_PASS: ${ELASTICSEARCH_KEY_PASS}
+      KIBANA_KEY_PASS: ${KIBANA_KEY_PASS}
+      LOGSTASH_KEY_PASS: ${LOGSTASH_KEY_PASS}
+      BACKEND_KEY_PASS: ${BACKEND_KEY_PASS}
+      POSTGRES_KEY_PASS: ${POSTGRES_KEY_PASS}
+    volumes:
+      - ./pki:/etc/pki/CA/config
+      - pki_secrets:/etc/pki/CA
+      - ./secrets:/etc/pki/CA/certs
+      - pki_doctors_csr:/etc/pki/CA/csr
+      - pki_doctors_crt:/etc/pki/CA/certs_doctors
+    command: |
+      bash -c "
+      bash /etc/pki/CA/config/pki_deploy.sh;
+      "
+    healthcheck:
+      test: [ "CMD", "test", "-f", "/etc/pki/CA/certs/root-ca.crt" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    networks:
+      - auth-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    entrypoint: >
+      /bin/bash -c " until [ -f /opt/keycloak/conf/truststores/root-ca.crt ]; do
+      sleep 2; done && rm -f /tmp/truststore.p12 && keytool -import -alias
+      root-ca -file /opt/keycloak/conf/truststores/root-ca.crt -keystore
+      /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt
+      && keytool -import -alias signing-ca -file
+      /opt/keycloak/conf/truststores/signing-ca1.crt -keystore
+      /tmp/truststore.p12 -storepass $${KEYCLOAK_TRUSTSTORE_PASSWORD} -noprompt
+      && mkdir -p /opt/keycloak/data/import && sed
+      \"s|\\$${KEYCLOAK_CLIENT_SECRET}|$${KEYCLOAK_CLIENT_SECRET}|g\"
+      /opt/keycloak/data/import/realm.json && /opt/keycloak/bin/kc.sh start-dev
+      --import-realm "
+    env_file:
+      - .env
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres_keycloak:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_FEATURES: web-authn
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8443
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/conf/truststores/server.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/conf/truststores/server.key
+      KC_HTTPS_CERTIFICATE_KEY_PASSWORD: ${SERVER_KEY_PASS}
+      KC_HTTPS_TRUST_STORE_FILE: /tmp/truststore.p12
+      KC_HTTPS_TRUST_STORE_PASSWORD: ${KEYCLOAK_TRUSTSTORE_PASSWORD}
+      KC_HTTPS_CLIENT_AUTH: request
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    depends_on:
+      postgres_keycloak:
+        condition: service_healthy
+      pki:
+        condition: service_healthy
+    networks:
+      - auth-network
+    volumes:
+      - ./secrets/keycloak:/opt/keycloak/conf/truststores
+      - ./keycloak/import/realm-export.json:/opt/keycloak/data/import/realm.json
+
+  mailcatcher:
+    image: sj26/mailcatcher
+    container_name: mailcatcher
+    ports:
+      - "1025:1025"
+      - "1080:1080"
+    networks:
+      - auth-network
+
+networks:
+  auth-network:
+    driver: bridge
+  elk:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  pki_doctors_csr:
+  pki_doctors_crt:
+  pki_secrets:
+  elasticsearch:
+  elasticsearch_audit_logs:

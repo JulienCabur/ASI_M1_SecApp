@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>presentation.auth.oidc &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css?v=12dfc556" />
+    <script src="../../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for presentation.auth.oidc</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Flux OIDC BFF : login, callback, logout, refresh, me.</span>
+
+<span class="sd">Le frontend ne parle jamais directement à Keycloak ; tout passe par ces</span>
+<span class="sd">routes et la session utilisateur est portée par un cookie httpOnly signé.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">secrets</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.user</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">httpx</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIRouter</span><span class="p">,</span> <span class="n">Depends</span><span class="p">,</span> <span class="n">HTTPException</span><span class="p">,</span> <span class="n">Query</span><span class="p">,</span> <span class="n">Request</span><span class="p">,</span> <span class="n">Response</span><span class="p">,</span> <span class="n">status</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fastapi.responses</span><span class="w"> </span><span class="kn">import</span> <span class="n">JSONResponse</span><span class="p">,</span> <span class="n">RedirectResponse</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Session</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">core.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_jwt_token</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">core.database</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_db</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">core.oidc</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">build_authorize_url</span><span class="p">,</span>
+    <span class="n">build_logout_url</span><span class="p">,</span>
+    <span class="n">end_session</span><span class="p">,</span>
+    <span class="n">exchange_code_for_tokens</span><span class="p">,</span>
+    <span class="n">generate_pkce_pair</span><span class="p">,</span>
+    <span class="n">refresh_tokens</span><span class="p">,</span>
+    <span class="n">session_payload_from_token_response</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">core.session</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">clear_session_cookie</span><span class="p">,</span>
+    <span class="n">consume_oidc_state_cookie</span><span class="p">,</span>
+    <span class="n">get_session_payload</span><span class="p">,</span>
+    <span class="n">is_session_expired</span><span class="p">,</span>
+    <span class="n">set_csrf_cookie</span><span class="p">,</span>
+    <span class="n">set_oidc_state_cookie</span><span class="p">,</span>
+    <span class="n">set_session_cookie</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">schema.auth_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">UserInDB</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.auth_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">AuthService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.log_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">LogsService</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">._helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode_token_unverified</span><span class="p">,</span> <span class="n">frontend_url</span>
+
+<span class="n">router</span> <span class="o">=</span> <span class="n">APIRouter</span><span class="p">()</span>
+<span class="n">logs_service</span> <span class="o">=</span> <span class="n">LogsService</span><span class="p">(</span><span class="s2">&quot;backend_auth&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="login_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.oidc.login_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/login&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">login_route</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">redirect_to</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;/&quot;</span><span class="p">),</span>
+    <span class="n">flow_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;standard&quot;</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RedirectResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Démarre le flux Authorization Code + PKCE.</span>
+<span class="sd">    On dépose un cookie temporaire signé contenant `state` et `code_verifier`</span>
+<span class="sd">    pour les vérifier au callback. `redirect_to` permet à l&#39;app front de</span>
+<span class="sd">    revenir sur la page initialement demandée après login.</span>
+<span class="sd">    `flow_type` permet de distinguer un login normal (&quot;standard&quot;) d&#39;un ajout</span>
+<span class="sd">    d&#39;appareil (&quot;add_device&quot;) afin de ne pas nettoyer les anciens passkeys.&quot;&quot;&quot;</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n">secrets</span><span class="o">.</span><span class="n">token_urlsafe</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span>
+    <span class="n">verifier</span><span class="p">,</span> <span class="n">challenge</span> <span class="o">=</span> <span class="n">generate_pkce_pair</span><span class="p">()</span>
+    <span class="n">authorize_url</span> <span class="o">=</span> <span class="n">build_authorize_url</span><span class="p">(</span><span class="n">state</span><span class="o">=</span><span class="n">state</span><span class="p">,</span> <span class="n">code_challenge</span><span class="o">=</span><span class="n">challenge</span><span class="p">)</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">authorize_url</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
+    <span class="n">set_oidc_state_cookie</span><span class="p">(</span>
+        <span class="n">response</span><span class="p">,</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">state</span><span class="p">,</span>
+            <span class="s2">&quot;code_verifier&quot;</span><span class="p">:</span> <span class="n">verifier</span><span class="p">,</span>
+            <span class="s2">&quot;redirect_to&quot;</span><span class="p">:</span> <span class="n">redirect_to</span> <span class="k">if</span> <span class="n">redirect_to</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;/&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;flow_type&quot;</span><span class="p">:</span> <span class="n">flow_type</span><span class="p">,</span>
+        <span class="p">},</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">response</span></div>
+
+
+
+<div class="viewcode-block" id="callback_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.oidc.callback_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/callback&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">callback_route</span><span class="p">(</span>
+    <span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span>
+    <span class="n">code</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">),</span>
+    <span class="n">state</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">),</span>
+    <span class="n">error</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Query</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">),</span>
+    <span class="n">db</span><span class="p">:</span> <span class="n">Session</span> <span class="o">=</span> <span class="n">Depends</span><span class="p">(</span><span class="n">get_db</span><span class="p">),</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RedirectResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Callback Keycloak : échange le `code` contre des tokens et pose le cookie session.&quot;&quot;&quot;</span>
+    <span class="n">auth_service</span> <span class="o">=</span> <span class="n">AuthService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span>
+    <span class="n">fail_url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">frontend_url</span><span class="p">()</span><span class="si">}</span><span class="s2">/login?error=auth_failed&quot;</span>
+    <span class="k">if</span> <span class="n">error</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">fail_url</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
+
+    <span class="n">response</span> <span class="o">=</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">frontend_url</span><span class="p">()</span><span class="si">}</span><span class="s2">/&quot;</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
+    <span class="n">expected</span> <span class="o">=</span> <span class="n">consume_oidc_state_cookie</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">response</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">expected</span> <span class="ow">or</span> <span class="n">expected</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;state&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="n">state</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">code</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">fail_url</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">token_response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">exchange_code_for_tokens</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">expected</span><span class="p">[</span><span class="s2">&quot;code_verifier&quot;</span><span class="p">])</span>
+    <span class="k">except</span> <span class="n">httpx</span><span class="o">.</span><span class="n">HTTPError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;OIDC_CALLBACK_FAIL&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="s2">&quot;anonymous&quot;</span><span class="p">,</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">fail_url</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">validate_jwt_token</span><span class="p">(</span><span class="n">token_response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+    <span class="k">except</span> <span class="n">HTTPException</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">fail_url</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
+
+    <span class="n">claims</span> <span class="o">=</span> <span class="n">decode_token_unverified</span><span class="p">(</span><span class="n">token_response</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+    <span class="n">user_sub</span> <span class="o">=</span> <span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sub&quot;</span><span class="p">)</span>
+    <span class="n">user_role</span> <span class="o">=</span> <span class="p">(</span><span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;realm_access&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;roles&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;unknown&quot;</span><span class="p">])</span> <span class="ow">or</span> <span class="p">[</span><span class="s2">&quot;unknown&quot;</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="n">expected_cert_username</span> <span class="o">=</span> <span class="n">expected</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cert_proven_username&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">expected_cert_username</span><span class="p">:</span>
+        <span class="n">actual_username</span> <span class="o">=</span> <span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;preferred_username&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">actual_username</span> <span class="ow">or</span> <span class="n">actual_username</span> <span class="o">!=</span> <span class="n">expected_cert_username</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+                <span class="n">action</span><span class="o">=</span><span class="s2">&quot;CERT_BINDING_MISMATCH&quot;</span><span class="p">,</span>
+                <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+                <span class="n">user_id</span><span class="o">=</span><span class="n">actual_username</span> <span class="ow">or</span> <span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+                <span class="n">user_role</span><span class="o">=</span><span class="n">user_role</span><span class="p">,</span>
+                <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;Certificate username &#39;</span><span class="si">{</span><span class="n">actual_username</span><span class="si">}</span><span class="s2">&#39; does not match expected &#39;</span><span class="si">{</span><span class="n">expected_cert_username</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">RedirectResponse</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">fail_url</span><span class="p">,</span> <span class="n">status_code</span><span class="o">=</span><span class="mi">302</span><span class="p">)</span>
+
+    <span class="c1"># Cleanup post-reset : si l&#39;utilisateur vient de finir le flow d&#39;action</span>
+    <span class="c1"># email (webauthn-register-passwordless), il a un nouveau passkey *en plus*</span>
+    <span class="c1"># des anciens. On garde le plus récent de chaque type et on supprime les</span>
+    <span class="c1"># autres. Hors flow de reset c&#39;est un no-op (un seul credential par type).</span>
+    <span class="c1"># Pour le flow &quot;add_device&quot;, on préserve intentionnellement tous les</span>
+    <span class="c1"># passkeys existants (multi-appareils). Une exception ici ne doit pas</span>
+    <span class="c1"># casser le login : sera retenté à la prochaine connexion.</span>
+    <span class="n">flow_type</span> <span class="o">=</span> <span class="n">expected</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;flow_type&quot;</span><span class="p">,</span> <span class="s2">&quot;standard&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">user_sub</span> <span class="ow">and</span> <span class="n">flow_type</span> <span class="o">!=</span> <span class="s2">&quot;add_device&quot;</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">AuthService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">cleanup_stale_credentials</span><span class="p">(</span><span class="n">user_sub</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+                <span class="n">action</span><span class="o">=</span><span class="s2">&quot;CRED_CLEANUP_FAIL&quot;</span><span class="p">,</span>
+                <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+                <span class="n">user_id</span><span class="o">=</span><span class="n">user_sub</span><span class="p">,</span>
+                <span class="n">user_role</span><span class="o">=</span><span class="n">user_role</span><span class="p">,</span>
+                <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                <span class="n">message</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_sub</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">():</span>
+                <span class="n">user_data</span> <span class="o">=</span> <span class="n">UserInDB</span><span class="p">(</span>
+                    <span class="nb">id</span><span class="o">=</span><span class="n">user_sub</span><span class="p">,</span>
+                    <span class="n">username</span><span class="o">=</span><span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;preferred_username&quot;</span><span class="p">,</span> <span class="n">user_sub</span><span class="p">),</span>
+                    <span class="n">email</span><span class="o">=</span><span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                    <span class="n">roles</span><span class="o">=</span><span class="p">[</span><span class="n">user_role</span><span class="p">]</span> <span class="k">if</span> <span class="n">user_role</span> <span class="o">!=</span> <span class="s2">&quot;unknown&quot;</span> <span class="k">else</span> <span class="p">[]</span>
+                <span class="p">)</span>
+                <span class="n">auth_service</span><span class="o">.</span><span class="n">store_user</span><span class="p">(</span><span class="n">user_data</span><span class="p">)</span>
+                <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+                    <span class="n">action</span><span class="o">=</span><span class="s2">&quot;USER_CREATED_IN_DB&quot;</span><span class="p">,</span>
+                    <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span>
+                    <span class="n">user_id</span><span class="o">=</span><span class="n">user_sub</span><span class="p">,</span>
+                    <span class="n">user_role</span><span class="o">=</span><span class="n">user_role</span><span class="p">,</span>
+                    <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="n">message</span><span class="o">=</span><span class="s2">&quot;New user stored in database&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+                <span class="n">action</span><span class="o">=</span><span class="s2">&quot;USER_CREATION_FAIL&quot;</span><span class="p">,</span>
+                <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;WARNING&quot;</span><span class="p">,</span>
+                <span class="n">user_id</span><span class="o">=</span><span class="n">user_sub</span><span class="p">,</span>
+                <span class="n">user_role</span><span class="o">=</span><span class="n">user_role</span><span class="p">,</span>
+                <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                <span class="n">message</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">),</span>
+            <span class="p">)</span>
+
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">session_payload_from_token_response</span><span class="p">(</span><span class="n">token_response</span><span class="p">)</span>
+    <span class="n">set_session_cookie</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
+    <span class="n">set_csrf_cookie</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">secrets</span><span class="o">.</span><span class="n">token_urlsafe</span><span class="p">(</span><span class="mi">32</span><span class="p">))</span>
+
+    <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+        <span class="n">action</span><span class="o">=</span><span class="s2">&quot;LOGIN&quot;</span><span class="p">,</span>
+        <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span>
+        <span class="n">user_id</span><span class="o">=</span><span class="n">user_sub</span> <span class="ow">or</span> <span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+        <span class="n">user_role</span><span class="o">=</span><span class="n">user_role</span><span class="p">,</span>
+        <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+        <span class="n">message</span><span class="o">=</span><span class="s2">&quot;User logged in&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">redirect_to</span> <span class="o">=</span> <span class="n">expected</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;redirect_to&quot;</span><span class="p">,</span> <span class="s2">&quot;/&quot;</span><span class="p">)</span>
+    <span class="n">response</span><span class="o">.</span><span class="n">headers</span><span class="p">[</span><span class="s2">&quot;location&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">frontend_url</span><span class="p">()</span><span class="si">}{</span><span class="n">redirect_to</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="n">response</span></div>
+
+
+
+<div class="viewcode-block" id="debug_token_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.oidc.debug_token_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/debug/token&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">debug_token_route</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Endpoint debug temporaire pour récupérer le JWT stocké dans la session BFF.</span>
+
+<span class="sd">    Le frontend n&#39;ayant pas accès au cookie httpOnly, cette route permet de</span>
+<span class="sd">    récupérer le access_token côté serveur pour des tests manuels.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">get_session_payload</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">payload</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_401_UNAUTHORIZED</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Non authentifié&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;access_token&quot;</span><span class="p">:</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;id_token&quot;</span><span class="p">:</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id_token&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;refresh_token&quot;</span><span class="p">:</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;refresh_token&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;access_exp&quot;</span><span class="p">:</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_exp&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;refresh_exp&quot;</span><span class="p">:</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;refresh_exp&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;issued_at&quot;</span><span class="p">:</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;issued_at&quot;</span><span class="p">),</span>
+    <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="logout_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.oidc.logout_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/logout&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">logout_route</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">JSONResponse</span><span class="p">:</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">get_session_payload</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+    <span class="n">id_token</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id_token&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">payload</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">refresh_token</span> <span class="o">=</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;refresh_token&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">payload</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="n">logout_url</span> <span class="o">=</span> <span class="n">build_logout_url</span><span class="p">(</span>
+        <span class="n">post_logout_redirect_uri</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">frontend_url</span><span class="p">()</span><span class="si">}</span><span class="s2">/login&quot;</span><span class="p">,</span>
+        <span class="n">id_token_hint</span><span class="o">=</span><span class="n">id_token</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="n">JSONResponse</span><span class="p">({</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;logged_out&quot;</span><span class="p">,</span> <span class="s2">&quot;logout_url&quot;</span><span class="p">:</span> <span class="n">logout_url</span><span class="p">})</span>
+
+    <span class="k">if</span> <span class="n">refresh_token</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">end_session</span><span class="p">(</span><span class="n">refresh_token</span><span class="p">)</span>
+        <span class="n">claims</span> <span class="o">=</span> <span class="n">decode_token_unverified</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+        <span class="k">await</span> <span class="n">logs_service</span><span class="o">.</span><span class="n">add_logs</span><span class="p">(</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;LOGOUT&quot;</span><span class="p">,</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sub&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">),</span>
+            <span class="n">user_role</span><span class="o">=</span><span class="p">(</span><span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;realm_access&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;roles&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s2">&quot;unknown&quot;</span><span class="p">])</span> <span class="ow">or</span> <span class="p">[</span><span class="s2">&quot;unknown&quot;</span><span class="p">])[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">patient_id</span><span class="o">=</span><span class="s2">&quot;null&quot;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="s2">&quot;User logged out&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="n">clear_session_cookie</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">response</span></div>
+
+
+
+<div class="viewcode-block" id="refresh_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.oidc.refresh_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">&quot;/refresh&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">refresh_route</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">JSONResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Force un refresh côté serveur (le front n&#39;a aucun token, il appelle juste /refresh).&quot;&quot;&quot;</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">get_session_payload</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">payload</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;refresh_token&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_401_UNAUTHORIZED</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Pas de session&quot;</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">token_response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">refresh_tokens</span><span class="p">(</span><span class="n">payload</span><span class="p">[</span><span class="s2">&quot;refresh_token&quot;</span><span class="p">])</span>
+    <span class="k">except</span> <span class="n">httpx</span><span class="o">.</span><span class="n">HTTPError</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_401_UNAUTHORIZED</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Refresh impossible&quot;</span><span class="p">)</span>
+    <span class="n">new_payload</span> <span class="o">=</span> <span class="n">session_payload_from_token_response</span><span class="p">(</span><span class="n">token_response</span><span class="p">)</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="n">JSONResponse</span><span class="p">({</span><span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s2">&quot;refreshed&quot;</span><span class="p">,</span> <span class="s2">&quot;expires_at&quot;</span><span class="p">:</span> <span class="n">new_payload</span><span class="p">[</span><span class="s2">&quot;access_exp&quot;</span><span class="p">]})</span>
+    <span class="n">set_session_cookie</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">new_payload</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">response</span></div>
+
+
+
+<div class="viewcode-block" id="me_route">
+<a class="viewcode-back" href="../../../modules/presentation.html#presentation.auth.oidc.me_route">[docs]</a>
+<span class="nd">@router</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;/me&quot;</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">me_route</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">Request</span><span class="p">,</span> <span class="n">response</span><span class="p">:</span> <span class="n">Response</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Retourne le profil utilisateur lu depuis le cookie session.</span>
+<span class="sd">    Réponse 401 (et pas de body) si la session est invalide ou expirée.&quot;&quot;&quot;</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">get_session_payload</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">payload</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;access_token&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_401_UNAUTHORIZED</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Non authentifié&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">is_session_expired</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span> <span class="ow">and</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;refresh_token&quot;</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">token_response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">refresh_tokens</span><span class="p">(</span><span class="n">payload</span><span class="p">[</span><span class="s2">&quot;refresh_token&quot;</span><span class="p">])</span>
+            <span class="n">payload</span> <span class="o">=</span> <span class="n">session_payload_from_token_response</span><span class="p">(</span><span class="n">token_response</span><span class="p">)</span>
+            <span class="n">set_session_cookie</span><span class="p">(</span><span class="n">response</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">httpx</span><span class="o">.</span><span class="n">HTTPError</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_401_UNAUTHORIZED</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Session expirée&quot;</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">claims</span> <span class="o">=</span> <span class="k">await</span> <span class="n">validate_jwt_token</span><span class="p">(</span><span class="n">payload</span><span class="p">[</span><span class="s2">&quot;access_token&quot;</span><span class="p">])</span>
+    <span class="k">except</span> <span class="n">HTTPException</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">HTTP_401_UNAUTHORIZED</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">&quot;Token invalide&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;id&quot;</span><span class="p">:</span> <span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sub&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;preferred_username&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;first_name&quot;</span><span class="p">:</span> <span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;given_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;last_name&quot;</span><span class="p">:</span> <span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;family_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;roles&quot;</span><span class="p">:</span> <span class="n">claims</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;realm_access&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;roles&quot;</span><span class="p">,</span> <span class="p">[]),</span>
+    <span class="p">}</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/core.html">core</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules/presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>service.auth_service &#8212; SécuApp Backend 1.0.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../../_static/alabaster.css?v=12dfc556" />
+    <script src="../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for service.auth_service</h1><div class="highlight"><pre>
+<span></span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">datetime</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">secrets</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography</span><span class="w"> </span><span class="kn">import</span> <span class="n">x509</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.backends</span><span class="w"> </span><span class="kn">import</span> <span class="n">default_backend</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.primitives</span><span class="w"> </span><span class="kn">import</span> <span class="n">hashes</span><span class="p">,</span> <span class="n">serialization</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.hazmat.primitives.asymmetric</span><span class="w"> </span><span class="kn">import</span> <span class="n">padding</span><span class="p">,</span> <span class="n">rsa</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cryptography.x509.oid</span><span class="w"> </span><span class="kn">import</span> <span class="n">NameOID</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dotenv</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dotenv</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">keycloak</span><span class="w"> </span><span class="kn">import</span> <span class="n">KeycloakAdmin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">keycloak.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">KeycloakPostError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sqlalchemy.orm</span><span class="w"> </span><span class="kn">import</span> <span class="n">Session</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">core.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_keycloak_verify</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.devices</span><span class="w"> </span><span class="kn">import</span> <span class="n">Device</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.file</span><span class="w"> </span><span class="kn">import</span> <span class="n">File</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.relation</span><span class="w"> </span><span class="kn">import</span> <span class="n">Relation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">models.user</span><span class="w"> </span><span class="kn">import</span> <span class="n">User</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">schema.auth_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">CertificateRequest</span><span class="p">,</span> <span class="n">ChallengeResponse</span><span class="p">,</span> <span class="n">UserInDB</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">service.hospitals</span><span class="w"> </span><span class="kn">import</span> <span class="n">HospitalService</span>
+
+
+<span class="n">load_dotenv</span><span class="p">()</span>  <span class="c1"># Charger les variables d&#39;environnement depuis le fichier .env</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_env</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">required</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Lire une variable d&#39;environnement avec un comportement centralisé.</span>
+
+<span class="sd">    - `default` retourné si la variable est absente</span>
+<span class="sd">    - si `required=True` et la valeur est vide/None -&gt; RuntimeError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">val</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">required</span> <span class="ow">and</span> <span class="p">(</span><span class="n">val</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">val</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Environment variable </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> is required but not set&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">val</span>
+
+
+<div class="viewcode-block" id="DoctorConflictError">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.DoctorConflictError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">DoctorConflictError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Conflit d&#39;unicité côté Keycloak lors de l&#39;enregistrement d&#39;un médecin.</span>
+
+<span class="sd">    `field` vaut &quot;username&quot; ou &quot;email&quot; et permet à la couche présentation de</span>
+<span class="sd">    renvoyer un message ciblé sans réinterpréter la chaîne d&#39;erreur Keycloak.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">field</span> <span class="o">=</span> <span class="n">field</span></div>
+
+
+
+<div class="viewcode-block" id="AuthService">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AuthService</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Classe pour gérer les opérations liées à l&#39;authentification.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">db</span><span class="p">:</span> <span class="n">Session</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialise le service de gestion de l&#39;authentification avec une session de base de données.</span>
+<span class="sd">        :param db: Session de base de données SQLAlchemy.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span> <span class="o">=</span> <span class="n">db</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">csr_repository</span> <span class="o">=</span> <span class="s2">&quot;/app/csr&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cert_repository</span> <span class="o">=</span> <span class="s2">&quot;/app/certs_doctors&quot;</span>
+        <span class="c1"># Chaîne à embarquer dans les .p12 médecins. DIFFÉRENTE de ca-chain.pem</span>
+        <span class="c1"># (qui sert à valider le cert serveur Keycloak côté BFF, signing-ca2),</span>
+        <span class="c1"># parce que les certs médecins sont signés par signing-ca1. cf.</span>
+        <span class="c1"># pki_deploy.sh pour le détail des deux chaînes.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ca_chain_path</span> <span class="o">=</span> <span class="s2">&quot;/app/certs/doctor-ca-chain.pem&quot;</span>
+
+<div class="viewcode-block" id="AuthService.store_user">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.store_user">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">store_user</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_data</span><span class="p">:</span> <span class="n">UserInDB</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">User</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Stocke un nouvel utilisateur dans la base de données.</span>
+<span class="sd">        :param user_data: Données de l&#39;utilisateur à stocker.</span>
+<span class="sd">        :return: L&#39;utilisateur stocké.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_data</span><span class="o">.</span><span class="n">id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Utilisateur déjà existant&quot;</span><span class="p">)</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="n">user_data</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">username</span><span class="o">=</span><span class="n">user_data</span><span class="o">.</span><span class="n">username</span><span class="p">,</span> <span class="n">roles</span><span class="o">=</span><span class="s2">&quot;patient&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">refresh</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">user</span></div>
+
+
+    <span class="c1"># Politique CSR : 2048 bits min (aligné sur le default_bits de la PKI),</span>
+    <span class="c1"># 4096 max pour éviter des CSR pathologiquement gros.</span>
+    <span class="n">_CSR_KEY_MIN_BITS</span> <span class="o">=</span> <span class="mi">2048</span>
+    <span class="n">_CSR_KEY_MAX_BITS</span> <span class="o">=</span> <span class="mi">4096</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_assert_known_hospital</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">organization</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;L&#39;organisation déclarée doit appartenir au référentiel `hospitals`.</span>
+
+<span class="sd">        Sans ce filtre, on émettrait des certificats médecin pour des entités</span>
+<span class="sd">        arbitraires, et on accepterait au login des certs dont le O n&#39;a aucun</span>
+<span class="sd">        sens métier (utile aussi pour la révocation logique : si un hôpital</span>
+<span class="sd">        est retiré du référentiel, tous les certs portant son O deviennent</span>
+<span class="sd">        non utilisables sans toucher à la PKI).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">organization</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;L&#39;organisation est requise&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">organization</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">HospitalService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">)</span><span class="o">.</span><span class="n">get_hospitals</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Hôpital inconnu (hors référentiel)&quot;</span><span class="p">)</span>
+    <span class="c1"># Borne max sur la taille du CSR envoyé pour éviter qu&#39;un POST géant</span>
+    <span class="c1"># remplisse le volume partagé avec la PKI avant validation.</span>
+    <span class="n">_CSR_MAX_BYTES</span> <span class="o">=</span> <span class="mi">16</span> <span class="o">*</span> <span class="mi">1024</span>
+
+<div class="viewcode-block" id="AuthService.submit_browser_csr">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.submit_browser_csr">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">submit_browser_csr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">csr_pem</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">common_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">organization</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Valide un CSR généré par le navigateur puis le dépose pour la PKI.</span>
+
+<span class="sd">        Le subject DOIT correspondre exactement à ce que la PKI accepte (policy</span>
+<span class="sd">        `match_pol` dans signing-ca.conf : DC=be, DC=healthapp, O=&lt;organization&gt;,</span>
+<span class="sd">        CN=&lt;username&gt;). Sans cette vérification, un navigateur malveillant</span>
+<span class="sd">        pourrait soumettre un CSR avec un CN différent du username demandé et</span>
+<span class="sd">        obtenir un certificat signé pour un autre médecin.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">csr_pem</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">csr_pem</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">))</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_CSR_MAX_BYTES</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;CSR vide ou trop volumineux&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Refuse d&#39;émettre un cert si l&#39;hôpital revendiqué n&#39;existe pas dans</span>
+        <span class="c1"># notre référentiel. Vérifié ici (avant la PKI) pour éviter la signature</span>
+        <span class="c1"># d&#39;un cert qu&#39;on rejettera de toute façon au login.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_assert_known_hospital</span><span class="p">(</span><span class="n">organization</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">csr</span> <span class="o">=</span> <span class="n">x509</span><span class="o">.</span><span class="n">load_pem_x509_csr</span><span class="p">(</span><span class="n">csr_pem</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">),</span> <span class="n">default_backend</span><span class="p">())</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;CSR illisible: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Prouve que le navigateur détient la clé privée correspondante.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">csr</span><span class="o">.</span><span class="n">is_signature_valid</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Signature du CSR invalide (preuve de possession KO)&quot;</span><span class="p">)</span>
+
+        <span class="n">public_key</span> <span class="o">=</span> <span class="n">csr</span><span class="o">.</span><span class="n">public_key</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">public_key</span><span class="p">,</span> <span class="n">rsa</span><span class="o">.</span><span class="n">RSAPublicKey</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Seules les clés RSA sont acceptées&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_CSR_KEY_MIN_BITS</span> <span class="o">&lt;=</span> <span class="n">public_key</span><span class="o">.</span><span class="n">key_size</span> <span class="o">&lt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_CSR_KEY_MAX_BITS</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Taille de clé RSA invalide (</span><span class="si">{</span><span class="n">public_key</span><span class="o">.</span><span class="n">key_size</span><span class="si">}</span><span class="s2"> bits)&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Lecture du subject : on impose exactement DC=be, DC=healthapp,</span>
+        <span class="c1"># O=&lt;organization&gt;, CN=&lt;username&gt;. L&#39;ordre n&#39;a pas d&#39;importance ici,</span>
+        <span class="c1"># OpenSSL le réordonnera selon le policy au moment de la signature.</span>
+        <span class="n">attrs</span> <span class="o">=</span> <span class="p">{</span><span class="n">oid</span><span class="p">:</span> <span class="p">[</span><span class="n">v</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">csr</span><span class="o">.</span><span class="n">subject</span><span class="o">.</span><span class="n">get_attributes_for_oid</span><span class="p">(</span><span class="n">oid</span><span class="p">)]</span> <span class="k">for</span> <span class="n">oid</span> <span class="ow">in</span> <span class="p">{</span>
+            <span class="n">NameOID</span><span class="o">.</span><span class="n">DOMAIN_COMPONENT</span><span class="p">,</span>
+            <span class="n">NameOID</span><span class="o">.</span><span class="n">ORGANIZATION_NAME</span><span class="p">,</span>
+            <span class="n">NameOID</span><span class="o">.</span><span class="n">COMMON_NAME</span><span class="p">,</span>
+        <span class="p">}}</span>
+
+        <span class="n">dcs</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">NameOID</span><span class="o">.</span><span class="n">DOMAIN_COMPONENT</span><span class="p">,</span> <span class="p">[])]</span>
+        <span class="k">if</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">dcs</span><span class="p">)</span> <span class="o">!=</span> <span class="p">[</span><span class="s2">&quot;be&quot;</span><span class="p">,</span> <span class="s2">&quot;healthapp&quot;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Domain components attendus: DC=be, DC=healthapp&quot;</span><span class="p">)</span>
+
+        <span class="n">o_vals</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">NameOID</span><span class="o">.</span><span class="n">ORGANIZATION_NAME</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">o_vals</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">o_vals</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">organization</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;L&#39;organisation du CSR ne correspond pas à celle demandée&quot;</span><span class="p">)</span>
+
+        <span class="n">cn_vals</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">NameOID</span><span class="o">.</span><span class="n">COMMON_NAME</span><span class="p">,</span> <span class="p">[])</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cn_vals</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">cn_vals</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="n">common_name</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Le CN du CSR doit correspondre au username demandé&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Refus précoce des SAN/extensions injectées : la conf PKI a</span>
+        <span class="c1"># `copy_extensions = copy`, donc des extensions surprises (autres</span>
+        <span class="c1"># CN dans un subjectAltName, p.ex.) seraient copiées dans le cert</span>
+        <span class="c1"># signé. On ne tolère aucune extension dans le CSR.</span>
+        <span class="k">if</span> <span class="nb">list</span><span class="p">(</span><span class="n">csr</span><span class="o">.</span><span class="n">extensions</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Les extensions ne sont pas autorisées dans le CSR&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Écriture atomique : .csr.tmp puis rename, sinon le watcher PKI</span>
+        <span class="c1"># peut tomber sur un fichier partiellement écrit.</span>
+        <span class="n">csr_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">csr_repository</span><span class="p">,</span> <span class="n">common_name</span> <span class="o">+</span> <span class="s2">&quot;.csr&quot;</span><span class="p">)</span>
+        <span class="n">tmp_path</span> <span class="o">=</span> <span class="n">csr_path</span> <span class="o">+</span> <span class="s2">&quot;.tmp&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">tmp_path</span><span class="p">,</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">csr</span><span class="o">.</span><span class="n">public_bytes</span><span class="p">(</span><span class="n">serialization</span><span class="o">.</span><span class="n">Encoding</span><span class="o">.</span><span class="n">PEM</span><span class="p">))</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">tmp_path</span><span class="p">,</span> <span class="n">csr_path</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">csr_path</span></div>
+
+
+<div class="viewcode-block" id="AuthService.check_csr_signed">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.check_csr_signed">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">check_csr_signed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">common_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Retourne le chemin du certificat signé par la PKI (PEM).&quot;&quot;&quot;</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cert_repository</span> <span class="o">+</span> <span class="s2">&quot;/&quot;</span> <span class="o">+</span> <span class="n">common_name</span> <span class="o">+</span> <span class="s2">&quot;.crt&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Certificat non trouvé&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">path</span></div>
+
+
+<div class="viewcode-block" id="AuthService.read_ca_chain_pem">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.read_ca_chain_pem">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">read_ca_chain_pem</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Lit la chaîne CA à embarquer dans le .p12 côté navigateur.&quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ca_chain_path</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="AuthService.store_public_mek">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.store_public_mek">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">store_public_mek</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">doctor_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">public_mek</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Stocke la JWK publique MEK d&#39;un médecin (colonne JSONB).</span>
+
+<span class="sd">        `public_mek` est le dict issu de la JWK validée (clé publique RSA-OAEP).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">doctor_id</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Utilisateur non trouvé&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">user</span><span class="o">.</span><span class="n">roles</span> <span class="o">!=</span> <span class="s2">&quot;doctor&quot;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;L&#39;utilisateur n&#39;est pas un médecin&quot;</span><span class="p">)</span>
+        <span class="n">user</span><span class="o">.</span><span class="n">public_mek</span> <span class="o">=</span> <span class="n">public_mek</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_keycloak_admin</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KeycloakAdmin</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">KeycloakAdmin</span><span class="p">(</span>
+            <span class="n">server_url</span><span class="o">=</span><span class="n">_env</span><span class="p">(</span><span class="s2">&quot;KEYCLOAK_SERVER_URL&quot;</span><span class="p">),</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">_env</span><span class="p">(</span><span class="s2">&quot;KEYCLOAK_ADMIN&quot;</span><span class="p">),</span>
+            <span class="n">password</span><span class="o">=</span><span class="n">_env</span><span class="p">(</span><span class="s2">&quot;KEYCLOAK_ADMIN_PASSWORD&quot;</span><span class="p">),</span>
+            <span class="n">realm_name</span><span class="o">=</span><span class="n">_env</span><span class="p">(</span><span class="s2">&quot;KEYCLOAK_REALM&quot;</span><span class="p">),</span>
+            <span class="n">user_realm_name</span><span class="o">=</span><span class="s2">&quot;master&quot;</span><span class="p">,</span>
+            <span class="n">verify</span><span class="o">=</span><span class="n">resolve_keycloak_verify</span><span class="p">(),</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="AuthService.check_doctor_uniqueness">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.check_doctor_uniqueness">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">check_doctor_uniqueness</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Vérifie auprès de Keycloak qu&#39;aucun compte ne porte déjà ce username</span>
+<span class="sd">        ou cet email. Lève `DoctorConflictError` si un conflit est détecté.</span>
+
+<span class="sd">        Cette pré-vérification évite d&#39;émettre un certificat PKI qui devrait</span>
+<span class="sd">        être révoqué juste après si la création Keycloak échoue.&quot;&quot;&quot;</span>
+        <span class="n">admin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_keycloak_admin</span><span class="p">()</span>
+
+        <span class="c1"># `search=` matche aussi les sous-chaînes ; on filtre sur l&#39;égalité exacte.</span>
+        <span class="n">username_norm</span> <span class="o">=</span> <span class="p">(</span><span class="n">username</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="n">email_norm</span> <span class="o">=</span> <span class="p">(</span><span class="n">email</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="n">username_norm</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">admin</span><span class="o">.</span><span class="n">get_users</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">username_norm</span><span class="p">,</span> <span class="s2">&quot;exact&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}):</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;username&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">username_norm</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">DoctorConflictError</span><span class="p">(</span><span class="s2">&quot;username&quot;</span><span class="p">,</span> <span class="s2">&quot;Ce nom d&#39;utilisateur est déjà utilisé.&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">email_norm</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">admin</span><span class="o">.</span><span class="n">get_users</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">email_norm</span><span class="p">,</span> <span class="s2">&quot;exact&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}):</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">u</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="n">email_norm</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">DoctorConflictError</span><span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;Cette adresse e-mail est déjà utilisée.&quot;</span><span class="p">)</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_conflict_field_from_keycloak</span><span class="p">(</span><span class="n">err</span><span class="p">:</span> <span class="n">KeycloakPostError</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">err</span><span class="p">,</span> <span class="s2">&quot;error_message&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">err</span><span class="p">,</span> <span class="s2">&quot;response_body&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="p">(</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">bytearray</span><span class="p">)):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">raw</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;replace&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">raw</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="p">(</span><span class="n">raw</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="s2">&quot;same username&quot;</span> <span class="ow">in</span> <span class="n">text</span> <span class="ow">or</span> <span class="s2">&quot;username&quot;</span> <span class="ow">in</span> <span class="n">text</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;username&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;same email&quot;</span> <span class="ow">in</span> <span class="n">text</span> <span class="ow">or</span> <span class="s2">&quot;email&quot;</span> <span class="ow">in</span> <span class="n">text</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;email&quot;</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="AuthService.create_doctor_in_keycloak">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.create_doctor_in_keycloak">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_doctor_in_keycloak</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cert_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">user_info</span><span class="p">:</span> <span class="n">CertificateRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Crée le compte Keycloak associé au certificat fraîchement signé.</span>
+
+<span class="sd">        Le retour est le PEM du certificat — le navigateur en a besoin pour</span>
+<span class="sd">        assembler le .p12 (la clé privée n&#39;a jamais quitté le navigateur, donc</span>
+<span class="sd">        c&#39;est lui qui construit le PKCS#12 final). Le serial du cert est stocké</span>
+<span class="sd">        en attribut Keycloak pour pouvoir lier login OIDC ↔ cert plus tard.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">cert_path</span><span class="p">,</span> <span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">cert_pem_bytes</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+        <span class="n">cert</span> <span class="o">=</span> <span class="n">x509</span><span class="o">.</span><span class="n">load_pem_x509_certificate</span><span class="p">(</span><span class="n">cert_pem_bytes</span><span class="p">,</span> <span class="n">default_backend</span><span class="p">())</span>
+        <span class="n">serial_hex</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cert</span><span class="o">.</span><span class="n">serial_number</span><span class="si">:</span><span class="s2">02X</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Création de l&#39;utilisateur dans Keycloak avec le certificat: </span><span class="si">{</span><span class="n">cert_path</span><span class="si">}</span><span class="s2">, numéro de série: </span><span class="si">{</span><span class="n">serial_hex</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="n">keycloak_admin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_keycloak_admin</span><span class="p">()</span>
+
+        <span class="n">user_payload</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">user_info</span><span class="o">.</span><span class="n">email</span><span class="p">,</span>
+            <span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+            <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="s2">&quot;firstName&quot;</span><span class="p">:</span> <span class="n">user_info</span><span class="o">.</span><span class="n">first_name</span><span class="p">,</span>
+            <span class="s2">&quot;lastName&quot;</span><span class="p">:</span> <span class="n">user_info</span><span class="o">.</span><span class="n">last_name</span><span class="p">,</span>
+            <span class="s2">&quot;groups&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;/Docteurs&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;attributes&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;certificate_serial&quot;</span><span class="p">:</span> <span class="n">serial_hex</span><span class="p">,</span>
+                <span class="s2">&quot;date_of_birth&quot;</span><span class="p">:</span> <span class="n">user_info</span><span class="o">.</span><span class="n">date_of_birth</span><span class="p">,</span>
+                <span class="s2">&quot;user_type&quot;</span><span class="p">:</span> <span class="s2">&quot;doctor&quot;</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">new_user_id</span> <span class="o">=</span> <span class="n">keycloak_admin</span><span class="o">.</span><span class="n">create_user</span><span class="p">(</span><span class="n">user_payload</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">group_patient</span> <span class="o">=</span> <span class="n">keycloak_admin</span><span class="o">.</span><span class="n">get_group_by_path</span><span class="p">(</span><span class="s2">&quot;/Patients&quot;</span><span class="p">)</span>
+            <span class="n">keycloak_admin</span><span class="o">.</span><span class="n">group_user_remove</span><span class="p">(</span><span class="n">new_user_id</span><span class="p">,</span> <span class="n">group_patient</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">])</span>
+            <span class="n">user</span> <span class="o">=</span> <span class="n">User</span><span class="p">(</span>
+                <span class="nb">id</span><span class="o">=</span><span class="n">new_user_id</span><span class="p">,</span>
+                <span class="n">username</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">,</span>
+                <span class="n">roles</span><span class="o">=</span><span class="s2">&quot;doctor&quot;</span><span class="p">,</span>
+                <span class="n">challenge_nonce</span><span class="o">=</span><span class="kc">None</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">user</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+            <span class="k">return</span> <span class="n">cert_pem_bytes</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">KeycloakPostError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">delete_sensitive_files</span><span class="p">(</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">e</span><span class="p">,</span> <span class="s2">&quot;response_code&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="mi">409</span><span class="p">:</span>
+                <span class="n">field</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conflict_field_from_keycloak</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">field</span> <span class="o">==</span> <span class="s2">&quot;username&quot;</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">DoctorConflictError</span><span class="p">(</span><span class="s2">&quot;username&quot;</span><span class="p">,</span> <span class="s2">&quot;Ce nom d&#39;utilisateur est déjà utilisé.&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">field</span> <span class="o">==</span> <span class="s2">&quot;email&quot;</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">DoctorConflictError</span><span class="p">(</span><span class="s2">&quot;email&quot;</span><span class="p">,</span> <span class="s2">&quot;Cette adresse e-mail est déjà utilisée.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Erreur lors de la création de l&#39;utilisateur dans Keycloak: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">DoctorConflictError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">delete_sensitive_files</span><span class="p">(</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+            <span class="k">raise</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">delete_sensitive_files</span><span class="p">(</span><span class="n">user_info</span><span class="o">.</span><span class="n">username</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Erreur lors de la création de l&#39;utilisateur dans Keycloak: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AuthService.delete_sensitive_files">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.delete_sensitive_files">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">delete_sensitive_files</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">common_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Nettoie les artefacts laissés côté serveur après émission du cert.</span>
+
+<span class="sd">        Avec la nouvelle architecture, la clé privée ne touche jamais le</span>
+<span class="sd">        serveur (générée par le navigateur). Il ne reste donc à supprimer</span>
+<span class="sd">        que le CSR (au cas où le watcher PKI ne l&#39;aurait pas encore consommé)</span>
+<span class="sd">        et le .crt signé une fois lu et renvoyé au navigateur.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">csr_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">csr_repository</span><span class="p">,</span> <span class="n">common_name</span> <span class="o">+</span> <span class="s2">&quot;.csr&quot;</span><span class="p">)</span>
+        <span class="n">csr_tmp_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">csr_repository</span><span class="p">,</span> <span class="n">common_name</span> <span class="o">+</span> <span class="s2">&quot;.csr.tmp&quot;</span><span class="p">)</span>
+        <span class="n">crt_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cert_repository</span><span class="p">,</span> <span class="n">common_name</span> <span class="o">+</span> <span class="s2">&quot;.crt&quot;</span><span class="p">)</span>
+        <span class="n">crt_tmp_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cert_repository</span><span class="p">,</span> <span class="n">common_name</span> <span class="o">+</span> <span class="s2">&quot;.crt.tmp&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="p">[</span><span class="n">csr_path</span><span class="p">,</span> <span class="n">csr_tmp_path</span><span class="p">,</span> <span class="n">crt_path</span><span class="p">,</span> <span class="n">crt_tmp_path</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">size</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+                    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">&quot;r+b&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">urandom</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>
+                        <span class="n">f</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+                        <span class="n">os</span><span class="o">.</span><span class="n">fsync</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">fileno</span><span class="p">())</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="k">pass</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">path</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AuthService.generate_challenge">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.generate_challenge">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">generate_challenge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ChallengeResponse</span><span class="p">:</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">username</span> <span class="o">==</span> <span class="n">username</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Utilisateur non trouvé&quot;</span><span class="p">)</span>
+        <span class="n">nonce</span> <span class="o">=</span> <span class="n">secrets</span><span class="o">.</span><span class="n">token_hex</span><span class="p">(</span><span class="mi">16</span><span class="p">)</span>
+        <span class="n">timestamp</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(</span><span class="n">timespec</span><span class="o">=</span><span class="s1">&#39;milliseconds&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;+00:00&#39;</span><span class="p">,</span> <span class="s1">&#39;Z&#39;</span><span class="p">)</span>
+        <span class="n">user</span><span class="o">.</span><span class="n">challenge_nonce</span> <span class="o">=</span> <span class="n">nonce</span>
+        <span class="n">user</span><span class="o">.</span><span class="n">challenge_timestamp</span> <span class="o">=</span> <span class="n">timestamp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">ChallengeResponse</span><span class="p">(</span><span class="n">nonce</span><span class="o">=</span><span class="n">nonce</span><span class="p">,</span> <span class="n">timestamp</span><span class="o">=</span><span class="n">timestamp</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AuthService.verify_challenge_response">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.verify_challenge_response">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">verify_challenge_response</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">nonce</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">signature</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">certificate</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">challenge_nonce</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">challenge_nonce</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">username</span> <span class="o">==</span> <span class="n">username</span><span class="p">)</span><span class="o">.</span><span class="n">scalar</span><span class="p">()</span>
+        <span class="n">challenge_timestamp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">challenge_timestamp</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">username</span> <span class="o">==</span> <span class="n">username</span><span class="p">)</span><span class="o">.</span><span class="n">scalar</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">challenge_nonce</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">challenge_timestamp</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Aucun challenge généré pour cet utilisateur&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">timestamp</span> <span class="o">!=</span> <span class="n">challenge_timestamp</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Timestamp invalide&quot;</span><span class="p">)</span>
+        <span class="k">else</span> <span class="p">:</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span> <span class="o">-</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="o">.</span><span class="n">fromisoformat</span><span class="p">(</span><span class="n">challenge_timestamp</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;Z&#39;</span><span class="p">,</span> <span class="s1">&#39;+00:00&#39;</span><span class="p">)))</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">300</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Le challenge a expiré&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">nonce</span> <span class="o">!=</span> <span class="n">challenge_nonce</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Nonce invalide&quot;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cert</span> <span class="o">=</span> <span class="n">x509</span><span class="o">.</span><span class="n">load_pem_x509_certificate</span><span class="p">(</span><span class="n">certificate</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">default_backend</span><span class="p">())</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Certificat illisible: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Lie le certificat à l&#39;username revendiqué : sans cette vérif, un porteur</span>
+        <span class="c1"># de cert valide pourrait signer son propre challenge tout en revendiquant</span>
+        <span class="c1"># le username d&#39;un autre médecin, et la signature passerait avec la clé</span>
+        <span class="c1"># publique du cert fourni.</span>
+        <span class="n">cn_attrs</span> <span class="o">=</span> <span class="n">cert</span><span class="o">.</span><span class="n">subject</span><span class="o">.</span><span class="n">get_attributes_for_oid</span><span class="p">(</span><span class="n">NameOID</span><span class="o">.</span><span class="n">COMMON_NAME</span><span class="p">)</span>
+        <span class="n">cert_cn</span> <span class="o">=</span> <span class="n">cn_attrs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">value</span> <span class="k">if</span> <span class="n">cn_attrs</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cert_cn</span> <span class="ow">or</span> <span class="n">cert_cn</span> <span class="o">!=</span> <span class="n">username</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Le certificat ne correspond pas à l&#39;utilisateur revendiqué&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Vérifie que l&#39;hôpital encodé dans le cert est toujours dans le</span>
+        <span class="c1"># référentiel — couvre le cas d&#39;un cert encore valide cryptographiquement</span>
+        <span class="c1"># mais émis pour un hôpital depuis retiré (révocation logique sans</span>
+        <span class="c1"># toucher à la PKI).</span>
+        <span class="n">o_attrs</span> <span class="o">=</span> <span class="n">cert</span><span class="o">.</span><span class="n">subject</span><span class="o">.</span><span class="n">get_attributes_for_oid</span><span class="p">(</span><span class="n">NameOID</span><span class="o">.</span><span class="n">ORGANIZATION_NAME</span><span class="p">)</span>
+        <span class="n">cert_o</span> <span class="o">=</span> <span class="n">o_attrs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">value</span> <span class="k">if</span> <span class="n">o_attrs</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cert_o</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Certificat sans organisation&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_assert_known_hospital</span><span class="p">(</span><span class="n">cert_o</span><span class="p">)</span>
+
+        <span class="n">verification_data</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">nonce</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">timestamp</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">public_key</span> <span class="o">=</span> <span class="n">cert</span><span class="o">.</span><span class="n">public_key</span><span class="p">()</span>
+            <span class="n">public_key</span><span class="o">.</span><span class="n">verify</span><span class="p">(</span>
+            <span class="nb">bytes</span><span class="o">.</span><span class="n">fromhex</span><span class="p">(</span><span class="n">signature</span><span class="p">),</span>
+            <span class="n">verification_data</span><span class="p">,</span>
+                <span class="n">padding</span><span class="o">.</span><span class="n">PSS</span><span class="p">(</span>
+                    <span class="n">mgf</span><span class="o">=</span><span class="n">padding</span><span class="o">.</span><span class="n">MGF1</span><span class="p">(</span><span class="n">hashes</span><span class="o">.</span><span class="n">SHA256</span><span class="p">()),</span>
+                    <span class="n">salt_length</span><span class="o">=</span><span class="n">padding</span><span class="o">.</span><span class="n">PSS</span><span class="o">.</span><span class="n">MAX_LENGTH</span>
+                <span class="p">),</span>
+                <span class="n">hashes</span><span class="o">.</span><span class="n">SHA256</span><span class="p">()</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">clear_challenge</span><span class="p">(</span><span class="n">username</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Erreur lors de la vérification du challenge: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuthService.clear_challenge">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.clear_challenge">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear_challenge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">username</span> <span class="o">==</span> <span class="n">username</span><span class="p">)</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">user</span><span class="p">:</span>
+            <span class="n">user</span><span class="o">.</span><span class="n">challenge_nonce</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">user</span><span class="o">.</span><span class="n">challenge_timestamp</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+
+    <span class="c1"># Les deux étapes que comporte un &quot;reset complet&quot; sur ce realm passwordless :</span>
+    <span class="c1"># le 2FA (TOTP) et la clé d&#39;accès WebAuthn. Le mot de passe n&#39;existe pas dans</span>
+    <span class="c1"># le flow `Password-less`, donc on l&#39;exclut volontairement.</span>
+    <span class="n">_RESET_ACTIONS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;webauthn-register-passwordless&quot;</span><span class="p">]</span>
+
+    <span class="c1"># Types de credentials Keycloak considérés comme &quot;reset-ables&quot;.</span>
+    <span class="n">_RESET_CREDENTIAL_TYPES</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;webauthn-passwordless&quot;</span><span class="p">,)</span>
+
+    <span class="n">_ACTION_TOKEN_LIFESPAN_SECONDS</span> <span class="o">=</span> <span class="mi">3600</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_send_reenrollment_email</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">admin</span><span class="p">:</span> <span class="n">KeycloakAdmin</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">redirect_suffix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Envoie un mail Keycloak avec un action token qui force</span>
+<span class="sd">        webauthn-register-passwordless. Le token authentifie l&#39;utilisateur</span>
+<span class="sd">        sans qu&#39;il ait à présenter ses credentials existants, et les required</span>
+<span class="sd">        actions ajoutent de *nouveaux* credentials sans toucher aux anciens.</span>
+
+<span class="sd">        On force `client_id` + `redirect_uri` car sans eux Keycloak génère un</span>
+<span class="sd">        lien vers le client `account` (page blanche chez nous) et un redirect</span>
+<span class="sd">        par défaut hors de nos `redirectUris`.</span>
+
+<span class="sd">        `redirect_suffix` permet d&#39;ajouter des query params au redirect_uri,</span>
+<span class="sd">        par exemple &quot;?flow_type=add_device&quot; pour le flux d&#39;ajout d&#39;appareil.&quot;&quot;&quot;</span>
+        <span class="n">client_id</span> <span class="o">=</span> <span class="n">_env</span><span class="p">(</span><span class="s2">&quot;KEYCLOAK_CLIENT_ID&quot;</span><span class="p">,</span> <span class="s2">&quot;health_app_frontend&quot;</span><span class="p">)</span>
+        <span class="n">redirect_uri</span> <span class="o">=</span> <span class="n">_env</span><span class="p">(</span><span class="s2">&quot;FRONTEND_URL&quot;</span><span class="p">,</span> <span class="s2">&quot;https://localhost&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;/login&quot;</span> <span class="o">+</span> <span class="n">redirect_suffix</span>
+        <span class="n">admin</span><span class="o">.</span><span class="n">send_update_account</span><span class="p">(</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">user_id</span><span class="p">,</span>
+            <span class="n">payload</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_RESET_ACTIONS</span><span class="p">),</span>
+            <span class="n">client_id</span><span class="o">=</span><span class="n">client_id</span><span class="p">,</span>
+            <span class="n">redirect_uri</span><span class="o">=</span><span class="n">redirect_uri</span><span class="p">,</span>
+            <span class="n">lifespan</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_ACTION_TOKEN_LIFESPAN_SECONDS</span><span class="p">,</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="AuthService.cleanup_stale_credentials">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.cleanup_stale_credentials">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">cleanup_stale_credentials</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Pour chaque type &quot;reset-able&quot; (TOTP, passkey passwordless), si le</span>
+<span class="sd">        user en a plus d&#39;un, on garde le plus récent (le credential fraîchement</span>
+<span class="sd">        enrôlé) et on supprime les autres.</span>
+
+<span class="sd">        Hook appelé après chaque callback OIDC : c&#39;est ainsi qu&#39;on supprime</span>
+<span class="sd">        l&#39;ancien TOTP/passkey *après* la création du nouveau dans le flow</span>
+<span class="sd">        de reset. En régime nominal (un seul credential de chaque type), c&#39;est</span>
+<span class="sd">        un no-op. Aucun signal explicite de &quot;reset en cours&quot; n&#39;est nécessaire :</span>
+<span class="sd">        la pluralité des credentials suffit.&quot;&quot;&quot;</span>
+        <span class="n">admin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_keycloak_admin</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">credentials</span> <span class="o">=</span> <span class="n">admin</span><span class="o">.</span><span class="n">get_credentials</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">return</span>
+
+        <span class="n">by_type</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="p">:</span> <span class="p">[]</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_RESET_CREDENTIAL_TYPES</span><span class="p">}</span>
+        <span class="k">for</span> <span class="n">cred</span> <span class="ow">in</span> <span class="n">credentials</span><span class="p">:</span>
+            <span class="n">cred_type</span> <span class="o">=</span> <span class="n">cred</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">cred_type</span> <span class="ow">in</span> <span class="n">by_type</span> <span class="ow">and</span> <span class="n">cred</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">):</span>
+                <span class="n">by_type</span><span class="p">[</span><span class="n">cred_type</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cred</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">creds</span> <span class="ow">in</span> <span class="n">by_type</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">creds</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="c1"># `createdDate` est en epoch millis. Le plus grand = le plus récent</span>
+            <span class="c1"># = celui que l&#39;utilisateur vient d&#39;enrôler. On garde celui-là et</span>
+            <span class="c1"># on supprime tout le reste (anciens credentials du flow de reset).</span>
+            <span class="n">creds</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;createdDate&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">stale</span> <span class="ow">in</span> <span class="n">creds</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">admin</span><span class="o">.</span><span class="n">delete_credential</span><span class="p">(</span><span class="n">user_id</span><span class="p">,</span> <span class="n">stale</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">])</span>
+                <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                    <span class="c1"># Un id déjà supprimé ou introuvable ne doit pas bloquer</span>
+                    <span class="c1"># le nettoyage des autres.</span>
+                    <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="AuthService.send_credentials_reset_email">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.send_credentials_reset_email">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">send_credentials_reset_email</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reset différé pour patient : on n&#39;efface rien immédiatement, on</span>
+<span class="sd">        envoie juste le mail d&#39;action. Les required actions Keycloak font</span>
+<span class="sd">        enrôler de nouveaux credentials *à côté* des anciens. La suppression</span>
+<span class="sd">        des anciens a lieu au prochain callback OIDC, via</span>
+<span class="sd">        `cleanup_stale_credentials` — c&#39;est-à-dire seulement une fois que les</span>
+<span class="sd">        nouveaux sont en place. Si le mail est perdu, l&#39;utilisateur garde son</span>
+<span class="sd">        accès.</span>
+
+<span class="sd">        Ne lève pas si l&#39;email est inconnu : la route appelante répond toujours</span>
+<span class="sd">        200 pour éviter l&#39;énumération.&quot;&quot;&quot;</span>
+        <span class="n">admin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_keycloak_admin</span><span class="p">()</span>
+        <span class="n">users</span> <span class="o">=</span> <span class="n">admin</span><span class="o">.</span><span class="n">get_users</span><span class="p">({</span><span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span> <span class="s2">&quot;exact&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">users</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">user_id</span> <span class="o">=</span> <span class="n">users</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user_id</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_reenrollment_email</span><span class="p">(</span><span class="n">admin</span><span class="p">,</span> <span class="n">user_id</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AuthService.force_credentials_reset">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.force_credentials_reset">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">force_credentials_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reset différé pour médecin (via certificat) : on envoie le mail</span>
+<span class="sd">        d&#39;action sans toucher aux credentials existants. Cleanup des anciens</span>
+<span class="sd">        au prochain callback OIDC une fois les nouveaux enrôlés.&quot;&quot;&quot;</span>
+        <span class="n">admin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_keycloak_admin</span><span class="p">()</span>
+        <span class="n">users</span> <span class="o">=</span> <span class="n">admin</span><span class="o">.</span><span class="n">get_users</span><span class="p">({</span><span class="s2">&quot;username&quot;</span><span class="p">:</span> <span class="n">username</span><span class="p">,</span> <span class="s2">&quot;exact&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">users</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Utilisateur introuvable&quot;</span><span class="p">)</span>
+        <span class="n">user_id</span> <span class="o">=</span> <span class="n">users</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user_id</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Utilisateur introuvable&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_reenrollment_email</span><span class="p">(</span><span class="n">admin</span><span class="p">,</span> <span class="n">user_id</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AuthService.send_add_device_email">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.send_add_device_email">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">send_add_device_email</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Envoie un email Keycloak pour enregistrer un nouveau passkey WebAuthn.</span>
+
+<span class="sd">        Identique à send_credentials_reset_email mais le redirect_uri pointe vers</span>
+<span class="sd">        /login?flow_type=add_device afin que le callback OIDC ignore</span>
+<span class="sd">        cleanup_stale_credentials() et préserve les passkeys des autres appareils.</span>
+
+<span class="sd">        Lève une exception si l&#39;utilisateur est introuvable ; la route appelante</span>
+<span class="sd">        intercepte l&#39;exception et retourne quand même 200 pour éviter l&#39;énumération.&quot;&quot;&quot;</span>
+        <span class="n">admin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_keycloak_admin</span><span class="p">()</span>
+        <span class="n">users</span> <span class="o">=</span> <span class="n">admin</span><span class="o">.</span><span class="n">get_users</span><span class="p">({</span><span class="s2">&quot;email&quot;</span><span class="p">:</span> <span class="n">email</span><span class="p">,</span> <span class="s2">&quot;exact&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">users</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;User not found&quot;</span><span class="p">)</span>
+        <span class="n">user_id</span> <span class="o">=</span> <span class="n">users</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user_id</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;User has no id&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send_reenrollment_email</span><span class="p">(</span><span class="n">admin</span><span class="p">,</span> <span class="n">user_id</span><span class="p">,</span> <span class="n">redirect_suffix</span><span class="o">=</span><span class="s2">&quot;?flow_type=add_device&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AuthService.erase_user_data">
+<a class="viewcode-back" href="../../modules/service.html#service.auth_service.AuthService.erase_user_data">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">erase_user_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">storage_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Supprime toutes les données d&#39;un utilisateur (droit à l&#39;effacement RGPD).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">service.file_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">FileService</span>
+        <span class="n">fs</span> <span class="o">=</span> <span class="n">FileService</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="p">,</span> <span class="n">storage_path</span><span class="o">=</span><span class="n">storage_path</span><span class="p">)</span>
+        <span class="n">fs</span><span class="o">.</span><span class="n">delete_user_storage</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">File</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">File</span><span class="o">.</span><span class="n">user_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">synchronize_session</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Device</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">Device</span><span class="o">.</span><span class="n">user_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">synchronize_session</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">Relation</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">patient_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">Relation</span><span class="o">.</span><span class="n">doctor_id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">synchronize_session</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">query</span><span class="p">(</span><span class="n">User</span><span class="p">)</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">User</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">user_id</span><span class="p">)</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">synchronize_session</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">admin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_keycloak_admin</span><span class="p">()</span>
+            <span class="n">admin</span><span class="o">.</span><span class="n">delete_user</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">pass</span></div>
+</div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">SécuApp Backend</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Modules</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/main.html">main</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/core.html">core</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/models.html">models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/schema.html">schema</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/service.html">service</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/presentation.html">presentation</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

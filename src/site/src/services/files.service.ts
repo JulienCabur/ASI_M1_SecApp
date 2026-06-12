@@ -1,0 +1,322 @@
+/**
+ * Service fichiers — chiffrement de bout en bout.
+ *
+ * Modèle d'envelope :
+ *  - DEK AES-GCM 256 fraîche par fichier (jamais réutilisée), tirée par
+ *    crypto.service.ts.
+ *  - Le DEK est wrappé par la KEK de session, donc seul le détenteur de la
+ *    privée RSA (et donc de la KEK) peut décoder le fichier.
+ *  - Le backend stocke un seul champ `ciphered_dek` par fichier ; on y met
+ *    une enveloppe JSON-puis-base64 contenant `{ fileIv, wrappedDek, dekIv }`.
+ *  - Le contenu chiffré (AES-GCM) est envoyé comme corps multipart classique.
+ *
+ * Le serveur n'a donc accès qu'à du ciphertext opaque + une enveloppe
+ * inutilisable sans la KEK : confidentialité de bout en bout, indépendamment
+ * du fait qu'un admin DB puisse lire les lignes.
+ */
+
+import { api } from '@/services/api';
+import {
+  decryptFileWithKEK,
+  decryptMetadataWithKEK,
+  encryptFileWithKEK,
+  type EncryptedFile,
+} from '@/services/crypto.service';
+import { useCryptoStore } from '@/store/crypto.store';
+import type { PendingFileRequest } from '@/types';
+
+export interface RemoteFile {
+  id: string;
+  name: string;
+  date: string;
+  cipheredDek: string;
+}
+
+interface ListFilesResponse {
+  files: { name: string; date: string; ciphered_dek: string }[];
+}
+
+interface DownloadResponse {
+  file_content: string; // base64 du ciphertext stocké côté serveur
+  key: string;
+  filename: string;
+}
+
+interface DekEnvelope {
+  fileIv: string;
+  wrappedDek: string;
+  dekIv: string;
+  nameIv: string;
+  dateIv: string;
+}
+
+const toBase64 = (buf: ArrayBuffer): string => {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+};
+
+const fromBase64 = (b64: string): ArrayBuffer => {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+};
+
+const toBase64Url = (buf: ArrayBuffer): string =>
+  toBase64(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB — limite mémoire navigateur (arrayBuffer + ciphertext = 2× taille)
+
+const sanitizeFileName = (name: string): string =>
+  (name.replace(/[/\\]/g, '_').replace(/\.\./g, '_').trim().slice(0, 255)) || 'fichier';
+
+const fromBase64Url = (b64url: string): ArrayBuffer => {
+  const padded = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = padded.length % 4 === 0 ? '' : '='.repeat(4 - (padded.length % 4));
+  return fromBase64(padded + pad);
+};
+
+const encodeEnvelope = (
+  enc: Pick<EncryptedFile, 'fileIv' | 'wrappedDek' | 'dekIv' | 'nameIv' | 'dateIv'>,
+): string =>
+  btoa(
+    JSON.stringify({
+      fileIv: toBase64(enc.fileIv),
+      wrappedDek: toBase64(enc.wrappedDek),
+      dekIv: toBase64(enc.dekIv),
+      nameIv: toBase64(enc.nameIv),
+      dateIv: toBase64(enc.dateIv),
+    } satisfies DekEnvelope),
+  );
+
+const decodeEnvelope = (
+  encoded: string,
+): Pick<EncryptedFile, 'fileIv' | 'wrappedDek' | 'dekIv' | 'nameIv' | 'dateIv'> => {
+  const json = JSON.parse(atob(encoded)) as DekEnvelope;
+  return {
+    fileIv: fromBase64(json.fileIv),
+    wrappedDek: fromBase64(json.wrappedDek),
+    dekIv: fromBase64(json.dekIv),
+    nameIv: fromBase64(json.nameIv),
+    dateIv: fromBase64(json.dateIv),
+  };
+};
+
+/** Contexte optionnel pour les opérations fichiers. Par défaut on lit la KEK
+ *  du store (dossier de l'user courant) ; en mode médecin-visualise-patient,
+ *  on fournit la KEK patient déballée localement + le `patientId`. */
+export interface FileContext {
+  kek?: CryptoKey;
+  patientId?: string;
+}
+
+const resolveKek = (ctx?: FileContext): CryptoKey => {
+  const kek = ctx?.kek ?? useCryptoStore.getState().kek;
+  if (!kek) {
+    throw new Error('Session crypto non initialisée — clé KEK absente.');
+  }
+  return kek;
+};
+
+const patientParams = (ctx?: FileContext): Record<string, string> =>
+  ctx?.patientId ? { patient_id: ctx.patientId } : {};
+
+export const listFiles = async (ctx?: FileContext): Promise<RemoteFile[]> => {
+  const kek = resolveKek(ctx);
+  const { data } = await api.get<ListFilesResponse>('/files/list_files', {
+    params: patientParams(ctx),
+  });
+  const decrypted = await Promise.all(
+    data.files.map(async (f) => {
+      const env = decodeEnvelope(f.ciphered_dek);
+      const meta = await decryptMetadataWithKEK(
+        {
+          ...env,
+          nameCiphertext: fromBase64Url(f.name),
+          dateCiphertext: fromBase64(f.date),
+        },
+        kek,
+      );
+      return {
+        id: f.name,
+        name: meta.name,
+        date: meta.date,
+        cipheredDek: f.ciphered_dek,
+      };
+    }),
+  );
+  return decrypted;
+};
+
+export const uploadFile = async (file: File, ctx?: FileContext): Promise<void> => {
+  if (file.size > MAX_FILE_SIZE) throw new Error(`Le fichier dépasse la taille maximale autorisée (500 Mo).`);
+  const kek = resolveKek(ctx);
+  const plain = await file.arrayBuffer();
+  const enc = await encryptFileWithKEK(
+    plain,
+    { name: sanitizeFileName(file.name), date: new Date().toISOString() },
+    kek,
+  );
+  const envelope = encodeEnvelope(enc);
+  const cipheredName = toBase64Url(enc.nameCiphertext);
+  const cipheredDate = toBase64(enc.dateCiphertext);
+
+  const form = new FormData();
+  form.append('file', new Blob([enc.ciphertext]), cipheredName);
+  await api.post('/files/upload_file', form, {
+    params: { dek: envelope, date: cipheredDate, ...patientParams(ctx) },
+  });
+};
+
+export interface DecryptedFile {
+  blob: Blob;
+  filename: string;
+}
+
+const guessMimeType = (filename: string): string => {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  switch (ext) {
+    case 'pdf': return 'application/pdf';
+    case 'png': return 'image/png';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'gif': return 'image/gif';
+    case 'webp': return 'image/webp';
+    case 'svg': return 'image/svg+xml';
+    case 'txt': return 'text/plain';
+    case 'json': return 'application/json';
+    default: return 'application/octet-stream';
+  }
+};
+
+export const downloadFile = async (file: RemoteFile, ctx?: FileContext): Promise<DecryptedFile> => {
+  const kek = resolveKek(ctx);
+  const { data } = await api.get<DownloadResponse>('/files/download_file', {
+    params: { file: file.id, ...patientParams(ctx) },
+  });
+  const env = decodeEnvelope(data.key);
+  const plain = await decryptFileWithKEK(
+    {
+      ciphertext: fromBase64(data.file_content),
+      fileIv: env.fileIv,
+      wrappedDek: env.wrappedDek,
+      dekIv: env.dekIv,
+    },
+    kek,
+  );
+  return {
+    blob: new Blob([plain], { type: guessMimeType(file.name) }),
+    filename: file.name,
+  };
+};
+
+export const deleteFile = async (id: string, ctx?: FileContext): Promise<void> => {
+  await api.post('/files/delete_file', null, {
+    params: { file: id, ...patientParams(ctx) },
+  });
+};
+
+// ─── Quarantaine : opérations initiées par le médecin ────────────────────────
+
+export const uploadFileForDoctor = async (file: File, ctx: Required<FileContext>): Promise<void> => {
+  if (file.size > MAX_FILE_SIZE) throw new Error(`Le fichier dépasse la taille maximale autorisée (500 Mo).`);
+  const plain = await file.arrayBuffer();
+  const enc = await encryptFileWithKEK(
+    plain,
+    { name: sanitizeFileName(file.name), date: new Date().toISOString() },
+    ctx.kek,
+  );
+  const envelope = encodeEnvelope(enc);
+  const cipheredName = toBase64Url(enc.nameCiphertext);
+  const cipheredDate = toBase64(enc.dateCiphertext);
+
+  const form = new FormData();
+  form.append('file', new Blob([enc.ciphertext]), cipheredName);
+  await api.post('/files/upload_file_for_doctor', form, {
+    params: { dek: envelope, date: cipheredDate, patient_id: ctx.patientId },
+  });
+};
+
+export const deleteFileForDoctor = async (fileId: string, patientId: string): Promise<void> => {
+  await api.post(
+    '/files/delete_file_for_doctor',
+    new URLSearchParams({ file: fileId, patient_id: patientId }),
+  );
+};
+
+interface PendingRequestsResponse {
+  pending_requests: {
+    file_request_id: string;
+    relation_id: string;
+    doctor_id: string;
+    operation_type: string;
+    file_name: string;
+    date: string;
+    ciphered_dek: string;
+  }[];
+}
+
+const decryptPendingRequests = async (
+  raw: PendingRequestsResponse['pending_requests'],
+  kek: CryptoKey,
+): Promise<PendingFileRequest[]> =>
+  Promise.all(
+    raw.map(async (req) => {
+      const env = decodeEnvelope(req.ciphered_dek);
+      const meta = await decryptMetadataWithKEK(
+        {
+          ...env,
+          nameCiphertext: fromBase64Url(req.file_name),
+          dateCiphertext: fromBase64(req.date),
+        },
+        kek,
+      );
+      return {
+        fileRequestId: String(req.file_request_id),
+        relationId: String(req.relation_id),
+        doctorId: req.doctor_id,
+        operationType: req.operation_type as PendingFileRequest['operationType'],
+        fileName: meta.name,
+        date: meta.date,
+        encryptedFileName: req.file_name,
+      };
+    }),
+  );
+
+export const getPendingRequests = async (kek: CryptoKey): Promise<PendingFileRequest[]> => {
+  const { data } = await api.get<PendingRequestsResponse>('/relation/patient_pending_requests');
+  return decryptPendingRequests(data.pending_requests, kek);
+};
+
+export const getDoctorPendingRequests = async (
+  kek: CryptoKey,
+  patientId: string,
+): Promise<PendingFileRequest[]> => {
+  const { data } = await api.get<PendingRequestsResponse>('/relation/doctor_pending_requests', {
+    params: { patient_id: patientId },
+  });
+  return decryptPendingRequests(data.pending_requests, kek);
+};
+
+export const validateRequest = async (requestId: string): Promise<void> => {
+  await api.post(
+    '/relation/patient_validate_request',
+    new URLSearchParams({ request_id: requestId }),
+  );
+};
+
+export const rejectRequest = async (requestId: string): Promise<void> => {
+  await api.post(
+    '/relation/patient_reject_request',
+    new URLSearchParams({ request_id: requestId }),
+  );
+};
+
+export const cancelDoctorRequest = async (requestId: string): Promise<void> => {
+  await api.post(
+    '/relation/doctor_cancel_request',
+    new URLSearchParams({ request_id: requestId }),
+  );
+};

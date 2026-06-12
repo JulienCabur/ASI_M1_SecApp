@@ -1,0 +1,45 @@
+.page {
+  padding: 32px;
+  max-width: 900px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.section {
+  margin-bottom: 32px;
+}
+
+.sectionTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e3a60;
+  margin-bottom: 16px;
+}
+
+.deviceCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 14px 20px;
+  margin-bottom: 10px;
+}
+
+.deviceName {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.deviceActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

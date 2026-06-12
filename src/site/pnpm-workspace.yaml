@@ -1,0 +1,2 @@
+patchedDependencies:
+  '@rc-component/util@1.9.0': patches/@rc-component__util@1.9.0.patch
