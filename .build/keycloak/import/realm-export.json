@@ -2142,8 +2142,8 @@
     "id" : "35f51cc4-0d10-41b3-9c0e-542ef1434853",
     "alias" : "Health App Captacha",
     "config" : {
-      "site.key" : "6Lc0TrosAAAAAE0hz4-oVajDrmzj6L6T0GdQErzf",
-      "secret" : "6Lc0TrosAAAAAE6lHhjBuy3yv-0ldG1BBt_RwkAS"
+      "site.key" : "${env.KC_RECAPTCHA_SITE_KEY}",
+      "secret" : "${env.KC_RECAPTCHA_SECRET_KEY}"
     }
   }, {
     "id" : "04ff0c4d-dcdd-4d9e-a75f-a7e5d829c03e",
